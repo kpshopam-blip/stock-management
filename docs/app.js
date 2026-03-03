@@ -121,7 +121,7 @@ function loadStore() {
     currentStockTab = 'Products';
     document.getElementById('storeUserName').innerText = currentUser.name;
 
-    if (currentUser.role === 'Manager') {
+    if (currentUser.role === 'Manager' || currentUser.role === 'ผู้จัดการ') {
         document.getElementById('btnOpenInventory').classList.remove('hidden');
         const dashBtn = document.getElementById('btnOpenDashboard');
         if (dashBtn) dashBtn.classList.remove('hidden');
@@ -138,7 +138,7 @@ function loadStore() {
 
 function setStockTab(tabName) {
     currentStockTab = tabName;
-    const isEmployee = currentUser.role !== 'Manager' && currentUser.role !== 'ช่าง' && currentUser.role !== 'Technician';
+    const isEmployee = currentUser.role !== 'Manager' && currentUser.role !== 'ผู้จัดการ' && currentUser.role !== 'ช่าง' && currentUser.role !== 'Technician';
 
     ['Products', 'Employee', 'Spare'].forEach(t => {
         const btn = document.getElementById('tab_' + t);
@@ -147,7 +147,7 @@ function setStockTab(tabName) {
             btn.className = "font-bold text-brand-600 border-b-2 border-brand-600 px-1 pb-1 text-sm transition";
         } else {
             btn.className = "text-gray-500 hover:text-brand-500 border-b-2 border-transparent px-1 pb-1 text-sm transition";
-            if (currentUser.role !== 'Manager' && t === 'Employee') btn.classList.add('hidden');
+            if (currentUser.role !== 'Manager' && currentUser.role !== 'ผู้จัดการ' && t === 'Employee') btn.classList.add('hidden');
         }
     });
 
@@ -161,6 +161,22 @@ async function fetchProducts() {
     try {
         const products = await API_getProducts();
         allProducts = products;
+
+        // Populate Location Filter dynamically
+        const filterLocation = document.getElementById('filterLocation');
+        if (filterLocation) {
+            const currentSelected = filterLocation.value;
+            const locations = [...new Set(allProducts.map(p => p.location).filter(Boolean))].sort();
+            let optionsHtml = '<option value="">ทุกสาขา / ทุกที่อยู่</option>';
+            locations.forEach(loc => {
+                optionsHtml += `<option value="${loc}">${loc}</option>`;
+            });
+            filterLocation.innerHTML = optionsHtml;
+            if (locations.includes(currentSelected)) {
+                filterLocation.value = currentSelected;
+            }
+        }
+
         filterProducts();
     } catch (err) {
         console.error(err);
@@ -178,7 +194,7 @@ function renderProductGrid(products) {
     grid.innerHTML = '';
 
     // กรองสินค้าที่โดนลบตอน search ไปแล้วไม่ให้ซ้อนกัน
-    const isManager = currentUser && currentUser.role === 'Manager';
+    const isManager = currentUser && (currentUser.role === 'Manager' || currentUser.role === 'ผู้จัดการ');
     const filtered = isManager ? products : products.filter(p => (p.status || 'Available').toLowerCase() !== 'sold');
     document.getElementById('totalProductCount').innerText = filtered.length;
 
@@ -211,21 +227,27 @@ function renderProductGrid(products) {
 function searchProducts(inputId) {
     const query = document.getElementById(inputId).value.toLowerCase();
     const filterBrand = document.getElementById('filterBrand').value.toLowerCase();
-    executeSearch(query, filterBrand);
+    const locFilter = document.getElementById('filterLocation');
+    const filterLocation = locFilter ? locFilter.value.toLowerCase() : '';
+    executeSearch(query, filterBrand, filterLocation);
 }
 
 function filterProducts() {
     const query1 = document.getElementById('storeSearchDesktop') ? document.getElementById('storeSearchDesktop').value.toLowerCase() : '';
     const filterBrand = document.getElementById('filterBrand').value.toLowerCase();
-    executeSearch(query1, filterBrand);
+    const locFilter = document.getElementById('filterLocation');
+    const filterLocation = locFilter ? locFilter.value.toLowerCase() : '';
+    executeSearch(query1, filterBrand, filterLocation);
 }
 
-function executeSearch(query, brand) {
+function executeSearch(query, brand, location) {
     let filtered = allProducts.filter(p => (p.stockType || 'Products') === currentStockTab);
     if (brand) filtered = filtered.filter(p => p.brand.toLowerCase() === brand);
+    if (location) filtered = filtered.filter(p => p.location && p.location.toLowerCase() === location);
     if (query) filtered = filtered.filter(p =>
         p.model.toLowerCase().includes(query) || p.brand.toLowerCase().includes(query) ||
-        (p.color && p.color.toLowerCase().includes(query)) || (p.storage && p.storage.toLowerCase().includes(query))
+        (p.color && p.color.toLowerCase().includes(query)) || (p.storage && p.storage.toLowerCase().includes(query)) ||
+        (p.imei && p.imei.toLowerCase().includes(query))
     );
     renderProductGrid(filtered);
 }
@@ -234,6 +256,7 @@ function resetFilters() {
     if (document.getElementById('storeSearchDesktop')) document.getElementById('storeSearchDesktop').value = '';
     if (document.getElementById('storeSearchMobile')) document.getElementById('storeSearchMobile').value = '';
     document.getElementById('filterBrand').value = '';
+    if (document.getElementById('filterLocation')) document.getElementById('filterLocation').value = '';
     filterProducts();
 }
 
@@ -256,7 +279,7 @@ function viewProduct(id) {
         ? `<div class="inline-block bg-gray-700 text-white px-3 py-1 rounded text-sm font-bold mb-2">ขายแล้ว</div>`
         : `<div class="inline-block bg-green-500 text-white px-3 py-1 rounded text-sm font-bold mb-2">พร้อมขาย</div>`;
 
-    const isManager = currentUser && currentUser.role === 'Manager';
+    const isManager = currentUser && (currentUser.role === 'Manager' || currentUser.role === 'ผู้จัดการ');
     const isTech = currentUser && (currentUser.role === 'ช่าง' || currentUser.role === 'Technician');
 
     let moveStockHtml = '';
@@ -299,6 +322,7 @@ function viewProduct(id) {
       <div class="w-full md:w-1/2 p-5 bg-white space-y-4">
         <div>${statusLabel}<h2 class="text-2xl font-bold text-gray-800">${product.model}</h2><div class="text-sm text-gray-500 mt-1">ยี่ห้อ: ${product.brand} | รหัส: ${product.id}</div></div>
         <div class="text-3xl font-bold text-brand-600 border-b pb-4">฿${formatNumber(product.price)}</div>
+        ${isManager ? `<div class="text-sm text-gray-500 mb-2">ราคาทุน: <span class="font-medium">฿${formatNumber(product.cost || 0)}</span></div>` : ''}
         <div class="grid grid-cols-2 gap-y-3 gap-x-4 text-sm">
           <div class="text-gray-500">RAM/ความจุ:</div><div class="font-medium">${product.ram || '-'} / ${product.storage || '-'}</div>
           <div class="text-gray-500">สี:</div><div class="font-medium">${product.color || '-'}</div>
@@ -316,7 +340,8 @@ function viewProduct(id) {
         ${spareCommentHtml}
         ${moveStockHtml}
         ${(product.status || 'Available').toLowerCase() !== 'sold' ? `
-        <div class="border-t pt-4 mt-2">
+        <div class="border-t pt-4 mt-2 ${isManager ? 'grid grid-cols-2 gap-2' : ''}">
+          ${isManager ? `<button onclick="closeProductView(); editProductFromStore('${product.id}')" class="w-full py-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 transition shadow-lg flex items-center justify-center gap-2 text-base"><i class="fa-solid fa-pen-to-square"></i> แก้ไขข้อมูล</button>` : ''}
           <button onclick="closeProductView(); openSellModal('${product.id}')" class="w-full py-3 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition shadow-lg flex items-center justify-center gap-2 text-base">
             <i class="fa-solid fa-cart-shopping"></i> ขายสินค้านี้
           </button>
@@ -356,7 +381,7 @@ function filterInventory() {
 }
 
 function loadInventory() {
-    if (!currentUser || currentUser.role !== 'Manager') { showToast('เฉพาะผู้จัดการเท่านั้นที่สามารถเข้าถึงได้', 'warning'); return; }
+    if (!currentUser || (currentUser.role !== 'Manager' && currentUser.role !== 'ผู้จัดการ')) { showToast('เฉพาะผู้จัดการเท่านั้นที่สามารถเข้าถึงได้', 'warning'); return; }
     renderPage('tpl-inventory');
     const targetCon = document.getElementById('targetSheetContainer');
     if (targetCon) targetCon.classList.remove('hidden');
@@ -476,7 +501,7 @@ async function onStatusChange(productId, newStatus) {
 
 // ====== ลบสินค้า ======
 async function deleteProduct(productId) {
-    if (!currentUser || currentUser.role !== 'Manager') { showToast('เฉพาะผู้จัดการเท่านั้นที่สามารถลบสินค้าได้', 'warning'); return; }
+    if (!currentUser || (currentUser.role !== 'Manager' && currentUser.role !== 'ผู้จัดการ')) { showToast('เฉพาะผู้จัดการเท่านั้นที่สามารถลบสินค้าได้', 'warning'); return; }
     const p = allProducts.find(x => x.id === productId);
     const pName = p ? (p.brand + ' ' + p.model) : productId;
     if (!confirm('⚠️ ต้องการลบ "' + pName + '" ออกจากสต็อกใช่หรือไม่?\n\nการลบจะไม่สามารถย้อนกลับได้!')) return;
@@ -494,7 +519,7 @@ async function deleteProduct(productId) {
 
 // ====== Dashboard ======
 async function loadDashboard() {
-    if (!currentUser || currentUser.role !== 'Manager') { showToast('เฉพาะผู้จัดการเท่านั้นที่สามารถเข้าถึงได้', 'warning'); return; }
+    if (!currentUser || (currentUser.role !== 'Manager' && currentUser.role !== 'ผู้จัดการ')) { showToast('เฉพาะผู้จัดการเท่านั้นที่สามารถเข้าถึงได้', 'warning'); return; }
     renderPage('tpl-dashboard');
     try {
         const data = await API_getSalesSummary();
@@ -787,12 +812,21 @@ function resetProductForm() {
     if (btnSubmit) btnSubmit.innerHTML = '<i class="fa-solid fa-save"></i> บันทึกเข้าระบบ';
 }
 
-function editProduct(id) {
+async function editProduct(id) {
     const p = allProducts.find(x => x.id === id);
     if (!p) return;
     editingProductId = id;
 
-    document.getElementById('p_brand').value = p.brand;
+    const brandDropdown = document.getElementById('p_brand');
+    // If setting values are not yet formed inside the form DOM, explicitly await settings load
+    if (brandDropdown && brandDropdown.options.length <= 1) {
+        await loadSettings();
+    }
+
+    // Set values
+    const newBrandDropdown = document.getElementById('p_brand');
+    if (newBrandDropdown) newBrandDropdown.value = p.brand;
+
     document.getElementById('p_model').value = p.model;
     document.getElementById('p_ram').value = p.ram || '';
     document.getElementById('p_storage').value = p.storage || '';
@@ -822,6 +856,16 @@ function editProduct(id) {
     const btnSubmit = document.querySelector('#addProductForm button[type="submit"]');
     if (btnSubmit) btnSubmit.innerHTML = '<i class="fa-solid fa-pen"></i> บันทึกอัปเดตข้อมูล';
     window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function editProductFromStore(id) {
+    // 1. Load Inventory template first to render the #addProductForm correctly
+    loadInventory();
+
+    // 2. Wait slightly for template resolving
+    setTimeout(() => {
+        editProduct(id);
+    }, 100);
 }
 
 // ====== Action ย้ายคลัง & คอมเมนต์ ======
@@ -907,16 +951,16 @@ function openSellModal(productId) {
     sellReceiptDataURI = null;
 
     document.getElementById('sellProductInfo').innerHTML = `
-                < div class="font-bold text-gray-800" > ${p.brand} ${p.model}</div >
+                <div class="font-bold text-gray-800">${p.brand} ${p.model}</div>
     <div class="text-xs text-gray-500">สเปค: ${p.ram || '-'}/${p.storage || '-'} ${p.color || ''} | IMEI: ${p.imei || '-'}</div>
     <div class="text-xs text-gray-500 mt-1">ต้นทุน: ฿${formatNumber(p.cost)} | ราคาตั้ง: ฿${formatNumber(p.price)}</div>`;
 
     const typeSel = document.getElementById('sell_type');
     typeSel.innerHTML = '<option value="">เลือกรูปแบบ</option>';
     if (window._appSettings && window._appSettings.saleTypes) {
-        window._appSettings.saleTypes.forEach(t => { typeSel.innerHTML += `< option value = "${t}" > ${t}</option > `; });
+        window._appSettings.saleTypes.forEach(t => { typeSel.innerHTML += `<option value="${t}">${t}</option>`; });
     } else {
-        API_getSettings().then(s => { window._appSettings = s; s.saleTypes.forEach(t => typeSel.innerHTML += `< option value = "${t}" > ${t}</option > `); }).catch(() => { });
+        API_getSettings().then(s => { window._appSettings = s; s.saleTypes.forEach(t => typeSel.innerHTML += `<option value="${t}">${t}</option>`); }).catch(() => { });
     }
 
     document.getElementById('sellModal').classList.remove('hidden');
@@ -972,11 +1016,11 @@ async function confirmSell() {
 
 function showReceipt(r) {
     document.getElementById('receiptBody').innerHTML = `
-                < div class="text-center border-b pb-3 mb-3" >
+                <div class="text-center border-b pb-3 mb-3">
       <h2 class="text-lg font-bold text-gray-800">KP Shop</h2>
       <p class="text-xs text-gray-500">ใบเสร็จดิจิทัล</p>
       <p class="text-xs text-gray-400 mt-1">เลขที่: ${r.saleId}</p>
-    </div >
+    </div>
                 <div class="space-y-2 text-xs">
                     <div class="flex justify-between"><span class="text-gray-500">วันที่ขาย:</span><span class="font-medium">${r.saleDate}</span></div>
                     <div class="flex justify-between"><span class="text-gray-500">พนักงานขาย:</span><span class="font-medium">${r.salesperson}</span></div>
