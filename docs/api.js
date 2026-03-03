@@ -156,6 +156,23 @@ async function API_changeStatus(productId, newStatus) {
     return apiPost('changeStatus', { productId, newStatus });
 }
 
+// ย้ายคลัง
+async function API_moveProduct(productId, targetSheet) {
+    return apiPost('moveProduct', { productId, targetSheet });
+}
+
+// เพิ่มคอมเมนต์อะไหล่
+async function API_addComment(productId, commentText) {
+    return apiPost('addComment', { productId, commentText });
+}
+
+// ดึงคอมเมนต์
+async function API_getComments(productId) {
+    const res = await apiGet('getComments', { productId });
+    if (!res.success) throw new Error(res.error || 'getComments failed');
+    return res.data;
+}
+
 // อัปโหลดรูปภาพสินค้า
 async function API_uploadImage(dataURI, filename) {
     const res = await apiPost('uploadImage', { dataURI, filename });
