@@ -1084,6 +1084,38 @@ function showReceipt(r) {
     document.getElementById('receiptModal').classList.remove('hidden');
 }
 
+async function downloadReceipt() {
+    const el = document.getElementById('receiptBody');
+    if (!el) return;
+
+    // บังคับพื้นหลังสีขาวตอนเซฟ ป้องกันพื้นหลังดำ/ใส
+    const originalBg = el.style.backgroundColor;
+    el.style.backgroundColor = '#ffffff';
+    el.style.padding = '20px'; // เพื่ม padding นิดหน่อยให้ภาพสวยงาม
+
+    try {
+        showLoading(true);
+        const canvas = await html2canvas(el, { scale: 2, useCORS: true });
+        el.style.backgroundColor = originalBg;
+        el.style.padding = '1rem'; // คืนค่า padding class กลับ
+
+        const imgData = canvas.toDataURL('image/png');
+        const link = document.createElement('a');
+        link.href = imgData;
+        const tk = new Date().getTime();
+        link.download = `Receipt_KPShop_${tk}.png`;
+        link.click();
+        showLoading(false);
+        showToast('บันทึกใบเสร็จสำเร็จ', 'success');
+    } catch (e) {
+        showLoading(false);
+        el.style.backgroundColor = originalBg;
+        el.style.padding = '1rem';
+        showToast('ไม่สามารถบันทึกภาพได้', 'error');
+        console.error(e);
+    }
+}
+
 // ====== กล้อง QuaggaJS ======
 let allVideoDevices = [], currentDeviceIndex = 0, lastUsedDeviceId = null;
 
