@@ -269,11 +269,16 @@ function viewProduct(id) {
     const contentBody = document.getElementById('productDetailBody');
 
     const images = product.images && product.images.length > 0 && product.images[0].trim() !== '' ? product.images : [NO_IMAGE];
-    let galleryHtml = `<div class="w-full flex overflow-x-auto snap-x snap-mandatory hide-scrollbar">`;
+    let galleryHtml = `<div class="relative w-full group"><div id="productImageGallery" class="w-full flex overflow-x-auto snap-x snap-mandatory hide-scrollbar scroll-smooth" onscroll="syncImageIndicator()">`;
     images.forEach(imgUrl => {
         galleryHtml += `<div class="min-w-full snap-center flex justify-center bg-gray-100 relative items-center cursor-pointer" style="height:350px;" onclick="viewFullImage('${imgUrl}')"><img src="${imgUrl}" class="max-h-full max-w-full object-contain" alt="Product Image" onerror="this.onerror=null;this.src=NO_IMAGE;"></div>`;
     });
-    galleryHtml += `</div><div class="flex justify-center gap-1 my-2">${images.map((_, i) => `<div class="w-2 h-2 rounded-full ${i === 0 ? 'bg-brand-500' : 'bg-gray-300'}"></div>`).join('')}</div>`;
+    galleryHtml += `</div>`;
+    if (images.length > 1) {
+        galleryHtml += `<button type="button" onclick="scrollGallery(-1)" class="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center bg-white/80 rounded-full shadow hover:bg-white text-gray-800 opacity-0 group-hover:opacity-100 transition-opacity focus:outline-none"><i class="fa-solid fa-chevron-left text-sm"></i></button>`;
+        galleryHtml += `<button type="button" onclick="scrollGallery(1)" class="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center bg-white/80 rounded-full shadow hover:bg-white text-gray-800 opacity-0 group-hover:opacity-100 transition-opacity focus:outline-none"><i class="fa-solid fa-chevron-right text-sm"></i></button>`;
+    }
+    galleryHtml += `</div><div id="productImageIndicators" class="flex justify-center gap-1 my-2">${images.map((_, i) => `<div class="w-2 h-2 rounded-full transition-colors duration-300 ${i === 0 ? 'bg-brand-500' : 'bg-gray-300'}"></div>`).join('')}</div>`;
 
     const statusLabel = product.status.toLowerCase() !== 'available'
         ? `<div class="inline-block bg-gray-700 text-white px-3 py-1 rounded text-sm font-bold mb-2">ขายแล้ว</div>`
@@ -360,6 +365,32 @@ function viewProduct(id) {
 }
 
 function closeProductView() { document.getElementById('productDetailModal').classList.add('hidden'); }
+
+function scrollGallery(direction) {
+    const gallery = document.getElementById('productImageGallery');
+    if (!gallery) return;
+    const scrollAmount = gallery.clientWidth * direction;
+    gallery.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+}
+
+function syncImageIndicator() {
+    const gallery = document.getElementById('productImageGallery');
+    const indicators = document.getElementById('productImageIndicators');
+    if (!gallery || !indicators) return;
+
+    let index = Math.round(gallery.scrollLeft / gallery.clientWidth);
+
+    const dots = indicators.querySelectorAll('div');
+    dots.forEach((dot, i) => {
+        if (i === index) {
+            dot.classList.remove('bg-gray-300');
+            dot.classList.add('bg-brand-500');
+        } else {
+            dot.classList.remove('bg-brand-500');
+            dot.classList.add('bg-gray-300');
+        }
+    });
+}
 
 function viewFullImage(url) {
     if (url === NO_IMAGE) return;
