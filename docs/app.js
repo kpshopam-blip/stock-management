@@ -12,6 +12,7 @@ let existingImages = [];
 let editingProductId = null;
 let sellReceiptDataURI = null;
 let _dashboardData = null;
+let currentStockTab = 'Products';
 
 // รูปภาพสำรอง
 const NO_IMAGE = 'data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22400%22%20height%3D%22400%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%23eee%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%2250%25%22%20font-family%3D%22sans-serif%22%20font-size%3D%2224%22%20text-anchor%3D%22middle%22%20dy%3D%22.3em%22%20fill%3D%22%23999%22%3ENo%20Image%3C%2Ftext%3E%3C%2Fsvg%3E';
@@ -117,21 +118,50 @@ async function logout() {
 // ====== Store ======
 function loadStore() {
     renderPage('tpl-store');
+    currentStockTab = 'Products';
     document.getElementById('storeUserName').innerText = currentUser.name;
+
     if (currentUser.role === 'Manager') {
         document.getElementById('btnOpenInventory').classList.remove('hidden');
         const dashBtn = document.getElementById('btnOpenDashboard');
         if (dashBtn) dashBtn.classList.remove('hidden');
+        document.getElementById('storeTabs').classList.remove('hidden');
+        document.getElementById('tab_Employee').classList.remove('hidden');
+        document.getElementById('tab_Spare').classList.remove('hidden');
+    } else if (currentUser.role === 'ช่าง' || currentUser.role === 'Technician') {
+        document.getElementById('storeTabs').classList.remove('hidden');
+        document.getElementById('tab_Spare').classList.remove('hidden');
     }
+
     fetchProducts();
+}
+
+function setStockTab(tabName) {
+    currentStockTab = tabName;
+    const isEmployee = currentUser.role !== 'Manager' && currentUser.role !== 'ช่าง' && currentUser.role !== 'Technician';
+
+    ['Products', 'Employee', 'Spare'].forEach(t => {
+        const btn = document.getElementById('tab_' + t);
+        if (!btn) return;
+        if (t === tabName) {
+            btn.className = "font-bold text-brand-600 border-b-2 border-brand-600 px-1 pb-1 text-sm transition";
+        } else {
+            btn.className = "text-gray-500 hover:text-brand-500 border-b-2 border-transparent px-1 pb-1 text-sm transition";
+            if (currentUser.role !== 'Manager' && t === 'Employee') btn.classList.add('hidden');
+        }
+    });
+
+    const titles = { 'Products': 'สินค้าพร้อมขาย', 'Employee': 'เครื่องพนักงาน', 'Spare': 'เครื่องอะไหล่' };
+    document.getElementById('storeTitle').innerText = titles[tabName] || 'สินค้าทั้งหมด';
+
+    filterProducts();
 }
 
 async function fetchProducts() {
     try {
         const products = await API_getProducts();
         allProducts = products;
-        document.getElementById('totalProductCount').innerText = products.length;
-        renderProductGrid(products);
+        filterProducts();
     } catch (err) {
         console.error(err);
         showToast('ดูข้อมูลสินค้าไม่สำเร็จ กรุณารีเฟรช', 'error');
@@ -147,6 +177,7 @@ function renderProductGrid(products) {
     const noData = document.getElementById('noProductFound');
     grid.innerHTML = '';
 
+    // กรองสินค้าที่โดนลบตอน search ไปแล้วไม่ให้ซ้อนกัน
     const isManager = currentUser && currentUser.role === 'Manager';
     const filtered = isManager ? products : products.filter(p => (p.status || 'Available').toLowerCase() !== 'sold');
     document.getElementById('totalProductCount').innerText = filtered.length;
@@ -190,7 +221,7 @@ function filterProducts() {
 }
 
 function executeSearch(query, brand) {
-    let filtered = allProducts;
+    let filtered = allProducts.filter(p => (p.stockType || 'Products') === currentStockTab);
     if (brand) filtered = filtered.filter(p => p.brand.toLowerCase() === brand);
     if (query) filtered = filtered.filter(p =>
         p.model.toLowerCase().includes(query) || p.brand.toLowerCase().includes(query) ||
@@ -225,6 +256,43 @@ function viewProduct(id) {
         ? `<div class="inline-block bg-gray-700 text-white px-3 py-1 rounded text-sm font-bold mb-2">ขายแล้ว</div>`
         : `<div class="inline-block bg-green-500 text-white px-3 py-1 rounded text-sm font-bold mb-2">พร้อมขาย</div>`;
 
+    const isManager = currentUser && currentUser.role === 'Manager';
+    const isTech = currentUser && (currentUser.role === 'ช่าง' || currentUser.role === 'Technician');
+
+    let moveStockHtml = '';
+    if (isManager) {
+        moveStockHtml = `
+        <div class="border-t pt-4 mt-4">
+          <label class="block text-xs font-bold text-gray-700 mb-1"><i class="fa-solid fa-truck-ramp-box"></i> ย้ายคลังสินค้า (Manager)</label>
+          <div class="flex gap-2">
+              <select id="move_targetSheet" class="text-sm border border-gray-300 rounded p-1.5 focus:ring-brand-500 flex-grow outline-none">
+                  <option value="Products" ${product.stockType === 'Products' ? 'selected disabled' : ''}>ไปคลัง: พร้อมขาย</option>
+                  <option value="Stock_Employee" ${product.stockType === 'Employee' ? 'selected disabled' : ''}>ไปคลัง: เครื่องพนักงาน</option>
+                  <option value="Stock_Spare" ${product.stockType === 'Spare' ? 'selected disabled' : ''}>ไปคลัง: เครื่องอะไหล่</option>
+              </select>
+              <button onclick="moveProductAction('${product.id}')" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded shadow transition whitespace-nowrap">
+                  <i class="fa-solid fa-arrow-right-arrow-left"></i> ย้าย
+              </button>
+          </div>
+        </div>`;
+    }
+
+    let spareCommentHtml = '';
+    if ((isManager || isTech) && product.stockType === 'Spare') {
+        spareCommentHtml = `
+        <div class="border-t pt-4 mt-4 bg-orange-50 -mx-5 px-5 py-4 border-b">
+          <h4 class="font-bold text-orange-800 text-sm mb-2"><i class="fa-solid fa-screwdriver-wrench text-orange-600"></i> ประวัติการถอด/สลับอะไหล่</h4>
+          <div id="commentList_${product.id}" class="space-y-2 max-h-48 overflow-y-auto mb-3 bg-white border border-orange-200 rounded p-2 text-sm">
+              <div class="text-center text-gray-400 py-4"><i class="fa-solid fa-circle-notch fa-spin"></i> กำลังโหลด...</div>
+          </div>
+          <div class="flex gap-2">
+              <input type="text" id="newComment_${product.id}" placeholder="ระบุอะไหล่ที่ถอด/เปลี่ยน..." class="text-sm p-2 w-full border border-orange-300 rounded focus:ring-orange-500 outline-none shadow-inner">
+              <button onclick="addCommentAction('${product.id}')" class="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-bold rounded transition shadow whitespace-nowrap"><i class="fa-solid fa-paper-plane"></i></button>
+          </div>
+        </div>
+        `;
+    }
+
     contentBody.innerHTML = `
     <div class="flex flex-col md:flex-row h-full">
       <div class="w-full md:w-1/2 border-r bg-white">${galleryHtml}</div>
@@ -235,16 +303,18 @@ function viewProduct(id) {
           <div class="text-gray-500">RAM/ความจุ:</div><div class="font-medium">${product.ram || '-'} / ${product.storage || '-'}</div>
           <div class="text-gray-500">สี:</div><div class="font-medium">${product.color || '-'}</div>
           <div class="text-gray-500">สภาพเครื่อง:</div><div class="font-medium">${product.condition || 'ไม่ได้ระบุ'}</div>
-          <div class="text-gray-500">ตำหนิ:</div><div class="font-medium text-red-500">${product.defect || 'ไม่มี / ไม่ได้ระบุ'}</div>
+          <div class="text-gray-500">ตำหนิ:</div><div class="font-medium text-red-500">${product.defect || 'ไม่มี / ไม่ระบุ'}</div>
           <div class="text-gray-500">แบตเตอรี่:</div><div class="font-medium">${product.battery || '-'}</div>
           <div class="text-gray-500">อุปกรณ์:</div><div class="font-medium">${product.accessories || '-'}</div>
           <div class="text-gray-500">สาขา/ที่อยู่:</div><div class="font-medium">${product.location || '-'}</div>
           <div class="text-gray-500">หมายเหตุ:</div><div class="font-medium text-amber-600">${product.notes || '-'}</div>
           <div class="text-gray-500">แหล่งที่มา:</div><div class="font-medium">${product.source || '-'}</div>
           <div class="text-gray-500">เลข IMEI:</div><div class="font-medium">${product.imei || '-'}</div>
-          <div class="text-gray-500">ผู้รับเข้าสต็อก:</div><div class="font-medium">${product.receiver || '-'}</div>
+          <div class="text-gray-500">รับเข้าโดย:</div><div class="font-medium">${product.receiver || '-'}</div>
           <div class="text-gray-500">วันที่รับเข้า:</div><div class="font-medium">${product.dateAdded || '-'}</div>
         </div>
+        ${spareCommentHtml}
+        ${moveStockHtml}
         ${(product.status || 'Available').toLowerCase() !== 'sold' ? `
         <div class="border-t pt-4 mt-2">
           <button onclick="closeProductView(); openSellModal('${product.id}')" class="w-full py-3 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition shadow-lg flex items-center justify-center gap-2 text-base">
@@ -258,6 +328,10 @@ function viewProduct(id) {
     </div>`;
 
     modal.classList.remove('hidden');
+
+    if (spareCommentHtml !== '') {
+        loadComments(product.id);
+    }
 }
 
 function closeProductView() { document.getElementById('productDetailModal').classList.add('hidden'); }
@@ -284,6 +358,8 @@ function filterInventory() {
 function loadInventory() {
     if (!currentUser || currentUser.role !== 'Manager') { showToast('เฉพาะผู้จัดการเท่านั้นที่สามารถเข้าถึงได้', 'warning'); return; }
     renderPage('tpl-inventory');
+    const targetCon = document.getElementById('targetSheetContainer');
+    if (targetCon) targetCon.classList.remove('hidden');
     loadSettings();
     fetchInventoryData();
 }
@@ -652,6 +728,7 @@ async function submitProduct(event) {
     showLoading(true);
 
     const productData = {
+        targetSheet: document.getElementById('p_targetSheet') ? document.getElementById('p_targetSheet').value : 'Products',
         brand: document.getElementById('p_brand').value,
         model: document.getElementById('p_model').value,
         ram: document.getElementById('p_ram').value,
@@ -739,9 +816,82 @@ function editProduct(id) {
     formDiv.classList.remove('hidden');
     document.getElementById('addProductFormIcon').classList.replace('fa-chevron-right', 'fa-chevron-down');
 
+    const targetCon = document.getElementById('targetSheetContainer');
+    if (targetCon) targetCon.classList.add('hidden'); // ซ่อนเวลาแก้ไข เพราะย้ายด้วยปุ่มย้ายแทน
+
     const btnSubmit = document.querySelector('#addProductForm button[type="submit"]');
     if (btnSubmit) btnSubmit.innerHTML = '<i class="fa-solid fa-pen"></i> บันทึกอัปเดตข้อมูล';
     window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// ====== Action ย้ายคลัง & คอมเมนต์ ======
+async function moveProductAction(productId) {
+    const targetSheet = document.getElementById('move_targetSheet').value;
+    showLoading(true);
+    try {
+        const res = await API_moveProduct(productId, targetSheet);
+        showLoading(false);
+        showToast(res.message, res.success ? 'success' : 'error');
+        if (res.success) {
+            closeProductView();
+            fetchProducts();
+        }
+    } catch (err) {
+        showLoading(false);
+        showToast('ผิดพลาด: ' + err, 'error');
+    }
+}
+
+async function addCommentAction(productId) {
+    const input = document.getElementById('newComment_' + productId);
+    const val = input.value.trim();
+    if (!val) return;
+    input.value = '';
+
+    showLoading(true);
+    try {
+        const res = await API_addComment(productId, val);
+        showLoading(false);
+        if (res.success) {
+            loadComments(productId); // โหลดใหม่
+        } else {
+            showToast(res.message, 'error');
+        }
+    } catch (err) {
+        showLoading(false);
+        showToast('ผิดพลาด: ' + err, 'error');
+    }
+}
+
+async function loadComments(productId) {
+    const listDiv = document.getElementById('commentList_' + productId);
+    if (!listDiv) return;
+    listDiv.innerHTML = '<div class="text-center text-gray-400 py-4"><i class="fa-solid fa-circle-notch fa-spin"></i> กำลังโหลด...</div>';
+
+    try {
+        const comments = await API_getComments(productId);
+        if (!comments || comments.length === 0) {
+            listDiv.innerHTML = '<div class="text-xs text-gray-400 text-center py-2">ยังไม่มีประวัติการถอดอะไหล่</div>';
+            return;
+        }
+
+        // Show older first or newer first
+        let html = '';
+        comments.forEach(c => {
+            html += `
+            <div class="border-b last:border-0 pb-2 mb-2">
+                <div class="flex justify-between items-center mb-0.5">
+                    <span class="font-bold text-gray-700 text-xs"><i class="fa-solid fa-user-circle text-gray-400"></i> ${c.user}</span>
+                    <span class="text-[10px] text-gray-400">${c.timestamp}</span>
+                </div>
+                <div class="text-gray-600">${c.text}</div>
+            </div>`;
+        });
+        listDiv.innerHTML = html;
+        listDiv.scrollTop = listDiv.scrollHeight; // Scroll to bottom
+    } catch (err) {
+        listDiv.innerHTML = '<div class="text-xs text-red-400 py-2">โหลดข้อมูลล้มเหลว</div>';
+    }
 }
 
 // ====== ระบบขาย POS ======
@@ -757,16 +907,16 @@ function openSellModal(productId) {
     sellReceiptDataURI = null;
 
     document.getElementById('sellProductInfo').innerHTML = `
-    <div class="font-bold text-gray-800">${p.brand} ${p.model}</div>
+                < div class="font-bold text-gray-800" > ${p.brand} ${p.model}</div >
     <div class="text-xs text-gray-500">สเปค: ${p.ram || '-'}/${p.storage || '-'} ${p.color || ''} | IMEI: ${p.imei || '-'}</div>
     <div class="text-xs text-gray-500 mt-1">ต้นทุน: ฿${formatNumber(p.cost)} | ราคาตั้ง: ฿${formatNumber(p.price)}</div>`;
 
     const typeSel = document.getElementById('sell_type');
     typeSel.innerHTML = '<option value="">เลือกรูปแบบ</option>';
     if (window._appSettings && window._appSettings.saleTypes) {
-        window._appSettings.saleTypes.forEach(t => { typeSel.innerHTML += `<option value="${t}">${t}</option>`; });
+        window._appSettings.saleTypes.forEach(t => { typeSel.innerHTML += `< option value = "${t}" > ${t}</option > `; });
     } else {
-        API_getSettings().then(s => { window._appSettings = s; s.saleTypes.forEach(t => typeSel.innerHTML += `<option value="${t}">${t}</option>`); }).catch(() => { });
+        API_getSettings().then(s => { window._appSettings = s; s.saleTypes.forEach(t => typeSel.innerHTML += `< option value = "${t}" > ${t}</option > `); }).catch(() => { });
     }
 
     document.getElementById('sellModal').classList.remove('hidden');
@@ -822,29 +972,29 @@ async function confirmSell() {
 
 function showReceipt(r) {
     document.getElementById('receiptBody').innerHTML = `
-    <div class="text-center border-b pb-3 mb-3">
+                < div class="text-center border-b pb-3 mb-3" >
       <h2 class="text-lg font-bold text-gray-800">KP Shop</h2>
       <p class="text-xs text-gray-500">ใบเสร็จดิจิทัล</p>
       <p class="text-xs text-gray-400 mt-1">เลขที่: ${r.saleId}</p>
-    </div>
-    <div class="space-y-2 text-xs">
-      <div class="flex justify-between"><span class="text-gray-500">วันที่ขาย:</span><span class="font-medium">${r.saleDate}</span></div>
-      <div class="flex justify-between"><span class="text-gray-500">พนักงานขาย:</span><span class="font-medium">${r.salesperson}</span></div>
-      ${r.location ? `<div class="flex justify-between"><span class="text-gray-500">สาขา:</span><span class="font-medium">${r.location}</span></div>` : ''}
-      <hr>
-      <div class="bg-gray-50 p-2 rounded">
-        <div class="font-bold text-gray-800">${r.brand} ${r.model}</div>
-        <div class="text-gray-500">สเปค: ${r.spec}</div>
-        <div class="text-gray-500">IMEI: ${r.imei || '-'}</div>
-      </div>
-      <div class="flex justify-between"><span class="text-gray-500">รูปแบบการขาย:</span><span class="font-medium">${r.saleType}</span></div>
-      <hr>
-      <div class="flex justify-between text-base"><span class="font-bold text-gray-800">ราคาขาย:</span><span class="font-bold text-brand-600">฿${formatNumber(r.soldPrice)}</span></div>
-      <hr>
-      ${r.customerName ? `<div class="flex justify-between"><span class="text-gray-500">ลูกค้า:</span><span class="font-medium">${r.customerName}</span></div>` : ''}
-      ${r.customerPhone ? `<div class="flex justify-between"><span class="text-gray-500">เบอร์โทร:</span><span class="font-medium">${r.customerPhone}</span></div>` : ''}
-    </div>
-    <div class="text-center mt-4 text-xs text-gray-400"><p>ขอบคุณที่ใช้บริการ KP Shop</p></div>`;
+    </div >
+                <div class="space-y-2 text-xs">
+                    <div class="flex justify-between"><span class="text-gray-500">วันที่ขาย:</span><span class="font-medium">${r.saleDate}</span></div>
+                    <div class="flex justify-between"><span class="text-gray-500">พนักงานขาย:</span><span class="font-medium">${r.salesperson}</span></div>
+                    ${r.location ? `<div class="flex justify-between"><span class="text-gray-500">สาขา:</span><span class="font-medium">${r.location}</span></div>` : ''}
+                    <hr>
+                        <div class="bg-gray-50 p-2 rounded">
+                            <div class="font-bold text-gray-800">${r.brand} ${r.model}</div>
+                            <div class="text-gray-500">สเปค: ${r.spec}</div>
+                            <div class="text-gray-500">IMEI: ${r.imei || '-'}</div>
+                        </div>
+                        <div class="flex justify-between"><span class="text-gray-500">รูปแบบการขาย:</span><span class="font-medium">${r.saleType}</span></div>
+                        <hr>
+                            <div class="flex justify-between text-base"><span class="font-bold text-gray-800">ราคาขาย:</span><span class="font-bold text-brand-600">฿${formatNumber(r.soldPrice)}</span></div>
+                            <hr>
+                                ${r.customerName ? `<div class="flex justify-between"><span class="text-gray-500">ลูกค้า:</span><span class="font-medium">${r.customerName}</span></div>` : ''}
+                                ${r.customerPhone ? `<div class="flex justify-between"><span class="text-gray-500">เบอร์โทร:</span><span class="font-medium">${r.customerPhone}</span></div>` : ''}
+                            </div>
+                            <div class="text-center mt-4 text-xs text-gray-400"><p>ขอบคุณที่ใช้บริการ KP Shop</p></div>`;
     document.getElementById('receiptModal').classList.remove('hidden');
 }
 
