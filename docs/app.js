@@ -269,7 +269,7 @@ function viewProduct(id) {
     const contentBody = document.getElementById('productDetailBody');
 
     const images = product.images && product.images.length > 0 && product.images[0].trim() !== '' ? product.images : [NO_IMAGE];
-    let galleryHtml = `<div class="relative w-full group"><div id="productImageGallery" class="w-full flex overflow-x-auto snap-x snap-mandatory hide-scrollbar scroll-smooth" onscroll="syncImageIndicator()">`;
+    let galleryHtml = `<div class="relative w-full group"><div id="productImageGallery" class="w-full flex overflow-x-auto snap-x snap-mandatory hide-scrollbar scroll-smooth">`;
     images.forEach(imgUrl => {
         galleryHtml += `<div class="min-w-full snap-center flex justify-center bg-gray-100 relative items-center cursor-pointer" style="height:350px;" onclick="viewFullImage('${imgUrl}')"><img src="${imgUrl}" class="max-h-full max-w-full object-contain" alt="Product Image" onerror="this.onerror=null;this.src=NO_IMAGE;"></div>`;
     });
@@ -359,37 +359,48 @@ function viewProduct(id) {
 
     modal.classList.remove('hidden');
 
+    const gallery = document.getElementById('productImageGallery');
+    const dotsContainer = document.getElementById('productImageIndicators');
+    if (gallery && dotsContainer) {
+        const dots = Array.from(dotsContainer.querySelectorAll('div'));
+        if (dots.length > 1) {
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        const index = Array.from(gallery.children).indexOf(entry.target);
+                        if (index !== -1 && dots[index]) {
+                            dots.forEach(d => { d.classList.remove('bg-brand-500'); d.classList.add('bg-gray-300'); });
+                            dots[index].classList.remove('bg-gray-300');
+                            dots[index].classList.add('bg-brand-500');
+                        }
+                    }
+                });
+            }, { root: gallery, threshold: 0.5 });
+
+            Array.from(gallery.children).forEach(child => observer.observe(child));
+            modal.imageObserver = observer;
+        }
+    }
+
     if (spareCommentHtml !== '') {
         loadComments(product.id);
     }
 }
 
-function closeProductView() { document.getElementById('productDetailModal').classList.add('hidden'); }
+function closeProductView() {
+    const modal = document.getElementById('productDetailModal');
+    if (modal.imageObserver) {
+        modal.imageObserver.disconnect();
+        modal.imageObserver = null;
+    }
+    modal.classList.add('hidden');
+}
 
 function scrollGallery(direction) {
     const gallery = document.getElementById('productImageGallery');
     if (!gallery) return;
     const scrollAmount = gallery.clientWidth * direction;
     gallery.scrollBy({ left: scrollAmount, behavior: 'smooth' });
-}
-
-function syncImageIndicator() {
-    const gallery = document.getElementById('productImageGallery');
-    const indicators = document.getElementById('productImageIndicators');
-    if (!gallery || !indicators) return;
-
-    let index = Math.round(gallery.scrollLeft / gallery.clientWidth);
-
-    const dots = indicators.querySelectorAll('div');
-    dots.forEach((dot, i) => {
-        if (i === index) {
-            dot.classList.remove('bg-gray-300');
-            dot.classList.add('bg-brand-500');
-        } else {
-            dot.classList.remove('bg-brand-500');
-            dot.classList.add('bg-gray-300');
-        }
-    });
 }
 
 function viewFullImage(url) {
