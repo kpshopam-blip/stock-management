@@ -15,6 +15,8 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <!-- QuaggaJS Barcode Scanner -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
+  <!-- html2canvas for Receipt Download -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
   <!-- Tailwind Config -->
   <script>
@@ -646,12 +648,16 @@
           class="w-8 h-8 rounded-full bg-gray-200 text-gray-600 hover:bg-red-100 hover:text-red-500 flex justify-center items-center transition"><i
             class="fa-solid fa-xmark"></i></button>
       </div>
-      <div id="receiptBody" class="p-4 overflow-y-auto flex-grow text-sm"></div>
-      <div class="px-4 py-3 border-t bg-gray-50 text-center">
-        <p class="text-xs text-gray-500 mb-2">กรุณากดปุ่ม Screenshot หน้าจอเพื่อบันทึกใบเสร็จ</p>
+      <div id="receiptBody" class="p-4 overflow-y-auto flex-grow text-sm bg-white"></div>
+      <div class="px-4 py-3 border-t bg-gray-50 flex gap-2">
+        <button onclick="downloadReceipt()"
+          class="flex-1 py-2 bg-brand-600 text-white font-medium rounded hover:bg-brand-700 transition shadow text-sm flex justify-center items-center gap-2">
+          <i class="fa-solid fa-download"></i> บันทึกรูปใบเสร็จ
+        </button>
         <button onclick="document.getElementById('receiptModal').classList.add('hidden')"
-          class="px-5 py-2 bg-green-600 text-white font-medium rounded hover:bg-green-700 transition shadow text-sm"><i
-            class="fa-solid fa-check"></i> ปิดใบเสร็จ</button>
+          class="w-1/3 py-2 bg-gray-300 text-gray-700 font-medium rounded hover:bg-gray-400 transition shadow text-sm">
+          <i class="fa-solid fa-xmark"></i> ปิด
+        </button>
       </div>
     </div>
   </div>
