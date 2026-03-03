@@ -594,9 +594,61 @@ function renderImagePreviews() {
     });
 }
 
+// ====== ตรวจสอบ IMEI ซ้ำ (Frontend) ======
+function checkImeiDuplicate(imei, excludeId) {
+    if (!imei || imei.trim() === '') return null;
+    const norm = imei.trim().toLowerCase();
+    return allProducts.find(p => {
+        if (excludeId && p.id === excludeId) return false;
+        const pImei = (p.imei || '').trim().toLowerCase();
+        return pImei !== '' && pImei === norm && (p.status || 'Available').toLowerCase() !== 'sold';
+    }) || null;
+}
+
+function onImeiInput(value) {
+    const warningDiv = document.getElementById('imei_warning');
+    const imeiInput = document.getElementById('p_imei');
+    if (!warningDiv || !imeiInput) return;
+
+    const dup = checkImeiDuplicate(value, editingProductId);
+    if (dup) {
+        // แสดงคำเตือนในโหมดแดง
+        imeiInput.classList.add('border-red-500', 'bg-red-50');
+        imeiInput.classList.remove('border-gray-300');
+        warningDiv.className = 'mt-1.5 flex items-start gap-1.5 text-xs font-medium rounded-md px-2.5 py-2 bg-red-50 border border-red-200 text-red-700';
+        warningDiv.innerHTML = `<i class="fa-solid fa-circle-exclamation mt-0.5 shrink-0"></i><span><b>⚠️ IMEI/Serial นี้มีในระบบแล้ว!</b><br>พบในสินค้า: <b>${dup.brand} ${dup.model}</b> (ID: ${dup.id})<br>สถานะ: <b>${dup.status}</b></span>`;
+    } else if (value.trim() !== '') {
+        // IMEI ไม่ซ้ำ แสดงสีเขียว
+        imeiInput.classList.remove('border-red-500', 'bg-red-50');
+        imeiInput.classList.add('border-green-400', 'bg-green-50');
+        imeiInput.classList.remove('border-gray-300');
+        warningDiv.className = 'mt-1.5 flex items-start gap-1.5 text-xs font-medium rounded-md px-2.5 py-2 bg-green-50 border border-green-200 text-green-700';
+        warningDiv.innerHTML = '<i class="fa-solid fa-circle-check mt-0.5 shrink-0"></i><span>IMEI/Serial นี้ยังไม่เคยบันทึกในระบบ</span>';
+    } else {
+        // ว่างเปล่า รีเซ็ตคืน
+        imeiInput.classList.remove('border-red-500', 'bg-red-50', 'border-green-400', 'bg-green-50');
+        imeiInput.classList.add('border-gray-300');
+        warningDiv.className = 'hidden';
+        warningDiv.innerHTML = '';
+    }
+}
+
 // ====== บันทึก / แก้ไขสินค้า ======
 async function submitProduct(event) {
     event.preventDefault();
+
+    const imeiVal = document.getElementById('p_imei').value.trim();
+
+    // ตรวจสอบ IMEI ซ้ำใน Frontend (ความปลอดภัยชั้นที่ 1)
+    if (imeiVal) {
+        const dup = checkImeiDuplicate(imeiVal, editingProductId);
+        if (dup) {
+            showToast('IMEI/Serial "' + imeiVal + '" ซ้ำกับ ' + dup.brand + ' ' + dup.model + ' กรุณาตรวจสอบใหม่', 'error', 5000);
+            document.getElementById('p_imei').focus();
+            return; // หยุด ไม่ส่งไป Backend
+        }
+    }
+
     showLoading(true);
 
     const productData = {
@@ -608,7 +660,7 @@ async function submitProduct(event) {
         source: document.getElementById('p_source').value,
         cost: document.getElementById('p_cost').value,
         price: document.getElementById('p_price').value,
-        imei: document.getElementById('p_imei').value,
+        imei: imeiVal,
         condition: document.getElementById('p_condition').value,
         defect: document.getElementById('p_defect').value,
         battery: document.getElementById('p_battery').value,
@@ -637,7 +689,7 @@ async function submitProduct(event) {
             resetProductForm();
             fetchInventoryData();
         } else {
-            showToast(res.message, 'error');
+            showToast(res.message, 'error', 6000);
         }
     } catch (err) {
         showLoading(false);
@@ -649,6 +701,11 @@ function resetProductForm() {
     document.getElementById('addProductForm').reset();
     document.getElementById('imagePreviewContainer').innerHTML = '';
     fileQueue = []; existingImages = []; editingProductId = null;
+    // reset IMEI warning
+    const imeiInput = document.getElementById('p_imei');
+    const warningDiv = document.getElementById('imei_warning');
+    if (imeiInput) { imeiInput.classList.remove('border-red-500', 'bg-red-50', 'border-green-400', 'bg-green-50'); imeiInput.classList.add('border-gray-300'); }
+    if (warningDiv) { warningDiv.className = 'hidden'; warningDiv.innerHTML = ''; }
     const btnSubmit = document.querySelector('#addProductForm button[type="submit"]');
     if (btnSubmit) btnSubmit.innerHTML = '<i class="fa-solid fa-save"></i> บันทึกเข้าระบบ';
 }
@@ -859,5 +916,9 @@ function onBarcodeDetected(result) {
     const numbersOnly = code.replace(/\D/g, '');
     const finalResult = numbersOnly || code;
     const imeiInput = document.getElementById('p_imei');
-    if (imeiInput) { imeiInput.value = finalResult; showToast('สแกนสำเร็จ: ' + finalResult, 'success'); }
+    if (imeiInput) {
+        imeiInput.value = finalResult;
+        onImeiInput(finalResult); // ตรวจ IMEI ซ้ำหลังสแกน
+        showToast('สแกนสำเร็จ: ' + finalResult, 'success');
+    }
 }
