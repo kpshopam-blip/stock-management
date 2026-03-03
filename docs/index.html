@@ -174,7 +174,7 @@
             <span class="font-bold text-lg sm:text-xl tracking-wide">KP Shop</span>
           </div>
           <div class="flex-1 max-w-lg mx-4 hidden md:flex relative text-gray-800">
-            <input type="text" id="storeSearchDesktop" placeholder="ค้นหารุ่น, ยี่ห้อ, ความจุ, สี..."
+            <input type="text" id="storeSearchDesktop" placeholder="ค้นหารุ่น, ยี่ห้อ, ความจุ, สี, หรือ IMEI..."
               class="w-full py-2 pl-4 pr-12 rounded-sm focus:outline-none border-none shadow-inner text-sm">
             <button onclick="searchProducts('storeSearchDesktop')"
               class="absolute top-0 right-0 h-full w-12 bg-gray-800 text-white rounded-r-sm hover:bg-gray-700 transition flex justify-center items-center">
@@ -201,7 +201,7 @@
         </div>
       </div>
       <div class="md:hidden px-4 pb-3 flex text-gray-800">
-        <input type="text" id="storeSearchMobile" placeholder="ค้นหาสินค้า..."
+        <input type="text" id="storeSearchMobile" placeholder="ค้นหาสินค้า, IMEI..."
           class="flex-1 py-2 pl-3 rounded-l-sm focus:outline-none text-sm shadow-inner">
         <button onclick="searchProducts('storeSearchMobile')"
           class="bg-gray-800 px-4 text-white rounded-r-sm flex justify-center items-center">
@@ -241,15 +241,21 @@
               id="tab_Spare">เครื่องอะไหล่</button>
           </div>
         </div>
-        <select id="filterBrand" onchange="filterProducts()"
-          class="text-sm border-gray-300 rounded py-1 pl-2 pr-6 focus:ring-brand-500 outline-none text-gray-600">
-          <option value="">ทุกยี่ห้อ</option>
-          <option value="Apple">Apple / iPhone</option>
-          <option value="Samsung">Samsung</option>
-          <option value="Oppo">Oppo</option>
-          <option value="Vivo">Vivo</option>
-          <option value="Xiaomi">Xiaomi</option>
-        </select>
+        <div class="flex gap-2">
+          <select id="filterBrand" onchange="filterProducts()"
+            class="text-sm border-gray-300 rounded py-1 pl-2 pr-6 focus:ring-brand-500 outline-none text-gray-600">
+            <option value="">ทุกยี่ห้อ</option>
+            <option value="Apple">Apple / iPhone</option>
+            <option value="Samsung">Samsung</option>
+            <option value="Oppo">Oppo</option>
+            <option value="Vivo">Vivo</option>
+            <option value="Xiaomi">Xiaomi</option>
+          </select>
+          <select id="filterLocation" onchange="filterProducts()"
+            class="text-sm border-gray-300 rounded py-1 pl-2 pr-6 focus:ring-brand-500 outline-none text-gray-600">
+            <option value="">ทุกสาขา / ทุกที่อยู่</option>
+          </select>
+        </div>
       </div>
       <div id="productGrid" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4">
         <div class="bg-white p-2 rounded animate-pulse border">
