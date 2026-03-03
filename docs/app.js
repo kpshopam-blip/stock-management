@@ -1100,11 +1100,40 @@ async function downloadReceipt() {
         el.style.padding = '1rem'; // คืนค่า padding class กลับ
 
         const imgData = canvas.toDataURL('image/png');
+        const blob = await (await fetch(imgData)).blob();
+        const filename = `Receipt_KPShop_${new Date().getTime()}.png`;
+
+        try {
+            // ลองใช้ Web Share API (สำหรับมือถือ รองรับการ Share/Save รูปภาพตรงๆ เข้าเครื่อง)
+            if (navigator.share && navigator.canShare) {
+                const file = new File([blob], filename, { type: 'image/png' });
+                if (navigator.canShare({ files: [file] })) {
+                    showLoading(false);
+                    await navigator.share({
+                        files: [file],
+                        title: 'ใบเสร็จการขาย KP Shop',
+                    });
+                    return; // เซฟเสร็จแล้วจบคำสั่งตรงนี้
+                }
+            }
+        } catch (err) {
+            console.log('Share API Error/Cancelled:', err);
+        }
+
+        // Fallback (สำหรับ PC หรือบราวเซอร์ที่ไม่รองรับ Share API)
+        const url = window.URL.createObjectURL(blob);
         const link = document.createElement('a');
-        link.href = imgData;
-        const tk = new Date().getTime();
-        link.download = `Receipt_KPShop_${tk}.png`;
+        link.style.display = 'none';
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
         link.click();
+
+        setTimeout(() => {
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+        }, 100);
+
         showLoading(false);
         showToast('บันทึกใบเสร็จสำเร็จ', 'success');
     } catch (e) {
