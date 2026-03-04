@@ -795,15 +795,62 @@ function toggleForm(formId) {
 // ====== อัปโหลดรูปภาพ ======
 function previewImages(input) {
     if (!input.files || input.files.length === 0) return;
-    let filesRead = 0;
+    showLoading(true); // ป้องกันกดซ้ำตอนกำลังบีบอัดรูปรัวๆ
+    let filesProcessed = 0;
     const totalFiles = input.files.length;
+
+    // ตั้งค่าขนาดสูงสุดที่ต้องการให้บีบอัด
+    const MAX_WIDTH = 1200;
+    const MAX_HEIGHT = 1200;
+    const QUALITY = 0.7; // คุณภาพ JPEG (0.0 - 1.0)
+
     for (let i = 0; i < input.files.length; i++) {
         const file = input.files[i];
         const reader = new FileReader();
+
         reader.onload = function (e) {
-            fileQueue.push({ id: 'new_' + Date.now() + '_' + Math.floor(Math.random() * 1000), filename: Date.now() + '_' + file.name, dataURI: e.target.result });
-            filesRead++;
-            if (filesRead === totalFiles) { renderImagePreviews(); input.value = ''; }
+            const img = new Image();
+            img.onload = function () {
+                // คำนวณขนาดภาพใหม่ ให้ไม่เกิน MAX_WIDTH x MAX_HEIGHT แต่คงอัตราส่วนเดิม
+                let width = img.width;
+                let height = img.height;
+
+                if (width > height) {
+                    if (width > MAX_WIDTH) {
+                        height *= MAX_WIDTH / width;
+                        width = MAX_WIDTH;
+                    }
+                } else {
+                    if (height > MAX_HEIGHT) {
+                        width *= MAX_HEIGHT / height;
+                        height = MAX_HEIGHT;
+                    }
+                }
+
+                // สร้าง Canvas เพิ่อวาดรูปที่ย่อขนาดแล้ว
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+
+                // ดึงภาพย่อเป็น DataURI นามสกุล jpeg 
+                const compressedDataURI = canvas.toDataURL('image/jpeg', QUALITY);
+
+                fileQueue.push({
+                    id: 'new_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
+                    filename: Date.now() + '_' + file.name.replace(/\.[^/.]+$/, "") + '.jpg', // เปลี่ยนนามสกุลตาม
+                    dataURI: compressedDataURI
+                });
+
+                filesProcessed++;
+                if (filesProcessed === totalFiles) {
+                    renderImagePreviews();
+                    input.value = '';
+                    showLoading(false);
+                }
+            };
+            img.src = e.target.result;
         };
         reader.readAsDataURL(file);
     }
@@ -1108,14 +1155,44 @@ function closeSellModal() { document.getElementById('sellModal').classList.add('
 
 function previewReceiptImage(input) {
     if (!input.files || input.files.length === 0) return;
+    showLoading(true);
+    const file = input.files[0];
     const reader = new FileReader();
+
+    // ตั้งค่าขนาดบีบอัดใบเสร็จ POS
+    const MAX_WIDTH = 1200;
+    const MAX_HEIGHT = 1200;
+    const QUALITY = 0.7;
+
     reader.onload = function (e) {
-        sellReceiptDataURI = e.target.result;
-        document.getElementById('receiptPreviewImg').src = e.target.result;
-        document.getElementById('receiptPreview').classList.remove('hidden');
-        input.value = '';
+        const img = new Image();
+        img.onload = function () {
+            let width = img.width;
+            let height = img.height;
+
+            if (width > height) {
+                if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
+            } else {
+                if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; }
+            }
+
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+
+            const compressedDataURI = canvas.toDataURL('image/jpeg', QUALITY);
+
+            sellReceiptDataURI = compressedDataURI;
+            document.getElementById('receiptPreviewImg').src = compressedDataURI;
+            document.getElementById('receiptPreview').classList.remove('hidden');
+            input.value = '';
+            showLoading(false);
+        };
+        img.src = e.target.result;
     };
-    reader.readAsDataURL(input.files[0]);
+    reader.readAsDataURL(file);
 }
 
 async function confirmSell() {
