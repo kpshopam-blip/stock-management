@@ -474,13 +474,16 @@ function renderInventoryTable(products) {
       <option value="Repair"    ${statusVal === 'Repair' ? 'selected' : ''}>🟤 ส่งซ่อม/เคลม</option>
       <option value="Sold"      ${statusVal === 'Sold' ? 'selected' : ''}>⚫ ขายแล้ว</option>`;
 
+        const hasImage = p.images && p.images.length > 0 && p.images[0].trim() !== '';
+        const noImageBadge = !hasImage ? `<span class="px-1.5 py-0.5 bg-red-100 text-red-600 rounded text-[10px] ml-1 border border-red-200" title="ไม่มีรูปภาพ"><i class="fa-solid fa-image-slash"></i> ไม่มีรูป</span>` : '';
+
         // ตาราง (จอใหญ่)
         if (tbody) {
             const tr = document.createElement('tr');
             tr.className = 'hover:bg-gray-50 transition border-b inv-row';
             tr.setAttribute('data-search', `${p.model} ${p.brand} ${p.id} ${p.imei || ''} ${p.color || ''}`.toLowerCase());
             tr.innerHTML = `
-        <td class="px-4 py-3"><div class="font-medium text-gray-800">${p.model}</div><div class="text-xs text-gray-500">${p.brand} | ${p.id}</div></td>
+        <td class="px-4 py-3"><div class="font-medium text-gray-800 flex items-center">${p.model} ${noImageBadge}</div><div class="text-xs text-gray-500">${p.brand} | ${p.id}</div></td>
         <td class="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">${p.dateAdded || '-'}</td>
         <td class="px-4 py-3 text-gray-600">${spec}</td>
         <td class="px-4 py-3 text-xs text-gray-500">${p.imei || '-'}</td>
@@ -502,7 +505,7 @@ function renderInventoryTable(products) {
             card.setAttribute('data-search', `${p.model} ${p.brand} ${p.id} ${p.imei || ''} ${p.color || ''}`.toLowerCase());
             card.innerHTML = `
         <div class="flex justify-between items-start mb-2">
-          <div><div class="font-semibold text-gray-800 text-sm">${p.model}</div><div class="text-xs text-gray-500">${p.brand} | ${p.id}</div></div>
+          <div><div class="font-semibold text-gray-800 text-sm flex items-center">${p.model} ${noImageBadge}</div><div class="text-xs text-gray-500">${p.brand} | ${p.id}</div></div>
           <span class="px-2 py-0.5 rounded text-xs font-medium shrink-0 ${statusClass}">${statusText}</span>
         </div>
         <div class="grid grid-cols-2 gap-x-3 gap-y-1 text-xs mb-2">
@@ -992,10 +995,13 @@ function openSellModal(productId) {
     document.getElementById('receiptPreview').classList.add('hidden');
     sellReceiptDataURI = null;
 
+    const isManager = currentUser && (currentUser.role === 'Manager' || currentUser.role === 'ผู้จัดการ');
+    const costHtml = isManager ? `ต้นทุน: ฿${formatNumber(p.cost)} | ` : ``;
+
     document.getElementById('sellProductInfo').innerHTML = `
                 <div class="font-bold text-gray-800">${p.brand} ${p.model}</div>
     <div class="text-xs text-gray-500">สเปค: ${p.ram || '-'}/${p.storage || '-'} ${p.color || ''} | IMEI: ${p.imei || '-'}</div>
-    <div class="text-xs text-gray-500 mt-1">ต้นทุน: ฿${formatNumber(p.cost)} | ราคาตั้ง: ฿${formatNumber(p.price)}</div>`;
+    <div class="text-xs text-gray-500 mt-1">${costHtml}ราคาตั้ง: ฿${formatNumber(p.price)}</div>`;
 
     const typeSel = document.getElementById('sell_type');
     typeSel.innerHTML = '<option value="">เลือกรูปแบบ</option>';
