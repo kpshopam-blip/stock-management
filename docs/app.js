@@ -2,7 +2,7 @@
 // ====================================================================
 // JavaScript หลักของแอป KP Shop
 // แทนที่ JS.html เดิม — ใช้ API layer (api.js) แทน google.script.run
-// ===================================================================
+// ====================================================================
 
 // ====== ตัวแปรและสถานะรวม ======
 let currentUser = null;
@@ -123,8 +123,6 @@ function loadStore() {
 
     if (currentUser.role === 'Manager' || currentUser.role === 'ผู้จัดการ') {
         document.getElementById('btnOpenInventory').classList.remove('hidden');
-        const dashBtn = document.getElementById('btnOpenDashboard');
-        if (dashBtn) dashBtn.classList.remove('hidden');
         document.getElementById('storeTabs').classList.remove('hidden');
         document.getElementById('tab_Employee').classList.remove('hidden');
         document.getElementById('tab_Spare').classList.remove('hidden');
@@ -132,6 +130,10 @@ function loadStore() {
         document.getElementById('storeTabs').classList.remove('hidden');
         document.getElementById('tab_Spare').classList.remove('hidden');
     }
+
+    // ทุกคนสามารถดู Dashboard/รายการขายได้ แต่เห็นข้อมูลต่างกัน
+    const dashBtn = document.getElementById('btnOpenDashboard');
+    if (dashBtn) dashBtn.classList.remove('hidden');
 
     fetchProducts();
 }
@@ -158,6 +160,18 @@ function setStockTab(tabName) {
 }
 
 async function fetchProducts() {
+    const grid = document.getElementById('productGrid');
+    const noData = document.getElementById('noProductFound');
+    if (grid) {
+        grid.innerHTML = `
+            <div class="col-span-2 md:col-span-4 lg:col-span-5 flex flex-col items-center justify-center py-16 text-gray-400">
+                <i class="fa-solid fa-circle-notch fa-spin text-4xl text-brand-400 mb-3"></i>
+                <p>กำลังโหลดข้อมูลสินค้า...</p>
+            </div>
+        `;
+    }
+    if (noData) noData.classList.add('hidden');
+
     try {
         const products = await API_getProducts();
         allProducts = products;
@@ -564,8 +578,25 @@ async function deleteProduct(productId) {
 
 // ====== Dashboard ======
 async function loadDashboard() {
-    if (!currentUser || (currentUser.role !== 'Manager' && currentUser.role !== 'ผู้จัดการ')) { showToast('เฉพาะผู้จัดการเท่านั้นที่สามารถเข้าถึงได้', 'warning'); return; }
     renderPage('tpl-dashboard');
+
+    // ตั้งค่า UI สำหรับพนักงานทั่วไปทันทีที่โหลดหน้าจอ ป้องกันการค้างกรณีเน็ตช้าหรือโหลดไม่ติด
+    const isManager = currentUser && (currentUser.role === 'Manager' || currentUser.role === 'ผู้จัดการ');
+    if (!isManager) {
+        const smCards = document.getElementById('managerSummaryCards');
+        if (smCards) smCards.classList.add('hidden');
+        const chartCard = document.getElementById('managerChartCard');
+        if (chartCard) chartCard.classList.add('hidden');
+        const spFilter = document.getElementById('dashSalespersonFilter');
+        if (spFilter) spFilter.classList.add('hidden');
+
+        // เปลี่ยนหัวข้อ
+        const dashTitle = document.querySelector('h2');
+        if (dashTitle && dashTitle.innerText.includes('Dashboard')) {
+            dashTitle.innerHTML = '<i class="fa-solid fa-list text-brand-500"></i> รายการขายของฉัน';
+        }
+    }
+
     try {
         const data = await API_getSalesSummary();
         renderDashboard(data);
@@ -575,33 +606,66 @@ async function loadDashboard() {
 }
 
 function renderDashboard(d) {
-    _dashboardData = d;
-    document.getElementById('dash_todaySales').textContent = (d.today.sales || 0) + ' เครื่อง';
-    document.getElementById('dash_todayRevenue').textContent = '฿' + formatNumber(d.today.revenue || 0);
-    document.getElementById('dash_todayProfit').textContent = '฿' + formatNumber(d.today.profit || 0);
-    document.getElementById('dash_monthSales').textContent = (d.month.sales || 0) + ' เครื่อง';
-    document.getElementById('dash_monthRevenue').textContent = '฿' + formatNumber(d.month.revenue || 0);
-    document.getElementById('dash_monthProfit').textContent = 'กำไร: ฿' + formatNumber(d.month.profit || 0);
-    document.getElementById('dash_stockCount').textContent = (d.stock.count || 0) + ' เครื่อง';
-    document.getElementById('dash_stockValue').textContent = 'มูลค่า: ฿' + formatNumber(d.stock.value || 0);
+    const isManager = currentUser.role === 'Manager' || currentUser.role === 'ผู้จัดการ';
 
-    const chart = document.getElementById('dash_chart');
-    chart.innerHTML = '';
-    const maxRev = Math.max(...d.last7Days.map(x => x.revenue), 1);
-    d.last7Days.forEach(day => {
-        const pct = Math.max((day.revenue / maxRev) * 100, 2);
-        const bar = document.createElement('div');
-        bar.className = 'flex-1 flex flex-col items-center justify-end gap-1';
-        bar.innerHTML = `<div class="text-xs font-bold text-brand-600">${day.count > 0 ? day.count : ''}</div><div class="w-full bg-gradient-to-t from-brand-500 to-brand-300 rounded-t transition-all" style="height:${pct}%"></div><div class="text-[10px] text-gray-500">${day.date}</div>`;
-        chart.appendChild(bar);
-    });
+    // ตั้งค่าข้อมูลตั้งต้น
+    let displayList = d.salesList || [];
+    let todaySales = d.today.sales || 0;
+    let todayRevenue = d.today.revenue || 0;
+    let todayProfit = d.today.profit || 0;
 
-    const spSel = document.getElementById('dash_salesperson');
-    if (spSel) {
-        spSel.innerHTML = '<option value="">ทั้งหมด</option>';
-        (d.salespersons || []).forEach(sp => { spSel.innerHTML += `<option value="${sp}">${sp}</option>`; });
+    // ถ้าไม่ใช่ผู้จัดการ ให้แสดงแค่ยอดขายของตัวเอง และซ่อนองค์ประกอบที่ไม่เกี่ยวข้อง
+    if (!isManager) {
+        document.getElementById('managerSummaryCards').classList.add('hidden');
+        document.getElementById('managerChartCard').classList.add('hidden');
+        document.getElementById('dashSalespersonFilter').classList.add('hidden');
+
+        displayList = displayList.filter(s => s.salesperson === currentUser.name);
+
+        // ให้แสดงยอดรวม 2 ช่องแทน ของเฉพาะตัวพนักงานเอง
+        const dashTitle = document.querySelector('#tpl-dashboard h2');
+        if (dashTitle) dashTitle.innerHTML = '<i class="fa-solid fa-list text-brand-500"></i> รายการขายของฉัน';
+
+    } else {
+        document.getElementById('managerSummaryCards').classList.remove('hidden');
+        document.getElementById('managerChartCard').classList.remove('hidden');
+        document.getElementById('dashSalespersonFilter').classList.remove('hidden');
+
+        // Render Dashboard Cards for Manager
+        document.getElementById('dash_todaySales').textContent = todaySales + ' เครื่อง';
+        document.getElementById('dash_todayRevenue').textContent = '฿' + formatNumber(todayRevenue);
+        document.getElementById('dash_todayProfit').textContent = '฿' + formatNumber(todayProfit);
+        document.getElementById('dash_monthSales').textContent = (d.month.sales || 0) + ' เครื่อง';
+        document.getElementById('dash_monthRevenue').textContent = '฿' + formatNumber(d.month.revenue || 0);
+        document.getElementById('dash_monthProfit').textContent = 'กำไร: ฿' + formatNumber(d.month.profit || 0);
+        document.getElementById('dash_stockCount').textContent = (d.stock.count || 0) + ' เครื่อง';
+        document.getElementById('dash_stockValue').textContent = 'มูลค่า: ฿' + formatNumber(d.stock.value || 0);
+
+        const chart = document.getElementById('dash_chart');
+        chart.innerHTML = '';
+        const maxRev = Math.max(...d.last7Days.map(x => x.revenue), 1);
+        d.last7Days.forEach(day => {
+            const pct = Math.max((day.revenue / maxRev) * 100, 2);
+            const bar = document.createElement('div');
+            bar.className = 'flex-1 flex flex-col items-center justify-end gap-1';
+            bar.innerHTML = `<div class="text-xs font-bold text-brand-600">${day.count > 0 ? day.count : ''}</div><div class="w-full bg-gradient-to-t from-brand-500 to-brand-300 rounded-t transition-all" style="height:${pct}%"></div><div class="text-[10px] text-gray-500">${day.date}</div>`;
+            chart.appendChild(bar);
+        });
+
+        const spSel = document.getElementById('dash_salesperson');
+        if (spSel) {
+            spSel.innerHTML = '<option value="">ทั้งหมด</option>';
+            (d.salespersons || []).forEach(sp => { spSel.innerHTML += `<option value="${sp}">${sp}</option>`; });
+        }
     }
-    renderSalesList(d.salesList || []);
+
+    _dashboardData = d;
+    renderSalesList(displayList);
+
+    // พนักงานทั่วไป ต้องอัพเดตยอดรวมใน List ให้เห็นด้วยตอนโหลดครั้งแรก
+    if (!isManager) {
+        filterSalesList();
+    }
 }
 
 function parseDateDMY(str) {
@@ -630,6 +694,27 @@ function filterSalesList() {
     filtered.forEach(s => { totalRev += s.soldPrice; totalProfit += s.profit; });
     document.getElementById('dash_filterSummary').innerHTML = `พบ <b>${filtered.length}</b> รายการ | รวม <b class="text-brand-600">฿${formatNumber(totalRev)}</b> | กำไร <b class="text-green-600">฿${formatNumber(totalProfit)}</b>`;
     renderSalesList(filtered);
+
+    // อัปเดตกล่อง Dashboard ให้สัมพันธ์กับตัวกรอง
+    const isFiltered = fromStr || toStr || sp;
+    const lblSales = document.getElementById('lbl_dash_sales');
+    const lblProfit = document.getElementById('lbl_dash_profit');
+
+    if (isFiltered) {
+        if (lblSales) lblSales.textContent = 'ยอดขาย (ตามตัวกรอง)';
+        if (lblProfit) lblProfit.textContent = 'กำไร (ตามตัวกรอง)';
+
+        document.getElementById('dash_todaySales').textContent = filtered.length + ' เครื่อง';
+        document.getElementById('dash_todayRevenue').textContent = '฿' + formatNumber(totalRev);
+        document.getElementById('dash_todayProfit').textContent = '฿' + formatNumber(totalProfit);
+    } else {
+        if (lblSales) lblSales.textContent = 'ยอดขายวันนี้';
+        if (lblProfit) lblProfit.textContent = 'กำไรวันนี้';
+
+        document.getElementById('dash_todaySales').textContent = (_dashboardData.today.sales || 0) + ' เครื่อง';
+        document.getElementById('dash_todayRevenue').textContent = '฿' + formatNumber(_dashboardData.today.revenue || 0);
+        document.getElementById('dash_todayProfit').textContent = '฿' + formatNumber(_dashboardData.today.profit || 0);
+    }
 }
 
 function clearDashFilter() {
@@ -645,6 +730,8 @@ function renderSalesList(list) {
     if (!container) return;
     if (list.length === 0) { container.innerHTML = '<div class="text-center text-gray-400 text-sm py-8"><i class="fa-solid fa-receipt mr-1"></i> ไม่มีรายการขาย</div>'; return; }
 
+    const isManager = currentUser.role === 'Manager' || currentUser.role === 'ผู้จัดการ';
+
     let html = '';
     list.forEach(s => {
         const profitClass = s.profit >= 0 ? 'text-green-600' : 'text-red-600';
@@ -652,7 +739,10 @@ function renderSalesList(list) {
       <div class="bg-gray-50 border rounded-lg p-3 hover:bg-gray-100 transition">
         <div class="flex justify-between items-start mb-1">
           <div><div class="font-bold text-gray-800 text-sm">${s.brand} ${s.model}</div><div class="text-xs text-gray-500">IMEI: ${s.imei || '-'} | ${s.spec}</div></div>
-          <div class="text-right shrink-0"><div class="font-bold text-brand-600">฿${formatNumber(s.soldPrice)}</div><div class="text-xs ${profitClass}">กำไร: ฿${formatNumber(s.profit)}</div></div>
+          <div class="text-right shrink-0">
+            <div class="font-bold text-brand-600">฿${formatNumber(s.soldPrice)}</div>
+            ${isManager ? `<div class="text-xs ${profitClass}">กำไร: ฿${formatNumber(s.profit)}</div>` : ''}
+          </div>
         </div>
         <div class="grid grid-cols-2 gap-1 text-xs text-gray-500 mt-1">
           <div><i class="fa-regular fa-calendar mr-1"></i>${s.saleDate}</div>
@@ -1090,66 +1180,7 @@ function showReceipt(r) {
     document.getElementById('receiptModal').classList.remove('hidden');
 }
 
-async function downloadReceipt() {
-    const el = document.getElementById('receiptBody');
-    if (!el) return;
 
-    // บังคับพื้นหลังสีขาวตอนเซฟ ป้องกันพื้นหลังดำ/ใส
-    const originalBg = el.style.backgroundColor;
-    el.style.backgroundColor = '#ffffff';
-    el.style.padding = '20px'; // เพื่ม padding นิดหน่อยให้ภาพสวยงาม
-
-    try {
-        showLoading(true);
-        const canvas = await html2canvas(el, { scale: 2, useCORS: true });
-        el.style.backgroundColor = originalBg;
-        el.style.padding = '1rem'; // คืนค่า padding class กลับ
-
-        const imgData = canvas.toDataURL('image/png');
-        const blob = await (await fetch(imgData)).blob();
-        const filename = `Receipt_KPShop_${new Date().getTime()}.png`;
-
-        try {
-            // ลองใช้ Web Share API (สำหรับมือถือ รองรับการ Share/Save รูปภาพตรงๆ เข้าเครื่อง)
-            if (navigator.share && navigator.canShare) {
-                const file = new File([blob], filename, { type: 'image/png' });
-                if (navigator.canShare({ files: [file] })) {
-                    showLoading(false);
-                    await navigator.share({
-                        files: [file],
-                        title: 'ใบเสร็จการขาย KP Shop',
-                    });
-                    return; // เซฟเสร็จแล้วจบคำสั่งตรงนี้
-                }
-            }
-        } catch (err) {
-            console.log('Share API Error/Cancelled:', err);
-        }
-
-        // Fallback (สำหรับ PC หรือบราวเซอร์ที่ไม่รองรับ Share API)
-        const url = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.style.display = 'none';
-        link.href = url;
-        link.download = filename;
-        document.body.appendChild(link);
-        link.click();
-
-        setTimeout(() => {
-            document.body.removeChild(link);
-            window.URL.revokeObjectURL(url);
-        }, 100);
-
-        showLoading(false);
-        showToast('บันทึกใบเสร็จสำเร็จ', 'success');
-    } catch (e) {
-        showLoading(false);
-        el.style.backgroundColor = originalBg;
-        el.style.padding = '1rem';
-        showToast('ไม่สามารถบันทึกภาพได้', 'error');
-        console.error(e);
-    }
-}
 
 // ====== กล้อง QuaggaJS ======
 let allVideoDevices = [], currentDeviceIndex = 0, lastUsedDeviceId = null;
