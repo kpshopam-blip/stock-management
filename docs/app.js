@@ -1121,6 +1121,20 @@ async function loadComments(productId) {
 }
 
 // ====== ระบบขาย POS ======
+function toggleDownPayment() {
+    const type = document.getElementById('sell_type').value;
+    const dpContainer = document.getElementById('sell_downPaymentContainer');
+    if (!dpContainer) return;
+
+    // แสดงช่องเงินดาวน์ทุกกรณี ยกเว้นยังไม่ได้เลือก, มีคำว่า "สด" หรือมีคำว่า "พาร์ทเนอร์"
+    if (type && !type.includes('สด') && !type.includes('พาร์ทเนอร์')) {
+        dpContainer.classList.remove('hidden');
+    } else {
+        dpContainer.classList.add('hidden');
+        document.getElementById('sell_downPayment').value = '';
+    }
+}
+
 function openSellModal(productId) {
     const p = allProducts.find(x => x.id === productId);
     if (!p) { showToast('ไม่พบข้อมูลสินค้า', 'error'); return; }
@@ -1131,6 +1145,11 @@ function openSellModal(productId) {
     document.getElementById('sell_customerPhone').value = '';
     document.getElementById('receiptPreview').classList.add('hidden');
     sellReceiptDataURI = null;
+
+    const dpContainer = document.getElementById('sell_downPaymentContainer');
+    if (dpContainer) dpContainer.classList.add('hidden');
+    const dpInput = document.getElementById('sell_downPayment');
+    if (dpInput) dpInput.value = '';
 
     const isManager = currentUser && (currentUser.role === 'Manager' || currentUser.role === 'ผู้จัดการ');
     const costHtml = isManager ? `ต้นทุน: ฿${formatNumber(p.cost)} | ` : ``;
@@ -1201,8 +1220,10 @@ async function confirmSell() {
     const saleType = document.getElementById('sell_type').value;
     const customerName = document.getElementById('sell_customerName').value;
     const customerPhone = document.getElementById('sell_customerPhone').value;
+    const downPayment = document.getElementById('sell_downPayment') ? document.getElementById('sell_downPayment').value : '';
 
     if (!soldPrice || !saleType) { showToast('กรุณากรอกราคาขายจริง และเลือกรูปแบบการขาย', 'warning'); return; }
+    if (saleType && !saleType.includes('สด') && !saleType.includes('พาร์ทเนอร์') && !downPayment) { showToast('กรุณากรอกเงินดาวน์/ยอดรับชำระส่วนแรก', 'warning'); return; }
     if (!sellReceiptDataURI) { showToast('กรุณาอัปโหลดรูปใบเสร็จจากเครื่อง POS ก่อนกดยืนยัน', 'warning'); return; }
     if (!confirm('ยืนยันการขายสินค้าในราคา ฿' + formatNumber(soldPrice) + ' ใช่หรือไม่?')) return;
 
@@ -1210,6 +1231,7 @@ async function confirmSell() {
     try {
         const saleData = {
             productId, soldPrice, saleType, customerName, customerPhone,
+            downPayment: downPayment ? parseFloat(downPayment) : 0,
             salesperson: currentUser ? (currentUser.saleName || currentUser.name) : '',
             recordedBy: currentUser ? currentUser.name : '',
             receiptImage: sellReceiptDataURI ? { filename: 'receipt_' + Date.now() + '.jpg', dataURI: sellReceiptDataURI } : null
@@ -1249,6 +1271,10 @@ function showReceipt(r) {
                         <div class="flex justify-between"><span class="text-gray-500">รูปแบบการขาย:</span><span class="font-medium">${r.saleType}</span></div>
                         <hr>
                             <div class="flex justify-between text-base"><span class="font-bold text-gray-800">ราคาขาย:</span><span class="font-bold text-brand-600">฿${formatNumber(r.soldPrice)}</span></div>
+                            ${r.downPayment > 0 ? `
+                            <div class="flex justify-between text-sm mt-1"><span class="text-gray-500">เงินดาวน์:</span><span class="font-medium">฿${formatNumber(r.downPayment)}</span></div>
+                            <div class="flex justify-between text-sm"><span class="text-gray-500">ยอดจัด:</span><span class="font-medium text-red-500">฿${formatNumber(r.soldPrice - r.downPayment)}</span></div>
+                            ` : ''}
                             <hr>
                                 ${r.customerName ? `<div class="flex justify-between"><span class="text-gray-500">ลูกค้า:</span><span class="font-medium">${r.customerName}</span></div>` : ''}
                                 ${r.customerPhone ? `<div class="flex justify-between"><span class="text-gray-500">เบอร์โทร:</span><span class="font-medium">${r.customerPhone}</span></div>` : ''}
