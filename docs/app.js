@@ -1223,7 +1223,7 @@ async function confirmSell() {
     const downPayment = document.getElementById('sell_downPayment') ? document.getElementById('sell_downPayment').value : '';
 
     if (!soldPrice || !saleType) { showToast('กรุณากรอกราคาขายจริง และเลือกรูปแบบการขาย', 'warning'); return; }
-    if (saleType && !saleType.includes('สด') && !saleType.includes('พาร์ทเนอร์') && !downPayment) { showToast('กรุณากรอกเงินดาวน์/ยอดรับชำระส่วนแรก', 'warning'); return; }
+    if (saleType && !saleType.includes('สด') && !saleType.includes('พาร์ทเนอร์') && !downPayment) { showToast('กรุณากรอกเงินดาวน์ตามที่ไฟแนนซ์อนุมัติ', 'warning'); return; }
     if (!sellReceiptDataURI) { showToast('กรุณาอัปโหลดรูปใบเสร็จจากเครื่อง POS ก่อนกดยืนยัน', 'warning'); return; }
     if (!confirm('ยืนยันการขายสินค้าในราคา ฿' + formatNumber(soldPrice) + ' ใช่หรือไม่?')) return;
 
