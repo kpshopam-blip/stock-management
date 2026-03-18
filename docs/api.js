@@ -161,6 +161,18 @@ async function API_moveProduct(productId, targetSheet) {
     return apiPost('moveProduct', { productId, targetSheet });
 }
 
+// โอนข้ามสาขาหลายรายการ
+async function API_bulkTransfer(productIds, targetLocation) {
+    return apiPost('bulkTransfer', { productIds, targetLocation });
+}
+
+// ดึงประวัติการโอน
+async function API_getTransferHistory() {
+    const res = await apiGet('getTransferHistory');
+    if (!res.success) throw new Error(res.error || 'getTransferHistory failed');
+    return res.data;
+}
+
 // เพิ่มคอมเมนต์อะไหล่
 async function API_addComment(productId, commentText) {
     return apiPost('addComment', { productId, commentText });
