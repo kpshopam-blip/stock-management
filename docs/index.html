@@ -445,11 +445,20 @@
         </form>
       </div>
       <!-- ตารางสต็อก -->
+      <div id="bulkTransferActionContainer" class="hidden mb-4 bg-indigo-50 border border-indigo-200 rounded-lg p-3 items-center justify-between shadow-sm">
+        <div class="text-indigo-800 text-sm font-medium">
+          <i class="fa-solid fa-check-double mr-1 text-indigo-500"></i> เลือกสินค้า <span id="bulkTransferCount" class="font-bold bg-indigo-200 px-2 py-0.5 rounded text-indigo-900 mx-1">0</span> รายการ
+        </div>
+        <button onclick="openTransferSetupModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-1.5 rounded-md text-sm font-bold shadow transition flex items-center gap-2">
+          <i class="fa-solid fa-truck-fast"></i> โอนสินค้าข้ามสาขา
+        </button>
+      </div>
       <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
         <div
           class="p-4 border-b bg-gray-50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
           <h3 class="font-bold text-gray-800 shrink-0"><i class="fa-solid fa-list"></i> รายการสินค้าสต็อก</h3>
           <div class="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+            <button onclick="openTransferHistoryModal()" class="text-xs bg-white text-indigo-700 font-bold border border-indigo-200 px-3 py-1.5 rounded hover:bg-indigo-50 shrink-0 w-full sm:w-auto flex items-center gap-1 justify-center transition shadow-sm"><i class="fa-solid fa-clock-rotate-left"></i> ประวัติการโอน</button>
             <div class="relative w-full sm:w-64">
               <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400"><i
                   class="fa-solid fa-search"></i></span>
@@ -469,6 +478,9 @@
           <table class="w-full text-sm text-left whitespace-nowrap">
             <thead class="text-xs text-gray-600 bg-gray-100 uppercase font-semibold">
               <tr>
+                <th class="px-4 py-3 w-10">
+                  <input type="checkbox" id="selectAllCb" onchange="selectAllBulkTransfer(this)" class="w-4 h-4 text-brand-600 rounded border-gray-300 focus:ring-brand-500 cursor-pointer" title="เลือกทั้งหมดบนหน้านี้">
+                </th>
                 <th class="px-4 py-3">ยี่ห้อ/รุ่น</th>
                 <th class="px-4 py-3">วันที่รับเข้า</th>
                 <th class="px-4 py-3">สเปค</th>
@@ -662,6 +674,55 @@
           <i class="fa-solid fa-xmark"></i> ปิดหน้าต่าง
         </button>
       </div>
+    </div>
+  </div>
+
+  <!-- Modal โอนสินค้าข้ามสาขา -->
+  <div id="transferSetupModal" class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 hidden backdrop-blur-sm">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-zoomIn">
+      <div class="px-4 py-3 border-b bg-indigo-50 flex justify-between items-center">
+        <h3 class="font-bold text-indigo-800 text-lg"><i class="fa-solid fa-truck-fast mr-1"></i> เลือกสาขาปลายทาง</h3>
+        <button onclick="closeTransferSetupModal()" class="w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 hover:bg-red-100 hover:text-red-500 flex justify-center items-center transition"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="p-6">
+        <label class="block text-sm font-medium text-gray-700 mb-2">โอนสินค้าที่เลือก ไปยัง:</label>
+        <select id="transfer_targetPlatform" class="w-full border-gray-300 rounded-lg p-3 border focus:ring-indigo-500 focus:border-indigo-500 text-gray-800 outline-none text-base">
+          <option value="">เลือกสาขาปลายทาง</option>
+        </select>
+        <p class="text-xs text-gray-500 mt-3"><i class="fa-solid fa-info-circle text-indigo-400"></i> เวลาเข้าสาขาใหม่จะถูกรีเซ็ต เมื่อทำการโอนสำเร็จ</p>
+      </div>
+      <div class="px-4 py-3 border-t bg-gray-50 flex justify-end gap-2">
+        <button onclick="closeTransferSetupModal()" class="px-4 py-2 border rounded text-gray-600 hover:bg-gray-100 transition text-sm font-medium">ยกเลิก</button>
+        <button onclick="confirmBulkTransfer()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-medium shadow text-sm transition flex items-center gap-2"><i class="fa-solid fa-check"></i> ยืนยันการโอน</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal ใบโอนสินค้า (โอนสำเร็จ) -->
+  <div id="transferReceiptModal" class="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 hidden backdrop-blur-sm">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-zoomIn flex flex-col max-h-[90vh]">
+      <div class="bg-gradient-to-r from-indigo-500 to-purple-600 px-4 py-3 flex justify-between items-center text-white shrink-0">
+        <h3 class="font-bold text-lg"><i class="fa-solid fa-file-invoice mr-1"></i> โอนสำเร็จ</h3>
+        <button onclick="document.getElementById('transferReceiptModal').classList.add('hidden')" class="w-8 h-8 rounded-full bg-white/20 hover:bg-red-500 flex justify-center items-center transition"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div id="transferReceiptBody" class="p-4 overflow-y-auto flex-grow text-sm bg-white"></div>
+      <div class="px-4 py-3 border-t bg-gray-50 flex flex-col items-center shrink-0">
+        <p class="text-xs text-indigo-600 font-bold mb-2 flex items-center"><i class="fa-solid fa-mobile-screen mr-2"></i> กรุณาแคปหน้าจอนี้ไว้เป็นหลักฐานการโอน</p>
+        <button onclick="document.getElementById('transferReceiptModal').classList.add('hidden')" class="w-full py-2 bg-indigo-100 text-indigo-800 font-medium rounded hover:bg-indigo-200 transition shadow-sm text-sm">
+          ปิดหน้าต่าง
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal ประวัติการโอนสินค้า -->
+  <div id="transferHistoryModal" class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 hidden backdrop-blur-sm">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden animate-zoomIn flex flex-col max-h-[90vh]">
+      <div class="bg-indigo-700 px-4 py-3 flex justify-between items-center text-white shrink-0">
+        <h3 class="font-bold text-lg"><i class="fa-solid fa-clock-rotate-left mr-1"></i> ประวัติการโอนสินค้า</h3>
+        <button onclick="document.getElementById('transferHistoryModal').classList.add('hidden')" class="w-8 h-8 rounded-full bg-white/20 hover:bg-red-500 flex justify-center items-center transition"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div id="transferHistoryBody" class="p-4 overflow-y-auto flex-grow text-sm bg-gray-50/50"></div>
     </div>
   </div>
 
