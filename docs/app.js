@@ -198,6 +198,21 @@ async function fetchProducts() {
     }
 }
 
+function calculateDaysAtBranch(dateString) {
+    if (!dateString) return 0;
+    const cleanedDate = dateString.replace(/,/g, '');
+    const parts = cleanedDate.split(' ')[0].split('/');
+    if (parts.length < 3) return 0;
+    const dStr = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}T00:00:00`;
+    const targetDate = new Date(dStr);
+    if (isNaN(targetDate.getTime())) return 0;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const diffTime = Math.abs(today - targetDate);
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays;
+}
+
 function formatNumber(num) {
     return parseFloat(num).toLocaleString('th-TH');
 }
@@ -222,6 +237,8 @@ function renderProductGrid(products) {
             ? `<div class="absolute top-2 right-2 bg-gray-800 text-white text-xs font-bold px-2 py-1 rounded">ขายแล้ว</div>`
             : `<div class="absolute top-2 right-2 bg-brand-500 text-white text-xs font-bold px-2 py-1 rounded">มีของ</div>`;
         const specSnippet = `${p.ram ? p.ram + '/' : ''}${p.storage || ''}`;
+        const daysAtBranch = calculateDaysAtBranch(p.branchEntryDate || p.dateAdded);
+        const daysText = daysAtBranch === 0 ? 'เข้าใหม่วันนี้' : (daysAtBranch + ' วัน');
 
         grid.innerHTML += `
       <div class="bg-white rounded border overflow-hidden product-card flex flex-col cursor-pointer" onclick="viewProduct('${p.id}')">
@@ -230,7 +247,10 @@ function renderProductGrid(products) {
           ${tagHtml}
         </div>
         <div class="p-3 flex flex-col flex-grow">
-          <div class="text-xs text-gray-500 mb-1">${p.brand} ${specSnippet}</div>
+          <div class="flex justify-between items-start mb-1">
+            <div class="text-xs text-gray-500">${p.brand} ${specSnippet}</div>
+            <div class="text-[10px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded border border-blue-100 flex items-center gap-1" title="ระยะเวลาที่อยู่ที่สาขานี้"><i class="fa-solid fa-clock"></i> ${daysText}</div>
+          </div>
           <h3 class="font-medium text-sm text-gray-800 leading-tight mb-2 line-clamp-2">${p.model} <span class="text-xs text-gray-500">(${p.color || 'ไม่ระบุสี'})</span></h3>
           <div class="mt-auto"><span class="text-brand-600 font-bold">฿${formatNumber(p.price)}</span></div>
         </div>
@@ -355,6 +375,7 @@ function viewProduct(id) {
           <div class="text-gray-500">เลข IMEI:</div><div class="font-medium">${product.imei || '-'}</div>
           <div class="text-gray-500">รับเข้าโดย:</div><div class="font-medium">${product.receiver || '-'}</div>
           <div class="text-gray-500">วันที่รับเข้า:</div><div class="font-medium">${product.dateAdded || '-'}</div>
+          <div class="text-gray-500">เวลาหน้าสาขา:</div><div class="font-medium text-blue-600 flex items-center gap-1"><i class="fa-solid fa-clock"></i> ${calculateDaysAtBranch(product.branchEntryDate || product.dateAdded)} วัน</div>
         </div>
         ${spareCommentHtml}
         ${moveStockHtml}
@@ -448,7 +469,7 @@ function loadInventory() {
 async function fetchInventoryData() {
     const tbody = document.getElementById('inventoryTableBody');
     const cardList = document.getElementById('inventoryCardList');
-    if (tbody) tbody.innerHTML = `<tr><td colspan="8" class="px-4 py-8 text-center text-gray-500"><i class="fa-solid fa-circle-notch fa-spin mr-2"></i> กำลังโหลดข้อมูล...</td></tr>`;
+    if (tbody) tbody.innerHTML = `<tr><td colspan="9" class="px-4 py-8 text-center text-gray-500"><i class="fa-solid fa-circle-notch fa-spin mr-2"></i> กำลังโหลดข้อมูล...</td></tr>`;
     if (cardList) cardList.innerHTML = `<div class="text-center text-gray-500 py-8"><i class="fa-solid fa-circle-notch fa-spin mr-2"></i> กำลังโหลดข้อมูล...</div>`;
 
     try {
@@ -456,7 +477,7 @@ async function fetchInventoryData() {
         allProducts = products;
         renderInventoryTable(products);
     } catch (err) {
-        if (tbody) tbody.innerHTML = `<tr><td colspan="8" class="px-4 py-8 text-center text-red-500">โหลดข้อมูลล้มเหลว</td></tr>`;
+        if (tbody) tbody.innerHTML = `<tr><td colspan="9" class="px-4 py-8 text-center text-red-500">โหลดข้อมูลล้มเหลว</td></tr>`;
         if (cardList) cardList.innerHTML = `<div class="text-center text-red-500 py-8">โหลดข้อมูลล้มเหลว</div>`;
     }
 }
@@ -468,7 +489,7 @@ function renderInventoryTable(products) {
     if (cardList) cardList.innerHTML = '';
 
     if (products.length === 0) {
-        if (tbody) tbody.innerHTML = `<tr><td colspan="8" class="px-4 py-8 text-center text-gray-500">ไม่มีข้อมูลสินค้าในสต็อก</td></tr>`;
+        if (tbody) tbody.innerHTML = `<tr><td colspan="9" class="px-4 py-8 text-center text-gray-500">ไม่มีข้อมูลสินค้าในสต็อก</td></tr>`;
         if (cardList) cardList.innerHTML = '<div class="text-center text-gray-400 py-8">ไม่มีข้อมูลสินค้า</div>';
         return;
     }
@@ -491,14 +512,23 @@ function renderInventoryTable(products) {
         const hasImage = p.images && p.images.length > 0 && p.images[0].trim() !== '';
         const noImageBadge = !hasImage ? `<span class="px-1.5 py-0.5 bg-red-100 text-red-600 rounded text-[10px] ml-1 border border-red-200" title="ไม่มีรูปภาพ"><i class="fa-solid fa-image-slash"></i> ไม่มีรูป</span>` : '';
 
+        const daysAtBranch = calculateDaysAtBranch(p.branchEntryDate || p.dateAdded);
+        const daysText = daysAtBranch === 0 ? 'เข้าใหม่วันนี้' : (daysAtBranch + ' วัน');
+
+        const checkboxHtml = `<input type="checkbox" class="bulk-transfer-cb w-4 h-4 text-brand-600 rounded border-gray-300 focus:ring-brand-500 cursor-pointer" value="${p.id}" onchange="toggleBulkSelection()">`;
+
         // ตาราง (จอใหญ่)
         if (tbody) {
             const tr = document.createElement('tr');
             tr.className = 'hover:bg-gray-50 transition border-b inv-row';
             tr.setAttribute('data-search', `${p.model} ${p.brand} ${p.id} ${p.imei || ''} ${p.color || ''}`.toLowerCase());
             tr.innerHTML = `
+        <td class="px-4 py-3 align-middle text-center w-10">${checkboxHtml}</td>
         <td class="px-4 py-3"><div class="font-medium text-gray-800 flex items-center">${p.model} ${noImageBadge}</div><div class="text-xs text-gray-500">${p.brand} | ${p.id}</div></td>
-        <td class="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">${p.dateAdded || '-'}</td>
+        <td class="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">
+          <div>${p.dateAdded || '-'}</div>
+          <div class="text-[10px] text-blue-500 mt-0.5" title="ระยะเวลาที่อยู่ที่สาขานี้"><i class="fa-solid fa-clock"></i> สาขา: ${daysText}</div>
+        </td>
         <td class="px-4 py-3 text-gray-600">${spec}</td>
         <td class="px-4 py-3 text-xs text-gray-500">${p.imei || '-'}</td>
         <td class="px-4 py-3 text-right text-gray-600">฿${formatNumber(p.cost)}</td>
@@ -515,21 +545,27 @@ function renderInventoryTable(products) {
         // การ์ด (มือถือ)
         if (cardList) {
             const card = document.createElement('div');
-            card.className = 'bg-white border rounded-lg p-3 shadow-sm inv-card';
+            card.className = 'bg-white border rounded-lg p-3 shadow-sm inv-card relative';
             card.setAttribute('data-search', `${p.model} ${p.brand} ${p.id} ${p.imei || ''} ${p.color || ''}`.toLowerCase());
             card.innerHTML = `
         <div class="flex justify-between items-start mb-2">
-          <div><div class="font-semibold text-gray-800 text-sm flex items-center">${p.model} ${noImageBadge}</div><div class="text-xs text-gray-500">${p.brand} | ${p.id}</div></div>
+          <div class="flex items-start gap-2">
+            <div class="mt-0.5">${checkboxHtml}</div>
+            <div>
+              <div class="font-semibold text-gray-800 text-sm flex items-center">${p.model} ${noImageBadge}</div>
+              <div class="text-xs text-gray-500">${p.brand} | ${p.id}</div>
+            </div>
+          </div>
           <span class="px-2 py-0.5 rounded text-xs font-medium shrink-0 ${statusClass}">${statusText}</span>
         </div>
-        <div class="grid grid-cols-2 gap-x-3 gap-y-1 text-xs mb-2">
+        <div class="grid grid-cols-2 gap-x-3 gap-y-1 text-xs mb-2 pl-6">
           <div class="text-gray-500">สเปค: <span class="text-gray-700 font-medium">${spec}</span></div>
-          <div class="text-gray-500">รับเข้า: <span class="text-gray-700">${p.dateAdded || '-'}</span></div>
+          <div class="text-gray-500">โอนล่าสุด: <span class="text-blue-500 font-medium">${daysText}</span></div>
           <div class="text-gray-500">ต้นทุน: <span class="text-gray-700">฿${formatNumber(p.cost)}</span></div>
           <div class="text-gray-500">ราคาขาย: <span class="text-brand-600 font-bold">฿${formatNumber(p.price)}</span></div>
           <div class="text-gray-500 col-span-2">IMEI: <span class="text-gray-700 font-medium">${p.imei || '-'}</span></div>
         </div>
-        <div class="flex items-center justify-between border-t pt-2 gap-2">
+        <div class="flex items-center justify-between border-t pt-2 gap-2 pl-6">
           <select onchange="onStatusChange('${p.id}', this.value)" class="text-xs border rounded px-1 py-0.5 ${statusClass} font-medium cursor-pointer">${statusOptions}</select>
           <div class="flex gap-2">
             <button onclick="editProduct('${p.id}')"   class="text-indigo-600 hover:text-indigo-900 text-xs font-medium flex items-center gap-1"><i class="fa-solid fa-pen-to-square"></i> แก้ไข</button>
@@ -573,6 +609,218 @@ async function deleteProduct(productId) {
     } catch (err) {
         showLoading(false);
         showToast('ลบสินค้าไม่สำเร็จ: ' + err, 'error');
+    }
+}
+
+// ====== Bulk Transfer (โอนข้ามสาขา) ======
+function toggleBulkSelection() {
+    const checkboxes = document.querySelectorAll('.bulk-transfer-cb:checked');
+    const bulkActionContainer = document.getElementById('bulkTransferActionContainer');
+    const bulkCountSpan = document.getElementById('bulkTransferCount');
+    if (!bulkActionContainer) return;
+    
+    if (checkboxes.length > 0) {
+        bulkCountSpan.innerText = checkboxes.length;
+        bulkActionContainer.classList.remove('hidden');
+        bulkActionContainer.classList.add('flex');
+    } else {
+        bulkActionContainer.classList.add('hidden');
+        bulkActionContainer.classList.remove('flex');
+    }
+}
+
+function selectAllBulkTransfer(sourceCb) {
+    const isChecked = sourceCb.checked;
+    const checkboxes = document.querySelectorAll('.bulk-transfer-cb');
+    checkboxes.forEach(cb => {
+        // เฉพาะแถวที่ไม่ได้ถูกซ่อน (display !== 'none')
+        const row = cb.closest('.inv-row') || cb.closest('.inv-card');
+        if (row && row.style.display !== 'none') {
+            cb.checked = isChecked;
+        }
+    });
+    toggleBulkSelection();
+}
+
+function openTransferSetupModal() {
+    const checkboxes = document.querySelectorAll('.bulk-transfer-cb:checked');
+    if (checkboxes.length === 0) return;
+    
+    // ตั้งค่าสาขาปลายทาง
+    const locSel = document.getElementById('transfer_targetPlatform');
+    locSel.innerHTML = '<option value="">เลือกสาขาปลายทาง</option>';
+    if (window._appSettings && window._appSettings.locations) {
+        window._appSettings.locations.forEach(l => {
+            locSel.innerHTML += `<option value="${l}">${l}</option>`;
+        });
+    }
+    document.getElementById('transferSetupModal').classList.remove('hidden');
+}
+
+function closeTransferSetupModal() {
+    document.getElementById('transferSetupModal').classList.add('hidden');
+}
+
+async function confirmBulkTransfer() {
+    const checkboxes = document.querySelectorAll('.bulk-transfer-cb:checked');
+    if (checkboxes.length === 0) return;
+    
+    const targetLocation = document.getElementById('transfer_targetPlatform').value;
+    if (!targetLocation) {
+        showToast('กรุณาเลือกสาขาปลายทาง', 'warning');
+        return;
+    }
+
+    const productIds = Array.from(checkboxes).map(cb => cb.value);
+    
+    // ยืนยัน
+    if (!confirm(`ยืนยันการโอนสินค้าจำนวน ${productIds.length} รายการ ไปยังสาขา "${targetLocation}" หรือไม่?`)) return;
+
+    closeTransferSetupModal();
+    showLoading(true);
+
+    try {
+        const res = await API_bulkTransfer(productIds, targetLocation);
+        showLoading(false);
+        showToast(res.message, res.success ? 'success' : 'error');
+        
+        if (res.success) {
+            // เตรียมข้อมูลเพื่อแสดงใบโอน
+            const transferredProducts = allProducts.filter(p => productIds.includes(p.id));
+            showTransferReceiptCard(transferredProducts, targetLocation);
+            
+            // ยกเลิกการเลือก
+            document.querySelectorAll('.bulk-transfer-cb').forEach(cb => cb.checked = false);
+            toggleBulkSelection();
+            if (document.getElementById('selectAllCb')) document.getElementById('selectAllCb').checked = false;
+            
+            fetchInventoryData();
+        }
+    } catch (err) {
+        showLoading(false);
+        showToast('การโอนไม่สำเร็จ: ' + err, 'error');
+    }
+}
+
+function showTransferReceiptCard(products, targetLocation, existingDocId, existingDateStr, existingUserName) {
+    const modal = document.getElementById('transferReceiptModal');
+    const body = document.getElementById('transferReceiptBody');
+    if (!modal || !body) return;
+
+    const now = new Date();
+    const docId = existingDocId || ('TRN-' + Utilities_formatDateClient(now));
+    const dateStr = existingDateStr || (now.toLocaleDateString('th-TH') + ' ' + now.toLocaleTimeString('th-TH'));
+    const userNameToPrint = existingUserName || currentUser?.name || currentUser?.username || '-';
+
+    let itemsHtml = '';
+    products.forEach((p, idx) => {
+        itemsHtml += `
+        <div class="flex justify-between items-center py-2 border-b border-gray-100 last:border-0 relative">
+            <div class="w-3/4">
+                <div class="font-bold text-gray-800 text-xs">${idx + 1}. ${p.brand} ${p.model}</div>
+                <div class="text-[10px] text-gray-500">IMEI: ${p.imei || '-'} | สี: ${p.color || '-'}</div>
+            </div>
+            <div class="text-[10px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded text-right whitespace-nowrap">
+                ต้นทาง:<br>${p.location || 'ไม่ระบุ'}
+            </div>
+        </div>`;
+    });
+
+    body.innerHTML = `
+    <div class="text-center mb-4 border-b pb-3 border-dashed border-gray-300">
+        <div class="w-14 h-14 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-2"><i class="fa-solid fa-truck-fast text-2xl"></i></div>
+        <h2 class="text-lg font-bold text-gray-800">ใบโอนสินค้าสาขา (KP Shop)</h2>
+        <div class="text-xs text-gray-500 mt-1">สาขาปลายทาง: <span class="font-bold text-indigo-600">${targetLocation}</span></div>
+    </div>
+    <div class="grid grid-cols-2 gap-2 text-xs mb-4 text-gray-600">
+        <div><span class="font-semibold">เลขที่เอกสาร:</span><br>${docId}</div>
+        <div class="text-right"><span class="font-semibold">วันที่:</span><br>${dateStr}</div>
+        <div><span class="font-semibold">พนักงานทำรายการ:</span><br>${userNameToPrint}</div>
+        <div class="text-right"><span class="font-semibold">รวมโอน:</span><br><span class="font-bold text-indigo-600 text-xl">${products.length}</span> รายการ</div>
+    </div>
+    <div class="bg-gray-50 rounded border p-2 mb-3 shadow-inner">
+        <h3 class="text-[11px] font-bold text-gray-700 border-b pb-1 mb-1"><i class="fa-solid fa-list-check"></i> รายการสินค้าโอน</h3>
+        <div class="max-h-48 overflow-y-auto pr-1 hide-scrollbar">
+            ${itemsHtml}
+        </div>
+    </div>
+    <div class="text-xs text-center text-gray-500 mt-4 border-t pt-3">
+        เอกสารสร้างโดยระบบการโอน KP Shop<br>อ้างอิงรหัสพนักงาน: ${currentUser ? currentUser.username : '-'}
+    </div>`;
+
+    modal.classList.remove('hidden');
+}
+
+function Utilities_formatDateClient(date) {
+    const pad = (n) => n.toString().padStart(2, '0');
+    return `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
+}
+
+// ====== ประวัติการโอน ======
+async function openTransferHistoryModal() {
+    const modal = document.getElementById('transferHistoryModal');
+    const body = document.getElementById('transferHistoryBody');
+    if (!modal || !body) return;
+    
+    modal.classList.remove('hidden');
+    body.innerHTML = '<div class="text-center py-10 text-gray-500 flex flex-col items-center justify-center"><i class="fa-solid fa-spinner fa-spin text-3xl mb-3 text-indigo-400"></i><span>กำลังดึงประวัติการโอน...</span></div>';
+    
+    try {
+        const history = await API_getTransferHistory();
+        if (!history || history.length === 0) {
+            body.innerHTML = '<div class="text-center py-10 text-gray-500 bg-gray-50 rounded-lg"><i class="fa-solid fa-box-open text-4xl mb-3 text-gray-300 block"></i>ยังไม่มีประวัติการโอนสินค้า</div>';
+            return;
+        }
+        
+        window.transferHistoryData = history;
+        let html = '<div class="space-y-3">';
+        history.forEach((log, index) => {
+            let receiptBtn = '';
+            if (log.payload) {
+                try {
+                    const parsed = JSON.parse(log.payload);
+                    if (parsed.products && parsed.products.length > 0) {
+                        receiptBtn = `<button onclick="viewHistoryReceipt(${index})" class="text-[10px] bg-indigo-600 hover:bg-indigo-700 text-white px-2 py-1 rounded shadow-sm transition flex items-center gap-1"><i class="fa-solid fa-file-invoice"></i> ดูใบโอน</button>`;
+                    }
+                } catch(e) {}
+            }
+            html += `
+            <div class="border border-indigo-100 rounded-lg p-3 bg-white hover:bg-indigo-50 transition flex flex-col sm:flex-row sm:items-start justify-between gap-3 shadow-sm relative overflow-hidden">
+                <div class="absolute left-0 top-0 bottom-0 w-1 bg-indigo-500"></div>
+                <div class="pl-2">
+                    <div class="text-sm font-bold text-gray-800 flex items-center gap-1.5 mb-1"><i class="fa-solid fa-arrow-right-arrow-left text-indigo-500"></i> ${log.detail}</div>
+                    <div class="text-xs text-gray-500"><i class="fa-solid fa-hashtag text-gray-400"></i> อ้างอิง: ${log.target}</div>
+                </div>
+                <div class="flex flex-row sm:flex-col justify-between items-end sm:items-end gap-1 shrink-0 w-full sm:w-auto mt-2 sm:mt-0 pt-2 border-t sm:border-t-0 border-gray-100">
+                    <div class="text-[11px] text-gray-500 font-medium bg-gray-100 px-2 py-0.5 rounded-full mb-0.5 sm:mb-1"><i class="fa-solid fa-clock mr-1"></i> ${log.timestamp}</div>
+                    <div class="flex items-center gap-1 mt-1 sm:mt-0">
+                        ${receiptBtn}
+                        <div class="text-[10px] text-indigo-700 bg-indigo-50 border border-indigo-100 px-2 py-1 rounded flex items-center gap-1 font-semibold">
+                            <i class="fa-solid fa-user-circle"></i> ${log.username || 'System'}
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+        });
+        html += '</div>';
+        body.innerHTML = html;
+        
+    } catch (e) {
+        body.innerHTML = '<div class="text-center py-10 text-red-500 bg-red-50 rounded-lg"><i class="fa-solid fa-circle-exclamation text-4xl mb-3 block"></i>โหลดข้อมูลล้มเหลว กรุณาลองใหม่</div>';
+        console.error(e);
+    }
+}
+
+function viewHistoryReceipt(index) {
+    if (!window.transferHistoryData) return;
+    const log = window.transferHistoryData[index];
+    if (!log || !log.payload) return;
+    try {
+        const payload = JSON.parse(log.payload);
+        showTransferReceiptCard(payload.products, payload.targetLocation, log.target, log.timestamp, log.username);
+    } catch(e) {
+        console.error('Failed to parse history receipt payload', e);
+        showToast('ไม่สามารถเปิดใบโอนนี้ได้ (ข้อมูลเชื่อมโยงเก่า)', 'warning');
     }
 }
 
@@ -647,8 +895,18 @@ function renderDashboard(d) {
         d.last7Days.forEach(day => {
             const pct = Math.max((day.revenue / maxRev) * 100, 2);
             const bar = document.createElement('div');
-            bar.className = 'flex-1 flex flex-col items-center justify-end gap-1';
-            bar.innerHTML = `<div class="text-xs font-bold text-brand-600">${day.count > 0 ? day.count : ''}</div><div class="w-full bg-gradient-to-t from-brand-500 to-brand-300 rounded-t transition-all" style="height:${pct}%"></div><div class="text-[10px] text-gray-500">${day.date}</div>`;
+            bar.className = 'flex-1 h-full flex flex-col items-center justify-end gap-1 group';
+            
+            const revText = day.revenue > 0 ? '฿' + Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(day.revenue) : '';
+            const countText = day.count > 0 ? `${day.count} เครื่อง` : '';
+            
+            bar.innerHTML = `
+                <div class="flex flex-col items-center text-center">
+                    <span class="text-[11px] font-bold text-brand-600 leading-tight">${revText}</span>
+                    <span class="text-[9px] text-gray-500 leading-tight block mt-0.5">${countText}</span>
+                </div>
+                <div class="w-full bg-gradient-to-t from-brand-500 to-brand-300 rounded-t transition-all group-hover:from-brand-600 group-hover:to-brand-400 cursor-pointer" style="height:${pct}%" title="ยอดขาย: ฿${formatNumber(day.revenue)} (${day.count} เครื่อง)"></div>
+                <div class="text-[10px] text-gray-500 shrink-0">${day.date}</div>`;
             chart.appendChild(bar);
         });
 
@@ -679,7 +937,8 @@ function filterSalesList() {
     const fromStr = document.getElementById('dash_dateFrom').value;
     const toStr = document.getElementById('dash_dateTo').value;
     const sp = document.getElementById('dash_salesperson').value;
-    const fromDate = fromStr ? new Date(fromStr) : null;
+    // เพิ่ม T00:00:00 เพื่อบังคับให้ JS Parse เป็นเวลา Local (GMT+7) แทนที่จะเป็น UTC
+    const fromDate = fromStr ? new Date(fromStr + 'T00:00:00') : null;
     const toDate = toStr ? new Date(toStr + 'T23:59:59') : null;
 
     let filtered = (_dashboardData.salesList || []).filter(s => {
