@@ -361,7 +361,7 @@ function viewProduct(id) {
       <div class="w-full md:w-1/2 p-5 bg-white space-y-4">
         <div>${statusLabel}<h2 class="text-2xl font-bold text-gray-800">${product.model}</h2><div class="text-sm text-gray-500 mt-1">ยี่ห้อ: ${product.brand} | รหัส: ${product.id}</div></div>
         <div class="text-3xl font-bold text-brand-600 border-b pb-4">฿${formatNumber(product.price)}</div>
-        ${isManager ? `<div class="text-sm text-gray-500 mb-2">ราคาทุน: <span class="font-medium">฿${formatNumber(product.cost || 0)}</span></div>` : ''}
+        ${isManager ? `<div class="text-sm text-gray-500 mb-2 flex items-center gap-2">ราคาทุน: <span id="costValueHidden" class="font-medium">•••••</span><span id="costValueVisible" class="font-medium hidden">฿${formatNumber(product.cost || 0)}</span><button type="button" onclick="toggleCostVisibility()" class="text-gray-400 hover:text-brand-600 transition-colors focus:outline-none" title="แสดง/ซ่อนราคาทุน"><i id="costEyeIcon" class="fa-solid fa-eye-slash text-sm"></i></button></div>` : ''}
         <div class="grid grid-cols-2 gap-y-3 gap-x-4 text-sm">
           <div class="text-gray-500">RAM/ความจุ:</div><div class="font-medium">${product.ram || '-'} / ${product.storage || '-'}</div>
           <div class="text-gray-500">สี:</div><div class="font-medium">${product.color || '-'}</div>
@@ -445,6 +445,27 @@ function viewFullImage(url) {
 }
 
 function closeImageViewer() { document.getElementById('imageViewerModal').classList.add('hidden'); }
+
+function toggleCostVisibility() {
+    const hidden = document.getElementById('costValueHidden');
+    const visible = document.getElementById('costValueVisible');
+    const icon = document.getElementById('costEyeIcon');
+    if (!hidden || !visible || !icon) return;
+
+    if (visible.classList.contains('hidden')) {
+        // แสดงราคาทุน
+        hidden.classList.add('hidden');
+        visible.classList.remove('hidden');
+        icon.classList.remove('fa-eye-slash');
+        icon.classList.add('fa-eye');
+    } else {
+        // ซ่อนราคาทุน
+        hidden.classList.remove('hidden');
+        visible.classList.add('hidden');
+        icon.classList.remove('fa-eye');
+        icon.classList.add('fa-eye-slash');
+    }
+}
 
 // ====== Inventory ======
 function filterInventory() {
