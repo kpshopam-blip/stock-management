@@ -580,6 +580,35 @@
     <img id="imageViewerImg" src="" class="max-w-[95%] max-h-[90vh] object-contain select-none" alt="Full Image">
   </div>
 
+  <!-- Modal เอาสินค้าออก (สำหรับผู้จัดการ) -->
+  <div id="removeProductModal"
+    class="fixed inset-0 bg-black/60 z-[90] hidden flex items-center justify-center p-2 sm:p-4 backdrop-blur-sm">
+    <div class="bg-white w-full max-w-md rounded-xl shadow-2xl overflow-hidden flex flex-col">
+      <div class="px-4 py-3 border-b bg-red-50 flex justify-between items-center">
+        <h3 class="font-bold text-red-700 text-lg"><i class="fa-solid fa-box-archive mr-1"></i> เอาสินค้าออกจากระบบ</h3>
+        <button onclick="closeRemoveProductModal()"
+          class="w-8 h-8 rounded-full bg-gray-200 text-gray-600 hover:bg-red-100 hover:text-red-500 flex justify-center items-center transition"><i
+            class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="p-4 space-y-3">
+        <div id="removeProductInfo" class="bg-gray-50 p-3 rounded-lg text-sm text-gray-700"></div>
+        <input type="hidden" id="remove_productId">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">ระบุเหตุผล/หมายเหตุที่เอาสินค้าออก *</label>
+          <textarea id="remove_reason" required placeholder="เช่น สินค้าชำรุดเสียหาย, ลูกค้านอกระบบรับไป, ตัดสต็อกส่งคืน ฯลฯ" rows="3"
+            class="w-full p-2 border border-gray-300 rounded focus:ring-red-500 outline-none text-sm"></textarea>
+        </div>
+      </div>
+      <div class="px-4 py-3 border-t bg-gray-50 flex justify-end gap-2">
+        <button onclick="closeRemoveProductModal()"
+          class="px-4 py-2 border border-gray-300 rounded text-gray-600 hover:bg-gray-100 transition text-sm">ยกเลิก</button>
+        <button onclick="confirmRemoveProduct()"
+          class="px-5 py-2 bg-red-600 text-white font-medium rounded hover:bg-red-700 transition shadow text-sm flex items-center gap-2"><i
+            class="fa-solid fa-check"></i> ยืนยันเอาสินค้าออก</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Modal ขายสินค้า (POS) -->
   <div id="sellModal"
     class="fixed inset-0 bg-black/60 z-[90] hidden flex items-center justify-center p-2 sm:p-4 backdrop-blur-sm">
