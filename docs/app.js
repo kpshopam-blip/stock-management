@@ -314,9 +314,19 @@ function viewProduct(id) {
     }
     galleryHtml += `</div><div id="productImageIndicators" class="flex justify-center gap-1 my-2">${images.map((_, i) => `<div class="w-2 h-2 rounded-full transition-colors duration-300 ${i === 0 ? 'bg-brand-500' : 'bg-gray-300'}"></div>`).join('')}</div>`;
 
-    const statusLabel = product.status.toLowerCase() !== 'available'
-        ? `<div class="inline-block bg-gray-700 text-white px-3 py-1 rounded text-sm font-bold mb-2">ขายแล้ว</div>`
-        : `<div class="inline-block bg-green-500 text-white px-3 py-1 rounded text-sm font-bold mb-2">พร้อมขาย</div>`;
+    const statusLower = (product.status || 'Available').toLowerCase();
+    let statusLabel = '';
+    if (statusLower === 'available') {
+        statusLabel = `<div class="inline-block bg-green-500 text-white px-3 py-1 rounded text-sm font-bold mb-2">พร้อมขาย</div>`;
+    } else if (statusLower === 'reserved') {
+        statusLabel = `<div class="inline-block bg-yellow-500 text-white px-3 py-1 rounded text-sm font-bold mb-2">ติดจอง</div>`;
+    } else if (statusLower === 'repair') {
+        statusLabel = `<div class="inline-block bg-blue-500 text-white px-3 py-1 rounded text-sm font-bold mb-2">ส่งซ่อม/เคลม</div>`;
+    } else if (statusLower === 'sold') {
+        statusLabel = `<div class="inline-block bg-gray-700 text-white px-3 py-1 rounded text-sm font-bold mb-2">ขายแล้ว</div>`;
+    } else if (statusLower === 'unavailable') {
+        statusLabel = `<div class="inline-block bg-red-600 text-white px-3 py-1 rounded text-sm font-bold mb-2">ไม่พร้อมขาย</div>`;
+    }
 
     const isManager = currentUser && (currentUser.role === 'Manager' || currentUser.role === 'ผู้จัดการ');
     const isTech = currentUser && (currentUser.role === 'ช่าง' || currentUser.role === 'Technician');
@@ -355,6 +365,27 @@ function viewProduct(id) {
         `;
     }
 
+    const removalInfo = parseRemovalInfo(product.notes);
+    let removalHtml = '';
+    if (removalInfo && isManager) {
+        removalHtml = `
+        <div class="border-t pt-4 mt-4 bg-red-50 -mx-5 px-5 py-4 border-b">
+          <h4 class="font-bold text-red-800 text-sm mb-2"><i class="fa-solid fa-box-archive text-red-600"></i> ข้อมูลการเอาออกจากระบบ</h4>
+          <div class="grid grid-cols-2 gap-y-2 text-xs text-red-900">
+            <div class="text-gray-500">ผู้ทำรายการ:</div><div class="font-bold">${removalInfo.by}</div>
+            <div class="text-gray-500">วันเวลาที่เอาออก:</div><div class="font-bold">${removalInfo.date}</div>
+            <div class="col-span-2 mt-1 text-gray-500">เหตุผล:</div>
+            <div class="col-span-2 bg-white border border-red-200 rounded p-2 text-xs text-gray-800 font-medium">${removalInfo.reason}</div>
+          </div>
+        </div>
+        `;
+    }
+
+    let displayNotes = product.notes || '-';
+    if (removalInfo) {
+        displayNotes = displayNotes.replace(/\[เอาสินค้าออก:[^\]]+\]/, '').trim() || '-';
+    }
+
     contentBody.innerHTML = `
     <div class="flex flex-col md:flex-row h-full">
       <div class="w-full md:w-1/2 border-r bg-white">${galleryHtml}</div>
@@ -370,24 +401,37 @@ function viewProduct(id) {
           <div class="text-gray-500">แบตเตอรี่:</div><div class="font-medium">${product.battery || '-'}</div>
           <div class="text-gray-500">อุปกรณ์:</div><div class="font-medium">${product.accessories || '-'}</div>
           <div class="text-gray-500">สาขา/ที่อยู่:</div><div class="font-medium">${product.location || '-'}</div>
-          <div class="text-gray-500">หมายเหตุ:</div><div class="font-medium text-amber-600">${product.notes || '-'}</div>
+          <div class="text-gray-500">หมายเหตุ:</div><div class="font-medium text-amber-600">${displayNotes}</div>
           <div class="text-gray-500">แหล่งที่มา:</div><div class="font-medium">${product.source || '-'}</div>
           <div class="text-gray-500">เลข IMEI:</div><div class="font-medium">${product.imei || '-'}</div>
           <div class="text-gray-500">รับเข้าโดย:</div><div class="font-medium">${product.receiver || '-'}</div>
           <div class="text-gray-500">วันที่รับเข้า:</div><div class="font-medium">${product.dateAdded || '-'}</div>
           <div class="text-gray-500">เวลาหน้าสาขา:</div><div class="font-medium text-blue-600 flex items-center gap-1"><i class="fa-solid fa-clock"></i> ${calculateDaysAtBranch(product.branchEntryDate || product.dateAdded)} วัน</div>
         </div>
+        ${removalHtml}
         ${spareCommentHtml}
         ${moveStockHtml}
-        ${(product.status || 'Available').toLowerCase() !== 'sold' ? `
-        <div class="border-t pt-4 mt-2 ${isManager ? 'grid grid-cols-2 gap-2' : ''}">
-          ${isManager ? `<button onclick="closeProductView(); editProductFromStore('${product.id}')" class="w-full py-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 transition shadow-lg flex items-center justify-center gap-2 text-base"><i class="fa-solid fa-pen-to-square"></i> แก้ไขข้อมูล</button>` : ''}
+        ${(product.status || 'Available').toLowerCase() === 'sold' ? `
+        <div class="border-t pt-4 mt-2">
+          <div class="w-full py-3 bg-gray-300 text-gray-600 font-bold rounded-lg text-center text-base"><i class="fa-solid fa-ban"></i> สินค้านี้ขายไปแล้ว</div>
+        </div>` : (product.status || 'Available').toLowerCase() === 'unavailable' ? `
+        <div class="border-t pt-4 mt-2">
+          <div class="w-full py-3 bg-red-100 text-red-700 font-bold rounded-lg text-center text-base"><i class="fa-solid fa-box-archive"></i> สินค้านี้ถูกเอาออกจากระบบแล้ว</div>
+        </div>` : `
+        <div class="border-t pt-4 mt-2 space-y-2">
           <button onclick="closeProductView(); openSellModal('${product.id}')" class="w-full py-3 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition shadow-lg flex items-center justify-center gap-2 text-base">
             <i class="fa-solid fa-cart-shopping"></i> ขายสินค้านี้
           </button>
-        </div>` : `
-        <div class="border-t pt-4 mt-2">
-          <div class="w-full py-3 bg-gray-300 text-gray-600 font-bold rounded-lg text-center text-base"><i class="fa-solid fa-ban"></i> สินค้านี้ขายไปแล้ว</div>
+          ${isManager ? `
+          <div class="grid grid-cols-2 gap-2">
+            <button onclick="closeProductView(); editProductFromStore('${product.id}')" class="w-full py-2.5 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 transition shadow flex items-center justify-center gap-2 text-sm">
+              <i class="fa-solid fa-pen-to-square"></i> แก้ไขข้อมูล
+            </button>
+            <button onclick="closeProductView(); openRemoveProductModal('${product.id}')" class="w-full py-2.5 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 transition shadow flex items-center justify-center gap-2 text-sm">
+              <i class="fa-solid fa-box-archive"></i> เอาสินค้าออก
+            </button>
+          </div>
+          ` : ''}
         </div>`}
       </div>
     </div>`;
@@ -521,6 +565,7 @@ function renderInventoryTable(products) {
         if (st === 'reserved') { statusClass = 'bg-yellow-100 text-yellow-800'; statusText = 'ติดจอง'; }
         else if (st === 'repair') { statusClass = 'bg-blue-100 text-blue-800'; statusText = 'ส่งซ่อม'; }
         else if (st === 'sold') { statusClass = 'bg-gray-200 text-gray-600'; statusText = 'ขายแล้ว'; }
+        else if (st === 'unavailable') { statusClass = 'bg-red-100 text-red-800'; statusText = 'ไม่พร้อมขาย'; }
 
         const spec = `${p.ram || '-'}/${p.storage || '-'} ${p.color || ''}`;
         const statusVal = p.status || 'Available';
@@ -528,7 +573,8 @@ function renderInventoryTable(products) {
       <option value="Available" ${statusVal === 'Available' ? 'selected' : ''}>🟢 พร้อมขาย</option>
       <option value="Reserved"  ${statusVal === 'Reserved' ? 'selected' : ''}>🟡 ติดจอง</option>
       <option value="Repair"    ${statusVal === 'Repair' ? 'selected' : ''}>🟤 ส่งซ่อม/เคลม</option>
-      <option value="Sold"      ${statusVal === 'Sold' ? 'selected' : ''}>⚫ ขายแล้ว</option>`;
+      <option value="Sold"      ${statusVal === 'Sold' ? 'selected' : ''}>⚫ ขายแล้ว</option>
+      <option value="Unavailable" ${statusVal === 'Unavailable' ? 'selected' : ''}>🔴 ไม่พร้อมขาย</option>`;
 
         const hasImage = p.images && p.images.length > 0 && p.images[0].trim() !== '';
         const noImageBadge = !hasImage ? `<span class="px-1.5 py-0.5 bg-red-100 text-red-600 rounded text-[10px] ml-1 border border-red-200" title="ไม่มีรูปภาพ"><i class="fa-solid fa-image-slash"></i> ไม่มีรูป</span>` : '';
@@ -601,7 +647,14 @@ function renderInventoryTable(products) {
 
 // ====== เปลี่ยนสถานะ ======
 async function onStatusChange(productId, newStatus) {
-    if (!confirm('ต้องการเปลี่ยนสถานะเป็น "' + newStatus + '" ใช่หรือไม่?')) { fetchInventoryData(); return; }
+    if (newStatus === 'Unavailable') {
+        openRemoveProductModal(productId);
+        fetchInventoryData();
+        return;
+    }
+    const statusNames = { Available: 'พร้อมขาย', Reserved: 'ติดจอง', Repair: 'ส่งซ่อม/เคลม', Sold: 'ขายแล้ว' };
+    const statusName = statusNames[newStatus] || newStatus;
+    if (!confirm('ต้องการเปลี่ยนสถานะเป็น "' + statusName + '" ใช่หรือไม่?')) { fetchInventoryData(); return; }
     showLoading(true);
     try {
         const res = await API_changeStatus(productId, newStatus);
@@ -1563,6 +1616,69 @@ function showReceipt(r) {
                             </div>
                             <div class="text-center mt-4 text-xs text-gray-400"><p>ขอบคุณที่ใช้บริการ KP Shop</p></div>`;
     document.getElementById('receiptModal').classList.remove('hidden');
+}
+
+// ====== ระบบเอาสินค้าออก (สำหรับผู้จัดการ) ======
+function openRemoveProductModal(productId) {
+    const p = allProducts.find(x => x.id === productId);
+    if (!p) { showToast('ไม่พบข้อมูลสินค้า', 'error'); return; }
+
+    document.getElementById('remove_productId').value = p.id;
+    document.getElementById('remove_reason').value = '';
+    
+    document.getElementById('removeProductInfo').innerHTML = `
+        <div class="font-bold text-gray-800">${p.brand} ${p.model}</div>
+        <div class="text-xs text-gray-500 mt-0.5">สเปค: ${p.ram || '-'}/${p.storage || '-'} ${p.color || ''} | IMEI: ${p.imei || '-'}</div>
+    `;
+
+    document.getElementById('removeProductModal').classList.remove('hidden');
+}
+
+function closeRemoveProductModal() {
+    document.getElementById('removeProductModal').classList.add('hidden');
+    document.getElementById('remove_reason').value = '';
+}
+
+async function confirmRemoveProduct() {
+    const productId = document.getElementById('remove_productId').value;
+    const reason = document.getElementById('remove_reason').value.trim();
+
+    if (!reason) {
+        showToast('กรุณาระบุเหตุผลการเอาสินค้าออก', 'warning');
+        return;
+    }
+
+    showLoading(true);
+    try {
+        const res = await API_removeProduct(productId, reason);
+        showLoading(false);
+        showToast(res.message, res.success ? 'success' : 'error');
+        if (res.success) {
+            closeRemoveProductModal();
+            fetchProducts();
+            if (document.getElementById('inventoryTableBody')) {
+                fetchInventoryData();
+            }
+        }
+    } catch (err) {
+        showLoading(false);
+        showToast('การทำรายการล้มเหลว: ' + err, 'error');
+    }
+}
+
+// ฟังก์ชันช่วยถอดรหัสข้อมูลการเอาออกจากระบบ
+function parseRemovalInfo(notes) {
+    if (!notes) return null;
+    const regex = /\[เอาสินค้าออก:\s*เมื่อ\s*([^|]+)\s*\|\s*โดย\s*([^|]+)\s*\|\s*เหตุผล:\s*([^\]]+)\]/;
+    const match = notes.match(regex);
+    if (match) {
+        return {
+            date: match[1].trim(),
+            by: match[2].trim(),
+            reason: match[3].trim()
+        };
+    }
+    return null;
 }
 
 
