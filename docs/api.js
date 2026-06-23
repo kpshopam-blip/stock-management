@@ -156,6 +156,11 @@ async function API_changeStatus(productId, newStatus) {
     return apiPost('changeStatus', { productId, newStatus });
 }
 
+// เอาสินค้าออก
+async function API_removeProduct(productId, reason) {
+    return apiPost('removeProduct', { productId, reason });
+}
+
 // ย้ายคลัง
 async function API_moveProduct(productId, targetSheet) {
     return apiPost('moveProduct', { productId, targetSheet });
