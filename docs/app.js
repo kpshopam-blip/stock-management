@@ -222,9 +222,23 @@ function renderProductGrid(products) {
     const noData = document.getElementById('noProductFound');
     grid.innerHTML = '';
 
-    // กรองสินค้าที่โดนลบตอน search ไปแล้วไม่ให้ซ้อนกัน
+    // กรองสินค้าตามสิทธิ์ (Role)
     const isManager = currentUser && (currentUser.role === 'Manager' || currentUser.role === 'ผู้จัดการ');
-    const filtered = isManager ? products : products.filter(p => (p.status || 'Available').toLowerCase() !== 'sold');
+    const isTech = currentUser && (currentUser.role === 'ช่าง' || currentUser.role === 'Technician');
+    
+    let filtered;
+    if (isManager) {
+        filtered = products; // ผู้จัดการเห็นสินค้าทุกสถานะ
+    } else if (isTech) {
+        // ช่างเห็นเกือบหมด ยกเว้น 'Sold' และ 'Unavailable'
+        filtered = products.filter(p => {
+            const st = (p.status || 'Available').toLowerCase();
+            return st !== 'sold' && st !== 'unavailable';
+        });
+    } else {
+        // พนักงานขายทั่วไปเห็นเฉพาะสินค้าพร้อมขาย 'Available' เท่านั้น
+        filtered = products.filter(p => (p.status || 'Available').toLowerCase() === 'available');
+    }
     document.getElementById('totalProductCount').innerText = filtered.length;
 
     if (filtered.length === 0) { noData.classList.remove('hidden'); return; }
@@ -249,7 +263,7 @@ function renderProductGrid(products) {
         <div class="p-3 flex flex-col flex-grow">
           <div class="flex justify-between items-start mb-1">
             <div class="text-xs text-gray-500">${p.brand} ${specSnippet}</div>
-            <div class="text-[10px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded border border-blue-100 flex items-center gap-1" title="ระยะเวลาที่อยู่ที่สาขานี้"><i class="fa-solid fa-clock"></i> ${daysText}</div>
+            <div class="text-[10px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded border border-blue-100 flex items-center gap-1" title="สาขาและระยะเวลาที่อยู่"><i class="fa-solid fa-location-dot"></i> ${p.location || 'ไม่ระบุ'} (${daysText})</div>
           </div>
           <h3 class="font-medium text-sm text-gray-800 leading-tight mb-2 line-clamp-2">${p.model} <span class="text-xs text-gray-500">(${p.color || 'ไม่ระบุสี'})</span></h3>
           <div class="mt-auto"><span class="text-brand-600 font-bold">฿${formatNumber(p.price)}</span></div>
@@ -594,7 +608,7 @@ function renderInventoryTable(products) {
         <td class="px-4 py-3"><div class="font-medium text-gray-800 flex items-center">${p.model} ${noImageBadge}</div><div class="text-xs text-gray-500">${p.brand} | ${p.id}</div></td>
         <td class="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">
           <div>${p.dateAdded || '-'}</div>
-          <div class="text-[10px] text-blue-500 mt-0.5" title="ระยะเวลาที่อยู่ที่สาขานี้"><i class="fa-solid fa-clock"></i> สาขา: ${daysText}</div>
+          <div class="text-[10px] text-blue-500 mt-0.5" title="สาขาและระยะเวลาที่อยู่"><i class="fa-solid fa-location-dot"></i> ${p.location || 'ไม่ระบุ'} (${daysText})</div>
         </td>
         <td class="px-4 py-3 text-gray-600">${spec}</td>
         <td class="px-4 py-3 text-xs text-gray-500">${p.imei || '-'}</td>
@@ -627,7 +641,7 @@ function renderInventoryTable(products) {
         </div>
         <div class="grid grid-cols-2 gap-x-3 gap-y-1 text-xs mb-2 pl-6">
           <div class="text-gray-500">สเปค: <span class="text-gray-700 font-medium">${spec}</span></div>
-          <div class="text-gray-500">โอนล่าสุด: <span class="text-blue-500 font-medium">${daysText}</span></div>
+          <div class="text-gray-500">สาขา: <span class="text-blue-500 font-medium">${p.location || 'ไม่ระบุ'} (${daysText})</span></div>
           <div class="text-gray-500">ต้นทุน: <span class="text-gray-700">฿${formatNumber(p.cost)}</span></div>
           <div class="text-gray-500">ราคาขาย: <span class="text-brand-600 font-bold">฿${formatNumber(p.price)}</span></div>
           <div class="text-gray-500 col-span-2">IMEI: <span class="text-gray-700 font-medium">${p.imei || '-'}</span></div>
