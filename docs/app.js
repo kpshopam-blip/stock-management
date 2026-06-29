@@ -1699,6 +1699,7 @@ function parseRemovalInfo(notes) {
 
 // ====== กล้อง QuaggaJS ======
 let allVideoDevices = [], currentDeviceIndex = 0, lastUsedDeviceId = null;
+let activeScannerTargetInputId = 'p_imei'; // ตัวแปรระบุฟิลด์เป้าหมายในการรับค่าสแกน
 
 function playBeepSound() {
     try {
@@ -1715,7 +1716,8 @@ function _stopQuaggaOnly() {
     try { Quagga.offDetected(onBarcodeDetected); Quagga.stop(); } catch (e) { }
 }
 
-function startScanner(specificDeviceId = null) {
+function startScanner(specificDeviceId = null, targetInputId = 'p_imei') {
+    activeScannerTargetInputId = targetInputId; // บันทึกเป้าหมาย
     document.getElementById('scanner-ui-overlay').style.display = 'block';
     const constraints = { width: { min: 640, ideal: 1920 }, height: { min: 480, ideal: 1080 }, advanced: [{ focusMode: 'continuous' }] };
     let targetDeviceId = specificDeviceId || lastUsedDeviceId;
@@ -1750,7 +1752,7 @@ function switchCamera() {
     _stopQuaggaOnly();
     currentDeviceIndex = (currentDeviceIndex + 1) % allVideoDevices.length;
     lastUsedDeviceId = allVideoDevices[currentDeviceIndex].deviceId;
-    startScanner(lastUsedDeviceId);
+    startScanner(lastUsedDeviceId, activeScannerTargetInputId);
 }
 
 function stopScanner() {
@@ -1764,10 +1766,19 @@ function onBarcodeDetected(result) {
     const code = result.codeResult.code;
     const numbersOnly = code.replace(/\D/g, '');
     const finalResult = numbersOnly || code;
-    const imeiInput = document.getElementById('p_imei');
-    if (imeiInput) {
-        imeiInput.value = finalResult;
-        onImeiInput(finalResult); // ตรวจ IMEI ซ้ำหลังสแกน
+    
+    const targetInput = document.getElementById(activeScannerTargetInputId);
+    if (targetInput) {
+        targetInput.value = finalResult;
         showToast('สแกนสำเร็จ: ' + finalResult, 'success');
+        
+        // รันฟังก์ชันค้นหา/ตรวจสอบอัตโนมัติตามเป้าหมายของฟิลด์
+        if (activeScannerTargetInputId === 'p_imei') {
+            onImeiInput(finalResult);
+        } else if (activeScannerTargetInputId === 'inventorySearch') {
+            filterInventory();
+        } else if (activeScannerTargetInputId === 'storeSearchDesktop' || activeScannerTargetInputId === 'storeSearchMobile') {
+            searchProducts(activeScannerTargetInputId);
+        }
     }
 }
