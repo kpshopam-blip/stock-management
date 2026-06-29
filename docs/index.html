@@ -175,7 +175,11 @@
           </div>
           <div class="flex-1 max-w-lg mx-4 hidden md:flex relative text-gray-800">
             <input type="text" id="storeSearchDesktop" placeholder="ค้นหารุ่น, ยี่ห้อ, ความจุ, สี, หรือ IMEI..."
-              class="w-full py-2 pl-4 pr-12 rounded-sm focus:outline-none border-none shadow-inner text-sm">
+              class="w-full py-2 pl-4 pr-24 rounded-sm focus:outline-none border-none shadow-inner text-sm">
+            <button type="button" onclick="startScanner(null, 'storeSearchDesktop')"
+              class="absolute top-0 right-12 h-full w-10 text-brand-600 hover:text-brand-800 transition flex justify-center items-center" title="สแกนบาร์โค้ด / IMEI">
+              <i class="fa-solid fa-barcode"></i>
+            </button>
             <button onclick="searchProducts('storeSearchDesktop')"
               class="absolute top-0 right-0 h-full w-12 bg-gray-800 text-white rounded-r-sm hover:bg-gray-700 transition flex justify-center items-center">
               <i class="fa-solid fa-magnifying-glass"></i>
@@ -200,11 +204,17 @@
           </div>
         </div>
       </div>
-      <div class="md:hidden px-4 pb-3 flex text-gray-800">
-        <input type="text" id="storeSearchMobile" placeholder="ค้นหาสินค้า, IMEI..."
-          class="flex-1 py-2 pl-3 rounded-l-sm focus:outline-none text-sm shadow-inner">
+      <div class="md:hidden px-4 pb-3 flex text-gray-800 gap-1">
+        <div class="relative flex-grow flex text-gray-800">
+          <input type="text" id="storeSearchMobile" placeholder="ค้นหาสินค้า, IMEI..."
+            class="w-full py-2 pl-3 pr-10 rounded-l-sm focus:outline-none text-sm shadow-inner">
+          <button type="button" onclick="startScanner(null, 'storeSearchMobile')"
+            class="absolute top-0 right-0 h-full w-10 text-brand-600 hover:text-brand-800 transition flex justify-center items-center" title="สแกนบาร์โค้ด / IMEI">
+            <i class="fa-solid fa-barcode"></i>
+          </button>
+        </div>
         <button onclick="searchProducts('storeSearchMobile')"
-          class="bg-gray-800 px-4 text-white rounded-r-sm flex justify-center items-center">
+          class="bg-gray-800 px-4 text-white rounded-r-sm flex justify-center items-center shrink-0">
           <i class="fa-solid fa-magnifying-glass"></i>
         </button>
       </div>
@@ -325,6 +335,20 @@
                 <option value="Stock_Spare">เครื่องอะไหล่</option>
               </select>
             </div>
+            <div class="lg:col-span-2">
+              <label class="block text-sm font-medium text-gray-700 mb-1">IMEI / Serial Number</label>
+              <div class="flex gap-2">
+                <input type="text" id="p_imei" placeholder="กรอกเลข IMEI เครื่อง (ถ้ามี)"
+                  class="flex-grow p-2 border border-gray-300 rounded focus:ring-brand-500 outline-none transition-colors"
+                  oninput="onImeiInput(this.value)">
+                <button type="button" onclick="startScanner()"
+                  class="px-3 py-2 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded text-sm font-semibold hover:bg-indigo-100 transition flex items-center gap-1 whitespace-nowrap">
+                  <i class="fa-solid fa-barcode"></i> สแกน
+                </button>
+              </div>
+              <div id="imei_warning"
+                class="hidden mt-1.5 flex items-start gap-1.5 text-xs font-medium rounded-md px-2.5 py-2"></div>
+            </div>
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">ยี่ห้อ (Brand) *</label>
               <select id="p_brand" required
@@ -366,20 +390,6 @@
               <label class="block text-sm font-medium text-gray-700 mb-1">ราคาขาย (บาท) *</label>
               <input type="number" id="p_price" required placeholder="0"
                 class="w-full p-2 border border-gray-300 rounded focus:ring-brand-500 outline-none text-brand-600 font-bold bg-brand-50">
-            </div>
-            <div class="lg:col-span-2">
-              <label class="block text-sm font-medium text-gray-700 mb-1">IMEI / Serial Number</label>
-              <div class="flex gap-2">
-                <input type="text" id="p_imei" placeholder="กรอกเลข IMEI เครื่อง (ถ้ามี)"
-                  class="flex-grow p-2 border border-gray-300 rounded focus:ring-brand-500 outline-none transition-colors"
-                  oninput="onImeiInput(this.value)">
-                <button type="button" onclick="startScanner()"
-                  class="px-3 py-2 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded text-sm font-semibold hover:bg-indigo-100 transition flex items-center gap-1 whitespace-nowrap">
-                  <i class="fa-solid fa-barcode"></i> สแกน
-                </button>
-              </div>
-              <div id="imei_warning"
-                class="hidden mt-1.5 flex items-start gap-1.5 text-xs font-medium rounded-md px-2.5 py-2"></div>
             </div>
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">สภาพสินค้า (%)</label>
@@ -463,7 +473,11 @@
               <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400"><i
                   class="fa-solid fa-search"></i></span>
               <input type="text" id="inventorySearch" placeholder="ค้นหารุ่น/ยี่ห้อ/IMEI..." oninput="filterInventory()"
-                class="w-full pl-9 pr-3 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-brand-500">
+                class="w-full pl-9 pr-10 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-brand-500">
+              <button type="button" onclick="startScanner(null, 'inventorySearch')"
+                class="absolute inset-y-0 right-0 pr-3 flex items-center text-brand-600 hover:text-brand-800 transition" title="สแกนบาร์โค้ด / IMEI">
+                <i class="fa-solid fa-barcode text-sm"></i>
+              </button>
             </div>
             <button onclick="fetchInventoryData()"
               class="text-xs bg-white border px-3 py-1.5 rounded hover:bg-gray-50 shrink-0 w-full sm:w-auto mt-2 sm:mt-0">
