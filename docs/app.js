@@ -76,7 +76,7 @@ window.onload = function () {
         renderPage('tpl-login');
     }
 
-    // ตั้งเวลาซิงค์อัปเดตข้อมูลสินค้าทุกๆ 2 นาที เพื่อดึงสถานะการจองสินค้าของพนักงานคนอื่น
+    // ตั้งเวลาซิงค์อัปเดตข้อมูลสินค้าทุกๆ 3 นาที เพื่อดึงสถานะการจองสินค้าของพนักงานคนอื่น
     setInterval(() => {
         if (currentUser && currentUser.token) {
             const detailModal = document.getElementById('productDetailModal');
@@ -92,7 +92,7 @@ window.onload = function () {
                 }).catch(e => console.error('Auto sync error:', e));
             }
         }
-    }, 120000);
+    }, 180000);
 };
 
 // ====== Login ======
@@ -1918,92 +1918,112 @@ async function addToCart(productId) {
         showToast('สินค้านี้อยู่ในตะกร้าแล้ว', 'info');
         return;
     }
-    showLoading(true);
-    try {
-        const res = await API_lockProduct(productId);
-        showLoading(false);
-        if (res.success) {
-            cart.push(productId);
-            showToast('เพิ่มสินค้าเข้าตะกร้าและจองชั่วคราวแล้ว (10 นาที)', 'success');
-            
-            const prod = allProducts.find(p => p.id === productId);
-            if (prod) {
-                prod.lockedBy = currentUser.name;
-                prod.lockExpires = Date.now() + 10 * 60 * 1000;
-            }
-            renderCart();
-            filterProducts();
-        } else {
-            showToast(res.message || 'ไม่สามารถจองสินค้าได้', 'error');
-            fetchProducts();
-        }
-    } catch (e) {
-        showLoading(false);
-        console.error(e);
-        showToast('เกิดข้อผิดพลาดในการจองสินค้า', 'error');
+    
+    // --- 1. Optimistic Update (อัปเดตปุ่มและตะกร้าทันทีในระดับ Client) ---
+    cart.push(productId);
+    const prod = allProducts.find(p => p.id === productId);
+    if (prod) {
+        prod.lockedBy = currentUser.name;
+        prod.lockExpires = Date.now() + 10 * 60 * 1000; // ล็อก 10 นาที
     }
-}
-
-async function removeFromCart(productId) {
-    showLoading(true);
-    try {
-        const res = await API_unlockProduct(productId);
-        showLoading(false);
+    renderCart();
+    filterProducts();
+    
+    // --- 2. เรียก API จองสต็อกหลังบ้านแบบเงียบๆ (Background Request) ---
+    API_lockProduct(productId).then(res => {
         if (res.success) {
+            showToast('เพิ่มสินค้าเข้าตะกร้าและจองชั่วคราวแล้ว (10 นาที)', 'success');
+        } else {
+            // จองหลังบ้านไม่สำเร็จ (โดนคนอื่นล็อกตัดหน้าพอดี) -> คืนค่ากลับ (Rollback)
+            showToast(res.message || 'ไม่สามารถจองสินค้าได้', 'error');
             cart = cart.filter(id => id !== productId);
-            showToast('ลบสินค้าออกจากตะกร้าแล้ว', 'info');
-            
-            const prod = allProducts.find(p => p.id === productId);
             if (prod) {
                 prod.lockedBy = null;
                 prod.lockExpires = null;
             }
             renderCart();
             filterProducts();
-        } else {
-            showToast(res.message || 'ไม่สามารถปลดล็อกสินค้าได้', 'error');
+            
+            // ซิงก์สต็อกใหม่เงียบๆ
+            API_getProducts().then(products => {
+                allProducts = products;
+                renderCart();
+                filterProducts();
+            }).catch(() => {});
         }
-    } catch (e) {
-        showLoading(false);
+    }).catch(e => {
         console.error(e);
-        showToast('เกิดข้อผิดพลาดในการปลดล็อกสินค้า', 'error');
+        showToast('เกิดข้อผิดพลาดในการเชื่อมต่อระบบจองสินค้า', 'error');
+        
+        // คืนค่ากลับหากติดต่อหลังบ้านไม่ได้
+        cart = cart.filter(id => id !== productId);
+        if (prod) {
+            prod.lockedBy = null;
+            prod.lockExpires = null;
+        }
+        renderCart();
+        filterProducts();
+    });
+}
+
+async function removeFromCart(productId) {
+    // --- 1. Optimistic Update (เอาสินค้าออกจากตะกร้าบนหน้าเว็บทันที) ---
+    cart = cart.filter(id => id !== productId);
+    const prod = allProducts.find(p => p.id === productId);
+    if (prod) {
+        prod.lockedBy = null;
+        prod.lockExpires = null;
     }
+    renderCart();
+    filterProducts();
+    
+    // --- 2. ส่ง API ปลดจองหลังบ้านเงียบๆ เบื้องหลัง ---
+    API_unlockProduct(productId).then(res => {
+        if (res.success) {
+            showToast('ลบสินค้าออกจากตะกร้าแล้ว', 'info');
+        } else {
+            console.warn('Backend unlock failed:', res.message);
+        }
+    }).catch(e => {
+        console.error('Unlock connection error:', e);
+    });
 }
 
 async function clearCart() {
     if (cart.length === 0) return;
     if (!confirm('ยืนยันล้างตะกร้าสินค้าทั้งหมด? (สินค้าทั้งหมดจะกลับมาพร้อมขายทันที)')) return;
     
-    showLoading(true);
-    let failCount = 0;
+    const itemsToUnlock = [...cart];
     
-    for (const id of [...cart]) {
-        try {
-            const res = await API_unlockProduct(id);
-            if (res.success) {
-                cart = cart.filter(cid => cid !== id);
-                const prod = allProducts.find(p => p.id === id);
-                if (prod) {
-                    prod.lockedBy = null;
-                    prod.lockExpires = null;
-                }
-            } else {
-                failCount++;
-            }
-        } catch (e) {
-            console.error(e);
-            failCount++;
+    // --- 1. Optimistic Update (ล้าง UI เป็นว่างทันที) ---
+    cart = [];
+    itemsToUnlock.forEach(id => {
+        const prod = allProducts.find(p => p.id === id);
+        if (prod) {
+            prod.lockedBy = null;
+            prod.lockExpires = null;
         }
-    }
-    
-    showLoading(false);
-    if (failCount > 0) {
-        showToast(`ล้างตะกร้าเสร็จสิ้น มีข้อผิดพลาด ${failCount} รายการ`, 'warning');
-    } else {
-        showToast('ล้างตะกร้าสินค้าทั้งหมดเรียบร้อย', 'success');
-    }
+    });
     renderCart();
     filterProducts();
+    
+    // --- 2. ยิง API ปลดจองพร้อมกันแบบคู่ขนานเบื้องหลัง (Parallel Background Unlock) ---
+    Promise.all(itemsToUnlock.map(id => 
+        API_unlockProduct(id).then(res => {
+            if (!res.success) console.warn(`Backend unlock failed for ${id}:`, res.message);
+            return res.success;
+        }).catch(e => {
+            console.error(`Unlock network error for ${id}:`, e);
+            return false;
+        })
+    )).then(results => {
+        const successCount = results.filter(Boolean).length;
+        if (successCount === itemsToUnlock.length) {
+            showToast('ล้างตะกร้าและปล่อยล็อกสินค้าทั้งหมดเรียบร้อยแล้ว', 'success');
+        } else {
+            showToast(`ล้างตะกร้าเรียบร้อย (ปล่อยล็อกหลังบ้านสำเร็จ ${successCount}/${itemsToUnlock.length} รายการ)`, 'warning');
+        }
+    });
 }
 
 async function addToCartByImei(imei) {
