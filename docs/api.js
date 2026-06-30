@@ -217,3 +217,18 @@ async function uploadImagesToDrive(queue) {
     }
     return uploadedUrls;
 }
+
+// ล็อกสินค้าชั่วคราว
+async function API_lockProduct(productId) {
+    return apiPost('lockProduct', { productId });
+}
+
+// ปลดล็อกสินค้า
+async function API_unlockProduct(productId) {
+    return apiPost('unlockProduct', { productId });
+}
+
+// บันทึกขายหลายเครื่องพร้อมกัน
+async function API_sellBulkProducts(bulkSaleData) {
+    return apiPost('sellBulkProducts', { bulkSaleData });
+}
