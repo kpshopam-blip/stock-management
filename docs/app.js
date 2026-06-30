@@ -7,6 +7,8 @@
 // ====== ตัวแปรและสถานะรวม ======
 let currentUser = null;
 let allProducts = [];
+let cart = [];
+let checkoutProductIds = [];
 let fileQueue = [];
 let existingImages = [];
 let editingProductId = null;
@@ -73,6 +75,24 @@ window.onload = function () {
     } else {
         renderPage('tpl-login');
     }
+
+    // ตั้งเวลาซิงค์อัปเดตข้อมูลสินค้าทุกๆ 2 นาที เพื่อดึงสถานะการจองสินค้าของพนักงานคนอื่น
+    setInterval(() => {
+        if (currentUser && currentUser.token) {
+            const detailModal = document.getElementById('productDetailModal');
+            const sellModal = document.getElementById('sellModal');
+            const isDetailHidden = detailModal ? detailModal.classList.contains('hidden') : true;
+            const isSellHidden = sellModal ? sellModal.classList.contains('hidden') : true;
+            
+            if (isDetailHidden && isSellHidden) {
+                API_getProducts().then(products => {
+                    allProducts = products;
+                    renderCart();
+                    filterProducts();
+                }).catch(e => console.error('Auto sync error:', e));
+            }
+        }
+    }, 120000);
 };
 
 // ====== Login ======
@@ -247,9 +267,21 @@ function renderProductGrid(products) {
     filtered.forEach(p => {
         const coverImage = p.images && p.images.length > 0 && p.images[0].trim() !== '' ? p.images[0] : NO_IMAGE;
         const isSold = p.status.toLowerCase() !== 'available';
-        const tagHtml = isSold
-            ? `<div class="absolute top-2 right-2 bg-gray-800 text-white text-xs font-bold px-2 py-1 rounded">ขายแล้ว</div>`
-            : `<div class="absolute top-2 right-2 bg-brand-500 text-white text-xs font-bold px-2 py-1 rounded">มีของ</div>`;
+        
+        // ตรวจสอบการล็อกชั่วคราว (Cache)
+        const isLockedByOthers = p.lockedBy && p.lockedBy !== currentUser.name && p.lockExpires > Date.now();
+        const isLockedByMe = p.lockedBy && p.lockedBy === currentUser.name && p.lockExpires > Date.now();
+        
+        let tagHtml = '';
+        if (isSold) {
+            tagHtml = `<div class="absolute top-2 right-2 bg-gray-800 text-white text-xs font-bold px-2 py-1 rounded">ขายแล้ว</div>`;
+        } else if (isLockedByOthers) {
+            tagHtml = `<div class="absolute top-2 right-2 bg-amber-500 text-white text-xs font-bold px-2 py-1 rounded"><i class="fa-solid fa-lock"></i> จองโดยคุณ ${p.lockedBy}</div>`;
+        } else if (isLockedByMe) {
+            tagHtml = `<div class="absolute top-2 right-2 bg-indigo-600 text-white text-xs font-bold px-2 py-1 rounded"><i class="fa-solid fa-cart-shopping"></i> ในตะกร้า</div>`;
+        } else {
+            tagHtml = `<div class="absolute top-2 right-2 bg-brand-500 text-white text-xs font-bold px-2 py-1 rounded">มีของ</div>`;
+        }
         const specSnippet = `${p.ram ? p.ram + '/' : ''}${p.storage || ''}`;
         const daysAtBranch = calculateDaysAtBranch(p.branchEntryDate || p.dateAdded);
         const daysText = daysAtBranch === 0 ? 'เข้าใหม่วันนี้' : (daysAtBranch + ' วัน');
@@ -433,9 +465,28 @@ function viewProduct(id) {
           <div class="w-full py-3 bg-red-100 text-red-700 font-bold rounded-lg text-center text-base"><i class="fa-solid fa-box-archive"></i> สินค้านี้ถูกเอาออกจากระบบแล้ว</div>
         </div>` : `
         <div class="border-t pt-4 mt-2 space-y-2">
-          <button onclick="closeProductView(); openSellModal('${product.id}')" class="w-full py-3 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition shadow-lg flex items-center justify-center gap-2 text-base">
-            <i class="fa-solid fa-cart-shopping"></i> ขายสินค้านี้
-          </button>
+          <!-- ปุ่มใส่ตะกร้าตามสถานะการจอง -->
+          ${(() => {
+              const isLockedByOthers = product.lockedBy && product.lockedBy !== currentUser.name && product.lockExpires > Date.now();
+              const isLockedByMe = product.lockedBy && product.lockedBy === currentUser.name && product.lockExpires > Date.now();
+              
+              if (isLockedByOthers) {
+                  return `
+                  <div class="w-full py-3 bg-amber-100 text-amber-800 font-bold rounded-lg text-center text-base flex items-center justify-center gap-2">
+                      <i class="fa-solid fa-lock"></i> ติดจองโดยคุณ ${product.lockedBy}
+                  </div>`;
+              } else if (isLockedByMe) {
+                  return `
+                  <button onclick="closeProductView(); removeFromCart('${product.id}')" class="w-full py-3 bg-red-500 hover:bg-red-600 text-white font-bold rounded-lg transition shadow-lg flex items-center justify-center gap-2 text-base">
+                      <i class="fa-solid fa-trash-can"></i> นำออกจากตะกร้า
+                  </button>`;
+              } else {
+                  return `
+                  <button onclick="closeProductView(); addToCart('${product.id}')" class="w-full py-3 bg-brand-600 text-white font-bold rounded-lg hover:bg-brand-700 transition shadow-lg flex items-center justify-center gap-2 text-base">
+                      <i class="fa-solid fa-cart-plus"></i> ใส่ตะกร้าสินค้า
+                  </button>`;
+              }
+          })()}
           ${isManager ? `
           <div class="grid grid-cols-2 gap-2">
             <button onclick="closeProductView(); editProductFromStore('${product.id}')" class="w-full py-2.5 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 transition shadow flex items-center justify-center gap-2 text-sm">
@@ -1486,8 +1537,17 @@ function openSellModal(productId) {
     const p = allProducts.find(x => x.id === productId);
     if (!p) { showToast('ไม่พบข้อมูลสินค้า', 'error'); return; }
 
+    checkoutProductIds = [productId];
+
     document.getElementById('sell_productId').value = p.id;
-    document.getElementById('sell_price').value = p.price || '';
+    
+    // แสดงช่องกรอกราคาขายเดี่ยว
+    const singlePriceInput = document.getElementById('sell_price');
+    if (singlePriceInput) {
+        singlePriceInput.parentElement.classList.remove('hidden');
+        singlePriceInput.value = p.price || '';
+    }
+    
     document.getElementById('sell_customerName').value = '';
     document.getElementById('sell_customerPhone').value = '';
     document.getElementById('receiptPreview').classList.add('hidden');
@@ -1562,37 +1622,87 @@ function previewReceiptImage(input) {
 }
 
 async function confirmSell() {
-    const productId = document.getElementById('sell_productId').value;
-    const soldPrice = document.getElementById('sell_price').value;
+    const isBulk = document.getElementById('sell_productId').value === 'BULK';
     const saleType = document.getElementById('sell_type').value;
     const customerName = document.getElementById('sell_customerName').value;
     const customerPhone = document.getElementById('sell_customerPhone').value;
     const downPayment = document.getElementById('sell_downPayment') ? document.getElementById('sell_downPayment').value : '';
 
-    if (!soldPrice || !saleType) { showToast('กรุณากรอกราคาขายจริง และเลือกรูปแบบการขาย', 'warning'); return; }
+    if (!saleType) { showToast('กรุณาเลือกรูปแบบการขาย', 'warning'); return; }
     if (!customerName || !customerName.trim()) { showToast('กรุณากรอกชื่อลูกค้า', 'warning'); return; }
     if (!customerPhone || !customerPhone.trim()) { showToast('กรุณากรอกเบอร์โทรลูกค้า', 'warning'); return; }
     if (saleType && !saleType.includes('สด') && !saleType.includes('พาร์ทเนอร์') && !downPayment) { showToast('กรุณากรอกเงินดาวน์ตามที่ไฟแนนซ์อนุมัติ', 'warning'); return; }
     if (!sellReceiptDataURI) { showToast('กรุณาอัปโหลดรูปใบเสร็จจากเครื่อง POS ก่อนกดยืนยัน', 'warning'); return; }
-    if (!confirm('ยืนยันการขายสินค้าในราคา ฿' + formatNumber(soldPrice) + ' ใช่หรือไม่?')) return;
+
+    let salePrices = {};
+    let totalBulkPrice = 0;
+    
+    if (isBulk) {
+        for (const pId of checkoutProductIds) {
+            const input = document.getElementById(`bulk_price_${pId}`);
+            if (!input || !input.value) {
+                showToast('กรุณากรอกราคาขายจริงให้ครบทุกเครื่อง', 'warning');
+                return;
+            }
+            const price = parseFloat(input.value) || 0;
+            salePrices[pId] = price;
+            totalBulkPrice += price;
+        }
+        if (!confirm('ยืนยันการขายสินค้าทั้งหมด ' + checkoutProductIds.length + ' เครื่อง รวมเป็นเงิน ฿' + formatNumber(totalBulkPrice) + ' ใช่หรือไม่?')) return;
+    } else {
+        const soldPrice = parseFloat(document.getElementById('sell_price').value) || 0;
+        if (!soldPrice) { showToast('กรุณากรอกราคาขายจริง', 'warning'); return; }
+        const productId = checkoutProductIds[0];
+        salePrices[productId] = soldPrice;
+        if (!confirm('ยืนยันการขายสินค้าในราคา ฿' + formatNumber(soldPrice) + ' ใช่หรือไม่?')) return;
+    }
 
     showLoading(true);
     try {
-        const saleData = {
-            productId, soldPrice, saleType, customerName, customerPhone,
-            downPayment: downPayment ? parseFloat(downPayment) : 0,
-            salesperson: currentUser ? (currentUser.saleName || currentUser.name) : '',
-            recordedBy: currentUser ? currentUser.name : '',
-            receiptImage: sellReceiptDataURI ? { filename: 'receipt_' + Date.now() + '.jpg', dataURI: sellReceiptDataURI } : null
-        };
-        const res = await API_sellProduct(saleData);
-        showLoading(false);
-        if (res.success) {
-            closeSellModal();
-            showReceipt(res.receipt);
-            fetchInventoryData();
+        if (isBulk) {
+            const saleData = {
+                productIds: checkoutProductIds,
+                prices: salePrices,
+                saleType, customerName, customerPhone,
+                downPayment: downPayment ? parseFloat(downPayment) : 0,
+                salesperson: currentUser ? (currentUser.saleName || currentUser.name) : '',
+                recordedBy: currentUser ? currentUser.name : '',
+                receiptImage: sellReceiptDataURI ? { filename: 'receipt_bulk_' + Date.now() + '.jpg', dataURI: sellReceiptDataURI } : null
+            };
+            const res = await API_sellBulkProducts(saleData);
+            showLoading(false);
+            if (res.success) {
+                cart = [];
+                renderCart();
+                closeSellModal();
+                showToast(res.message, 'success');
+                fetchProducts();
+                if (typeof fetchInventoryData === 'function') fetchInventoryData();
+            } else {
+                showToast(res.message, 'error');
+            }
         } else {
-            showToast(res.message, 'error');
+            const productId = checkoutProductIds[0];
+            const soldPrice = salePrices[productId];
+            const saleData = {
+                productId, soldPrice, saleType, customerName, customerPhone,
+                downPayment: downPayment ? parseFloat(downPayment) : 0,
+                salesperson: currentUser ? (currentUser.saleName || currentUser.name) : '',
+                recordedBy: currentUser ? currentUser.name : '',
+                receiptImage: sellReceiptDataURI ? { filename: 'receipt_' + Date.now() + '.jpg', dataURI: sellReceiptDataURI } : null
+            };
+            const res = await API_sellProduct(saleData);
+            showLoading(false);
+            if (res.success) {
+                cart = cart.filter(id => id !== productId);
+                renderCart();
+                closeSellModal();
+                showReceipt(res.receipt);
+                fetchProducts();
+                if (typeof fetchInventoryData === 'function') fetchInventoryData();
+            } else {
+                showToast(res.message, 'error');
+            }
         }
     } catch (err) {
         showLoading(false);
@@ -1779,6 +1889,296 @@ function onBarcodeDetected(result) {
             filterInventory();
         } else if (activeScannerTargetInputId === 'storeSearchDesktop' || activeScannerTargetInputId === 'storeSearchMobile') {
             searchProducts(activeScannerTargetInputId);
+        } else if (activeScannerTargetInputId === 'cartImeiInput') {
+            addToCartByImei(finalResult);
         }
     }
+}
+
+// ====================================================================
+// ฟังก์ชันจัดการตะกร้าสินค้าและระบบล็อกชั่วคราว (Cart & Booking Logic)
+// ====================================================================
+function toggleCartDrawer(show) {
+    const drawer = document.getElementById('cartDrawer');
+    if (!drawer) return;
+    if (show) {
+        drawer.classList.remove('hidden');
+        renderCart();
+        setTimeout(() => {
+            const imeiInput = document.getElementById('cartImeiInput');
+            if (imeiInput) imeiInput.focus();
+        }, 300);
+    } else {
+        drawer.classList.add('hidden');
+    }
+}
+
+async function addToCart(productId) {
+    if (cart.includes(productId)) {
+        showToast('สินค้านี้อยู่ในตะกร้าแล้ว', 'info');
+        return;
+    }
+    showLoading(true);
+    try {
+        const res = await API_lockProduct(productId);
+        showLoading(false);
+        if (res.success) {
+            cart.push(productId);
+            showToast('เพิ่มสินค้าเข้าตะกร้าและจองชั่วคราวแล้ว (10 นาที)', 'success');
+            
+            const prod = allProducts.find(p => p.id === productId);
+            if (prod) {
+                prod.lockedBy = currentUser.name;
+                prod.lockExpires = Date.now() + 10 * 60 * 1000;
+            }
+            renderCart();
+            filterProducts();
+        } else {
+            showToast(res.message || 'ไม่สามารถจองสินค้าได้', 'error');
+            fetchProducts();
+        }
+    } catch (e) {
+        showLoading(false);
+        console.error(e);
+        showToast('เกิดข้อผิดพลาดในการจองสินค้า', 'error');
+    }
+}
+
+async function removeFromCart(productId) {
+    showLoading(true);
+    try {
+        const res = await API_unlockProduct(productId);
+        showLoading(false);
+        if (res.success) {
+            cart = cart.filter(id => id !== productId);
+            showToast('ลบสินค้าออกจากตะกร้าแล้ว', 'info');
+            
+            const prod = allProducts.find(p => p.id === productId);
+            if (prod) {
+                prod.lockedBy = null;
+                prod.lockExpires = null;
+            }
+            renderCart();
+            filterProducts();
+        } else {
+            showToast(res.message || 'ไม่สามารถปลดล็อกสินค้าได้', 'error');
+        }
+    } catch (e) {
+        showLoading(false);
+        console.error(e);
+        showToast('เกิดข้อผิดพลาดในการปลดล็อกสินค้า', 'error');
+    }
+}
+
+async function clearCart() {
+    if (cart.length === 0) return;
+    if (!confirm('ยืนยันล้างตะกร้าสินค้าทั้งหมด? (สินค้าทั้งหมดจะกลับมาพร้อมขายทันที)')) return;
+    
+    showLoading(true);
+    let failCount = 0;
+    
+    for (const id of [...cart]) {
+        try {
+            const res = await API_unlockProduct(id);
+            if (res.success) {
+                cart = cart.filter(cid => cid !== id);
+                const prod = allProducts.find(p => p.id === id);
+                if (prod) {
+                    prod.lockedBy = null;
+                    prod.lockExpires = null;
+                }
+            } else {
+                failCount++;
+            }
+        } catch (e) {
+            console.error(e);
+            failCount++;
+        }
+    }
+    
+    showLoading(false);
+    if (failCount > 0) {
+        showToast(`ล้างตะกร้าเสร็จสิ้น มีข้อผิดพลาด ${failCount} รายการ`, 'warning');
+    } else {
+        showToast('ล้างตะกร้าสินค้าทั้งหมดเรียบร้อย', 'success');
+    }
+    renderCart();
+    filterProducts();
+}
+
+async function addToCartByImei(imei) {
+    if (!imei) return;
+    const cleanImei = imei.toString().trim().toLowerCase();
+    
+    const product = allProducts.find(p => p.imei && p.imei.toString().trim().toLowerCase() === cleanImei);
+    
+    if (!product) {
+        showToast(`ไม่พบสินค้าที่มี IMEI "${imei}" ในสต็อก`, 'error');
+        return;
+    }
+    
+    if ((product.status || 'Available').toLowerCase() !== 'available') {
+        showToast(`สินค้าชิ้นนี้ถูกขายหรือเอาออกจากระบบแล้ว (สถานะ: ${product.status})`, 'warning');
+        return;
+    }
+    
+    const isLocked = product.lockedBy && product.lockedBy !== currentUser.name && product.lockExpires > Date.now();
+    if (isLocked) {
+        showToast(`สินค้านี้ติดจองอยู่ในตะกร้าของคุณ ${product.lockedBy}`, 'warning');
+        return;
+    }
+    
+    if (cart.includes(product.id)) {
+        showToast('สินค้านี้ถูกเพิ่มอยู่ในตะกร้าของคุณแล้ว', 'info');
+        return;
+    }
+    
+    await addToCart(product.id);
+}
+
+async function handleCartImeiSubmit(e) {
+    e.preventDefault();
+    const input = document.getElementById('cartImeiInput');
+    if (!input) return;
+    const imei = input.value;
+    if (!imei) return;
+    
+    input.value = '';
+    input.focus();
+    
+    await addToCartByImei(imei);
+}
+
+function renderCart() {
+    const listContainer = document.getElementById('cartItemsList');
+    const badge = document.getElementById('cartBadge');
+    const totalItemsText = document.getElementById('cartTotalItems');
+    const totalPriceText = document.getElementById('cartTotalPrice');
+    const btnCheckout = document.getElementById('btnCheckoutCart');
+    
+    if (!listContainer) return;
+    
+    const count = cart.length;
+    
+    if (count > 0) {
+        if (badge) {
+            badge.innerText = count;
+            badge.classList.remove('hidden');
+        }
+        if (btnCheckout) btnCheckout.disabled = false;
+    } else {
+        if (badge) {
+            badge.innerText = '0';
+            badge.classList.add('hidden');
+        }
+        if (btnCheckout) btnCheckout.disabled = true;
+    }
+    
+    if (totalItemsText) totalItemsText.innerText = count;
+    
+    let totalPrice = 0;
+    
+    if (count === 0) {
+        listContainer.innerHTML = `
+        <div class="text-center py-12 text-gray-400 text-sm">
+            <i class="fa-solid fa-cart-arrow-down text-5xl mb-2 opacity-40"></i>
+            <p>ไม่มีสินค้าในตะกร้า</p>
+            <p class="text-xs mt-1 text-gray-400">กรุณาสแกน IMEI หรือเลือกสินค้าหน้าร้าน</p>
+        </div>`;
+        if (totalPriceText) totalPriceText.innerText = '0';
+        return;
+    }
+    
+    let itemsHtml = '';
+    cart.forEach(id => {
+        const p = allProducts.find(prod => prod.id === id);
+        if (!p) return;
+        
+        totalPrice += parseFloat(p.price) || 0;
+        const img = p.images && p.images.length > 0 && p.images[0].trim() !== '' ? p.images[0] : NO_IMAGE;
+        
+        itemsHtml += `
+        <div class="flex items-center gap-3 py-3 border-b border-gray-100 fade-in">
+            <img src="${img}" class="w-12 h-12 object-cover rounded border bg-gray-50 bg-center" onerror="this.onerror=null;this.src=NO_IMAGE;">
+            <div class="flex-grow min-w-0">
+                <h4 class="font-medium text-sm text-gray-800 truncate">${p.model}</h4>
+                <p class="text-xs text-gray-500 truncate">${p.brand} | ${p.ram || '-'}/${p.storage || '-'}</p>
+                <div class="flex justify-between items-center mt-1">
+                    <span class="text-brand-600 font-bold text-xs">฿${formatNumber(p.price)}</span>
+                    <span class="text-[9px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded truncate max-w-[125px] font-mono">IMEI: ${p.imei || '-'}</span>
+                </div>
+            </div>
+            <button onclick="removeFromCart('${p.id}')" class="shrink-0 text-red-500 hover:text-red-700 hover:bg-red-50 w-7 h-7 rounded-full flex items-center justify-center transition" title="ลบชิ้นนี้">
+                <i class="fa-regular fa-trash-can"></i>
+            </button>
+        </div>`;
+    });
+    
+    listContainer.innerHTML = itemsHtml;
+    if (totalPriceText) totalPriceText.innerText = formatNumber(totalPrice);
+}
+
+function checkoutCart() {
+    if (cart.length === 0) {
+        showToast('ไม่มีสินค้าในตะกร้า', 'warning');
+        return;
+    }
+    
+    checkoutProductIds = [...cart];
+    toggleCartDrawer(false);
+    
+    document.getElementById('sell_productId').value = 'BULK';
+    
+    // ซ่อนช่องราคาขายเดี่ยว
+    const singlePriceInput = document.getElementById('sell_price');
+    if (singlePriceInput) {
+        singlePriceInput.parentElement.classList.add('hidden');
+    }
+    
+    document.getElementById('sell_customerName').value = '';
+    document.getElementById('sell_customerPhone').value = '';
+    document.getElementById('receiptPreview').classList.add('hidden');
+    sellReceiptDataURI = null;
+
+    const dpContainer = document.getElementById('sell_downPaymentContainer');
+    if (dpContainer) dpContainer.classList.add('hidden');
+    const dpInput = document.getElementById('sell_downPayment');
+    if (dpInput) dpInput.value = '';
+
+    let infoHtml = `<div class="space-y-2 mb-2 max-h-[45vh] overflow-y-auto pr-1">
+      <div class="text-xs font-bold text-gray-700 mb-1 flex items-center gap-1"><i class="fa-solid fa-list-check text-brand-500"></i> รายการสินค้าที่จะขาย (${checkoutProductIds.length} เครื่อง)</div>`;
+      
+    const isManager = currentUser && (currentUser.role === 'Manager' || currentUser.role === 'ผู้จัดการ');
+    
+    checkoutProductIds.forEach(pId => {
+        const p = allProducts.find(x => x.id === pId);
+        if (!p) return;
+        
+        const costHtml = isManager ? `ต้นทุน: ฿${formatNumber(p.cost)} | ` : '';
+        infoHtml += `
+        <div class="bg-gray-50 p-2.5 rounded border border-gray-200 flex flex-col gap-1">
+          <div class="font-bold text-gray-800 text-xs">${p.brand} ${p.model}</div>
+          <div class="text-[10px] text-gray-500 flex justify-between">
+            <span>IMEI: ${p.imei || '-'}</span>
+            <span>${costHtml}ราคาตั้ง: ฿${formatNumber(p.price)}</span>
+          </div>
+          <div class="flex items-center gap-2 mt-1">
+            <span class="text-[11px] font-semibold text-gray-600 shrink-0">ราคาขายจริง (บาท):</span>
+            <input type="number" id="bulk_price_${p.id}" value="${p.price}" class="w-full text-xs font-bold text-brand-600 p-1 border border-gray-300 rounded focus:ring-brand-500 outline-none bg-brand-50">
+          </div>
+        </div>`;
+    });
+    infoHtml += `</div>`;
+    
+    document.getElementById('sellProductInfo').innerHTML = infoHtml;
+
+    const typeSel = document.getElementById('sell_type');
+    typeSel.innerHTML = '<option value="">เลือกรูปแบบ</option>';
+    if (window._appSettings && window._appSettings.saleTypes) {
+        window._appSettings.saleTypes.forEach(t => { typeSel.innerHTML += `<option value="${t}">${t}</option>`; });
+    } else {
+        API_getSettings().then(s => { window._appSettings = s; s.saleTypes.forEach(t => typeSel.innerHTML += `<option value="${t}">${t}</option>`); }).catch(() => { });
+    }
+
+    document.getElementById('sellModal').classList.remove('hidden');
 }
