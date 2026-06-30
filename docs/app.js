@@ -377,6 +377,12 @@ function viewProduct(id) {
     const isManager = currentUser && (currentUser.role === 'Manager' || currentUser.role === 'ผู้จัดการ');
     const isTech = currentUser && (currentUser.role === 'ช่าง' || currentUser.role === 'Technician');
 
+    const hasImages = product.images && product.images.length > 0 && product.images[0].trim() !== '';
+    const downloadButtonHtml = hasImages ? `
+    <button type="button" onclick="downloadAllProductImages('${product.id}')" class="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg border border-slate-200 transition flex items-center justify-center gap-2 text-xs">
+      <i class="fa-solid fa-download"></i> ดาวน์โหลดรูปภาพทั้งหมด (${product.images.length} รูป)
+    </button>` : '';
+
     let moveStockHtml = '';
     if (isManager) {
         moveStockHtml = `
@@ -487,6 +493,7 @@ function viewProduct(id) {
                   </button>`;
               }
           })()}
+          ${downloadButtonHtml}
           ${isManager ? `
           <div class="grid grid-cols-2 gap-2">
             <button onclick="closeProductView(); editProductFromStore('${product.id}')" class="w-full py-2.5 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 transition shadow flex items-center justify-center gap-2 text-sm">
@@ -2181,4 +2188,60 @@ function checkoutCart() {
     }
 
     document.getElementById('sellModal').classList.remove('hidden');
+}
+
+// ====================================================================
+// ฟังก์ชันดาวน์โหลดรูปภาพทั้งหมดของสินค้า
+// ====================================================================
+function getDownloadUrl(imageUrl) {
+    if (!imageUrl) return '';
+    let fileId = '';
+    // ตรวจสอบโครงสร้าง URL ของ Google Drive
+    if (imageUrl.includes('googleusercontent.com/d/')) {
+        fileId = imageUrl.split('googleusercontent.com/d/')[1].split('/')[0];
+    } else if (imageUrl.includes('id=')) {
+        fileId = imageUrl.split('id=')[1].split('&')[0];
+    } else if (imageUrl.includes('drive.google.com/file/d/')) {
+        fileId = imageUrl.split('drive.google.com/file/d/')[1].split('/')[0];
+    }
+    
+    if (fileId) {
+        // คืนค่าเป็นลิงก์ดาวน์โหลดโดยตรงของ Google Drive (เลี่ยง CORS)
+        return `https://drive.google.com/uc?export=download&id=${fileId}`;
+    }
+    return imageUrl;
+}
+
+function downloadAllProductImages(productId) {
+    const product = allProducts.find(p => p.id === productId);
+    if (!product || !product.images || product.images.length === 0 || product.images[0].trim() === '') {
+        showToast('ไม่มีรูปภาพสำหรับสินค้าชิ้นนี้', 'warning');
+        return;
+    }
+    
+    showToast('กำลังเตรียมดาวน์โหลดรูปภาพทั้งหมด...', 'info');
+    
+    let downloadCount = 0;
+    product.images.forEach((imgUrl, index) => {
+        if (!imgUrl || imgUrl.trim() === '') return;
+        
+        const downloadUrl = getDownloadUrl(imgUrl.trim());
+        const a = document.createElement('a');
+        a.href = downloadUrl;
+        a.target = '_blank';
+        a.download = `product_${productId}_image_${index + 1}.jpg`;
+        
+        // หน่วงเวลาเล็กน้อยเพื่อให้เบราว์เซอร์ไม่มองเป็น Pop-up Spam
+        setTimeout(() => {
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        }, index * 450);
+        
+        downloadCount++;
+    });
+    
+    setTimeout(() => {
+        showToast(`ส่งคำขอดาวน์โหลดภาพสำเร็จทั้งหมด ${downloadCount} รูป (หากรูปไม่ขึ้นกรุณาอนุญาต Pop-up)`, 'success');
+    }, downloadCount * 450);
 }
