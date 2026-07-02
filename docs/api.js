@@ -112,9 +112,65 @@ async function API_logout() {
 
 // ดึงสินค้าทั้งหมด
 async function API_getProducts() {
-    const res = await apiGet('getProducts');
-    if (!res.success) throw new Error(res.error || 'getProducts failed');
-    return res.data;
+    try {
+        const session = getSession();
+        const user = session ? session.user : null;
+        const role = user ? user.role : 'Employee';
+
+        if (!CONFIG.FIREBASE_DB_URL) {
+            throw new Error('Firebase DB URL not configured');
+        }
+
+        // ดึงข้อมูลตรงๆ จาก Firebase เพื่อความเร็วระดับมิลลิวินาที
+        const url = `${CONFIG.FIREBASE_DB_URL}products.json`;
+        const response = await fetch(url);
+        if (!response.ok) {
+            throw new Error(`Firebase Error: ${response.status}`);
+        }
+        
+        const rawProducts = await response.json() || {};
+        
+        // แปลงจาก Object { P10001: {...} } เป็น Array
+        const productsList = Object.values(rawProducts);
+
+        // กรองข้อมูลตามบทบาท (Role) ของผู้ใช้งานเหมือนใน Apps Script
+        const isManager = role === 'Manager' || role === 'ผู้จัดการ';
+        const isTech = role === 'ช่าง' || role === 'Technician';
+
+        const filteredProducts = productsList.filter(prod => {
+            const status = prod.status || 'Available';
+            const stockType = prod.stockType || 'Products';
+
+            if (isManager) {
+                // Manager เห็นสินค้าทุกตัวในทุกคลัง
+                return true;
+            } else if (isTech) {
+                // ช่างเห็นสินค้าในคลังพร้อมขาย (Products) และคลังอะไหล่ (Spare)
+                // ยกเว้นสินค้าที่ขายแล้ว (Sold) หรือเอาออกจากระบบแล้ว (Unavailable)
+                if (stockType === 'Employee') return false;
+                if (status.toLowerCase() === 'sold' || status.toLowerCase() === 'unavailable') {
+                    return false;
+                }
+                return true;
+            } else {
+                // พนักงานทั่วไป (Employee) หรืออื่นๆ เห็นเฉพาะคลังพร้อมขาย (Products) ที่มีสถานะ 'Available' (พร้อมขาย) เท่านั้น
+                if (stockType !== 'Products') return false;
+                if (status.toLowerCase() !== 'available') {
+                    return false;
+                }
+                return true;
+            }
+        });
+
+        // จัดเรียงจากรหัสสินค้าล่าสุดขึ้นก่อน (P-YYYYMMDD-HHmmss)
+        return filteredProducts.sort((a, b) => b.id.localeCompare(a.id));
+    } catch (e) {
+        console.warn('Failed to get products from Firebase, falling back to GAS API:', e);
+        // หาก Firebase ขัดข้อง ให้ใช้ Fallback กลับไปดึงจาก Google Apps Script แบบเดิม
+        const res = await apiGet('getProducts');
+        if (!res.success) throw new Error(res.error || 'getProducts failed');
+        return res.data;
+    }
 }
 
 // ดึง Settings
