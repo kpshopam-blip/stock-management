@@ -1,4 +1,3 @@
-// docs/app.js
 // ====================================================================
 // JavaScript หลักของแอป KP Shop
 // แทนที่ JS.html เดิม — ใช้ API layer (api.js) แทน google.script.run
