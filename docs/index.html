@@ -526,9 +526,16 @@
       <div class="flex justify-between items-center">
         <h2 class="text-xl font-bold text-gray-800 flex items-center gap-2"><i
             class="fa-solid fa-chart-line text-brand-500"></i> Dashboard สรุปยอดขาย</h2>
-        <button onclick="loadStore()"
-          class="text-sm bg-white border px-3 py-1.5 rounded hover:bg-gray-50 flex items-center gap-1"><i
-            class="fa-solid fa-arrow-left"></i> กลับหน้าร้าน</button>
+        <div class="flex gap-2">
+          <button id="btnForceSyncFirebase" onclick="forceSyncFirebase()"
+            class="text-sm bg-indigo-50 border border-indigo-200 text-indigo-700 px-3 py-1.5 rounded hover:bg-indigo-100 flex items-center gap-1"
+            title="ซิงค์ข้อมูลจาก Sheets ไป Firebase ทั้งหมดใหม่">
+            <i class="fa-solid fa-rotate"></i> <span>ซิงค์สต็อกไป Firebase</span>
+          </button>
+          <button onclick="loadStore()"
+            class="text-sm bg-white border px-3 py-1.5 rounded hover:bg-gray-50 flex items-center gap-1"><i
+              class="fa-solid fa-arrow-left"></i> กลับหน้าร้าน</button>
+        </div>
       </div>
       <div id="managerSummaryCards" class="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div class="bg-white rounded-xl shadow-sm border p-4">
