@@ -987,12 +987,20 @@ async function loadDashboard() {
         if (chartCard) chartCard.classList.add('hidden');
         const spFilter = document.getElementById('dashSalespersonFilter');
         if (spFilter) spFilter.classList.add('hidden');
+        
+        // ซ่อนปุ่มซิงค์ Firebase สำหรับพนักงานทั่วไป
+        const syncBtn = document.getElementById('btnForceSyncFirebase');
+        if (syncBtn) syncBtn.classList.add('hidden');
 
         // เปลี่ยนหัวข้อ
         const dashTitle = document.querySelector('h2');
         if (dashTitle && dashTitle.innerText.includes('Dashboard')) {
             dashTitle.innerHTML = '<i class="fa-solid fa-list text-brand-500"></i> รายการขายของฉัน';
         }
+    } else {
+        // แสดงปุ่มซิงค์ Firebase สำหรับผู้จัดการ
+        const syncBtn = document.getElementById('btnForceSyncFirebase');
+        if (syncBtn) syncBtn.classList.remove('hidden');
     }
 
     try {
@@ -1000,6 +1008,32 @@ async function loadDashboard() {
         renderDashboard(data);
     } catch (e) {
         showToast('โหลด Dashboard ไม่สำเร็จ', 'error');
+    }
+}
+
+// ฟังก์ชันบังคับซิงค์ข้อมูลจาก Sheets ไป Firebase
+async function forceSyncFirebase() {
+    if (!confirm('คุณต้องการซิงค์ข้อมูลสินค้าจาก Google Sheets ไปยัง Firebase ทั้งหมดใหม่หรือไม่?\n(ระบบจะอ่านข้อมูลล่าสุดจากชีตเพื่ออัปเดต Firebase ให้ตรงกัน)')) {
+        return;
+    }
+    
+    showLoading(true);
+    try {
+        const response = await apiPost('syncAllProducts', {});
+        showLoading(false);
+        if (response.success) {
+            showToast('ซิงค์ข้อมูลสำเร็จ! จำนวน ' + response.count + ' รายการ', 'success');
+            // ทำการดาวน์โหลดข้อมูลใหม่เพื่อแสดงผลล่าสุด
+            if (typeof loadStore === 'function') {
+                loadStore();
+            }
+        } else {
+            showToast('ซิงค์ข้อมูลไม่สำเร็จ: ' + (response.message || 'ไม่ทราบสาเหตุ'), 'error');
+        }
+    } catch (err) {
+        showLoading(false);
+        console.error('Force Sync Error:', err);
+        showToast('เกิดข้อผิดพลาดในการเชื่อมต่อ: ' + err.message, 'error');
     }
 }
 
