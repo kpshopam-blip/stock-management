@@ -1,3 +1,4 @@
+// docs/app.js - trigger build v1.0.1
 // ====================================================================
 // JavaScript หลักของแอป KP Shop
 // แทนที่ JS.html เดิม — ใช้ API layer (api.js) แทน google.script.run
@@ -2236,4 +2237,3 @@ function checkoutCart() {
 
     document.getElementById('sellModal').classList.remove('hidden');
 }
-
