@@ -274,14 +274,80 @@ async function uploadImagesToDrive(queue) {
     return uploadedUrls;
 }
 
-// ล็อกสินค้าชั่วคราว
+// ล็อกสินค้าชั่วคราว ผ่าน Firebase ตรงๆ เพื่อความเร็วสูงระดับมิลลิวินาที
 async function API_lockProduct(productId) {
-    return apiPost('lockProduct', { productId });
+    const session = getSession();
+    const user = session ? session.user : null;
+    const username = user ? user.name : 'Unknown';
+    
+    if (!CONFIG.FIREBASE_DB_URL) {
+        throw new Error('Firebase DB URL not configured');
+    }
+    
+    const url = `${CONFIG.FIREBASE_DB_URL}products/${productId}.json`;
+    
+    try {
+        // 1. ตรวจสอบการกดจองชนกันก่อนบันทึกจริง
+        const checkRes = await fetch(url);
+        if (checkRes.ok) {
+            const currentProd = await checkRes.json();
+            const now = Date.now();
+            if (currentProd && currentProd.lockedBy && currentProd.lockedBy !== username && currentProd.lockExpires > now) {
+                return { success: false, message: 'สินค้านี้ถูกจองไว้แล้วโดยคุณ ' + currentProd.lockedBy };
+            }
+        }
+
+        // 2. บันทึกข้อมูลการจอง
+        const payload = {
+            lockedBy: username,
+            lockExpires: Date.now() + 10 * 60 * 1000 // ล็อก 10 นาที
+        };
+
+        const response = await fetch(url, {
+            method: 'PATCH',
+            body: JSON.stringify(payload)
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Firebase status: ${response.status}`);
+        }
+        
+        return { success: true };
+    } catch (e) {
+        console.error('Firebase lock error, fallback to GAS:', e);
+        // หาก Firebase ขัดข้อง ให้ใช้ระบบสำรองผ่าน Apps Script
+        return apiPost('lockProduct', { productId });
+    }
 }
 
-// ปลดล็อกสินค้า
+// ปลดล็อกสินค้า ผ่าน Firebase ตรงๆ
 async function API_unlockProduct(productId) {
-    return apiPost('unlockProduct', { productId });
+    if (!CONFIG.FIREBASE_DB_URL) {
+        throw new Error('Firebase DB URL not configured');
+    }
+    
+    const url = `${CONFIG.FIREBASE_DB_URL}products/${productId}.json`;
+    const payload = {
+        lockedBy: null,
+        lockExpires: null
+    };
+    
+    try {
+        const response = await fetch(url, {
+            method: 'PATCH',
+            body: JSON.stringify(payload)
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Firebase status: ${response.status}`);
+        }
+        
+        return { success: true };
+    } catch (e) {
+        console.error('Firebase unlock error, fallback to GAS:', e);
+        // สำรอง
+        return apiPost('unlockProduct', { productId });
+    }
 }
 
 // บันทึกขายหลายเครื่องพร้อมกัน
