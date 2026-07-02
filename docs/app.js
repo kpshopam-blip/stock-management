@@ -1322,12 +1322,12 @@ function renderImagePreviews() {
 
 // ====== ตรวจสอบ IMEI ซ้ำ (Frontend) ======
 function checkImeiDuplicate(imei, excludeId) {
-    if (!imei || imei.trim() === '') return null;
-    const norm = imei.trim().toLowerCase();
+    if (!imei || String(imei).trim() === '') return null;
+    const norm = String(imei).trim().toLowerCase();
     return allProducts.find(p => {
         if (excludeId && p.id === excludeId) return false;
-        const pImei = (p.imei || '').trim().toLowerCase();
-        return pImei !== '' && pImei === norm && (p.status || 'Available').toLowerCase() !== 'sold';
+        const pImei = String(p.imei || '').trim().toLowerCase();
+        return pImei !== '' && pImei === norm && String(p.status || 'Available').toLowerCase() !== 'sold';
     }) || null;
 }
 
