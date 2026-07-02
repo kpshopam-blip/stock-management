@@ -1964,7 +1964,7 @@ async function addToCart(productId) {
         return;
     }
     
-    // ขึ้นตัวหมุน Loading เพื่อให้พนักงานมั่นใจว่าระบบกำลังทำงาน
+    // แสดงตัวหมุน Loading เพื่อให้พนักงานทราบว่ากดปุ่มแล้ว
     showLoading(true);
     
     API_lockProduct(productId).then(res => {
@@ -1985,14 +1985,14 @@ async function addToCart(productId) {
             fetchProducts();
         }
     }).catch(e => {
-        showLoading(false); // ปิดตัวหมุนเมื่อเกิดข้อผิดพลาด
-        console.error(e);
+        showLoading(false); // ปิดตัวหมุน
+        console.error('Lock error:', e);
         showToast('เกิดข้อผิดพลาดในการเชื่อมต่อระบบจองสินค้า', 'error');
     });
 }
 
 async function removeFromCart(productId) {
-    // ขึ้นตัวหมุน Loading
+    // แสดงตัวหมุน Loading เพื่อให้พนักงานทราบว่ากดปุ่มแล้ว
     showLoading(true);
     
     API_unlockProduct(productId).then(res => {
@@ -2024,10 +2024,10 @@ async function clearCart() {
     
     const itemsToUnlock = [...cart];
     
-    // ขึ้นตัวหมุน Loading
+    // แสดงตัวหมุน Loading
     showLoading(true);
     
-    // ยิง API ปลดจองพร้อมกันแบบคู่ขนานเบื้องหลัง
+    // ยิง API ปลดจองพร้อมกันแบบคู่ขนานไปยัง Firebase ตรงๆ
     Promise.all(itemsToUnlock.map(id => 
         API_unlockProduct(id).then(res => {
             if (!res.success) console.warn(`Backend unlock failed for ${id}:`, res.message);
@@ -2037,7 +2037,7 @@ async function clearCart() {
             return false;
         })
     )).then(results => {
-        showLoading(false); // ปิดตัวหมุนเมื่อปลดล็อกทุกรายการเสร็จสิ้น
+        showLoading(false); // ปิดตัวหมุน
         
         const successCount = results.filter(Boolean).length;
         
@@ -2056,7 +2056,7 @@ async function clearCart() {
         if (successCount === itemsToUnlock.length) {
             showToast('ล้างตะกร้าและปล่อยล็อกสินค้าทั้งหมดเรียบร้อยแล้ว', 'success');
         } else {
-            showToast(`ล้างตะกร้าเรียบร้อย (ปล่อยล็อกหลังบ้านสำเร็จ ${successCount}/${itemsToUnlock.length} รายการ)`, 'warning');
+            showToast(`ล้างตะกร้าเรียบร้อย (ปล่อยล็อกสำเร็จ ${successCount}/${itemsToUnlock.length} รายการ)`, 'warning');
         }
     });
 }
