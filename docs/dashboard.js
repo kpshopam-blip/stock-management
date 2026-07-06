@@ -236,6 +236,18 @@ function extractStorageFromSpec(spec) {
   return '';
 }
 
+// ฟังก์ชันจัดรูปแบบความจุ (Storage) ให้เป็นมาตรฐาน (เช่น "128GB" หรือ "128 GB " -> "128 GB")
+function normalizeStorage(storage) {
+  if (!storage) return '';
+  const match = storage.trim().match(/^(\d+)\s*(GB|TB)?/i);
+  if (match) {
+    const num = match[1];
+    const unit = (match[2] || 'GB').toUpperCase();
+    return `${num} ${unit}`;
+  }
+  return storage.trim();
+}
+
 // ====== 3. ตารางจำแนกรายงานสต็อก ยี่ห้อ/รุ่น (Column 1) คัดกรองตามแหล่งที่มา ======
 function renderStockTableReport() {
   const tbody = document.getElementById('stockReportTableBody');
@@ -255,6 +267,8 @@ function renderStockTableReport() {
     cleaned = cleaned.replace(/\s*\(?[A-Z]{1,3}\/[A-Z]{1,3}\)?$/i, '');
     // ลบรหัสโมเดลภูมิภาคแบบไม่มี / (เช่น TH, LL, ZP) ที่อยู่ท้ายสุด
     cleaned = cleaned.replace(/\s+\(?(TH|LL|ZP|CH|VN|ZA|KH|JP|US|EU|HK|CN|TW|KR|MY|SG|ID|PH)\)?$/i, '');
+    // ยุบช่องว่างที่ซ้ำซ้อนให้เหลือช่องเดียว
+    cleaned = cleaned.replace(/\s+/g, ' ');
     return cleaned.trim();
   };
 
@@ -267,13 +281,13 @@ function renderStockTableReport() {
       return; // กรองออกตามแหล่งที่มาหลัก
     }
 
-    const cleanModel = p.rawModel || getCleanModelName(p.model);
-    const storage = p.storage || '';
-    const key = `${p.brand.toLowerCase()}|${cleanModel.toLowerCase()}|${storage.toLowerCase()}`;
+    const cleanModel = getCleanModelName(p.rawModel || p.model);
+    const storage = normalizeStorage(p.storage || '');
+    const key = `${(p.brand || '').trim().toLowerCase()}|${cleanModel.toLowerCase()}|${storage.toLowerCase()}`;
     const status = (p.status || '').toLowerCase();
     
     if (!stats[key]) {
-      stats[key] = { brand: p.brand, model: cleanModel, storage: storage, added: 0, sold: 0, remaining: 0 };
+      stats[key] = { brand: (p.brand || '').trim(), model: cleanModel, storage: storage, added: 0, sold: 0, remaining: 0 };
     }
     
     stats[key].added++;
@@ -293,11 +307,15 @@ function renderStockTableReport() {
         return; // กรองออกตามแหล่งที่มาหลัก
       }
 
-      const cleanModel = s.modelCode ? s.model : getCleanModelName(s.model);
-      const storage = extractStorageFromSpec(s.spec || '');
-      const key = `${s.brand.toLowerCase()}|${cleanModel.toLowerCase()}|${storage.toLowerCase()}`;
+      const cleanModel = getCleanModelName(s.model);
+      const storage = normalizeStorage(extractStorageFromSpec(s.spec || '') || s.storage || '');
+      const key = `${(s.brand || '').trim().toLowerCase()}|${cleanModel.toLowerCase()}|${storage.toLowerCase()}`;
       if (!stats[key]) {
-        stats[key] = { brand: s.brand, model: cleanModel, storage: storage, added: 1, sold: 1, remaining: 0 };
+        stats[key] = { brand: (s.brand || '').trim(), model: cleanModel, storage: storage, added: 1, sold: 1, remaining: 0 };
+      } else {
+        // บวกสะสมยอดขายและยอดรับเข้าเพิ่มขึ้นกรณีที่มี Key อยู่แล้ว
+        stats[key].added++;
+        stats[key].sold++;
       }
     });
   }
