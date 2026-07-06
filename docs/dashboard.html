@@ -280,12 +280,39 @@
             <thead
               class="text-[10px] text-gray-500 dark:text-gray-400 uppercase bg-gray-100 dark:bg-darkbg-700 sticky top-0 font-semibold">
               <tr>
-                <th class="px-3 py-2.5">ยี่ห้อ / รุ่นเครื่อง</th>
-                <th class="px-2 py-2.5 text-center w-14">รับเข้า</th>
-                <th class="px-2 py-2.5 text-center w-14">ขายแล้ว</th>
+                <th class="px-3 py-2.5">
+                  <button onclick="setStockSort('model')" class="flex items-center gap-1 hover:text-gray-800 dark:hover:text-white transition group">
+                    ยี่ห้อ / รุ่นเครื่อง
+                    <span id="sort_icon_model" class="text-gray-300 dark:text-gray-600 group-hover:text-gray-500 dark:group-hover:text-gray-400 transition">
+                      <i class="fa-solid fa-sort"></i>
+                    </span>
+                  </button>
+                </th>
+                <th class="px-2 py-2.5 text-center w-14">
+                  <button onclick="setStockSort('added')" class="flex items-center justify-center gap-1 w-full hover:text-gray-800 dark:hover:text-white transition group">
+                    รับเข้า
+                    <span id="sort_icon_added" class="text-gray-300 dark:text-gray-600 group-hover:text-gray-500 dark:group-hover:text-gray-400 transition">
+                      <i class="fa-solid fa-sort"></i>
+                    </span>
+                  </button>
+                </th>
+                <th class="px-2 py-2.5 text-center w-14">
+                  <button onclick="setStockSort('sold')" class="flex items-center justify-center gap-1 w-full hover:text-gray-800 dark:hover:text-white transition group">
+                    ขายแล้ว
+                    <span id="sort_icon_sold" class="text-gray-300 dark:text-gray-600 group-hover:text-gray-500 dark:group-hover:text-gray-400 transition">
+                      <i class="fa-solid fa-sort"></i>
+                    </span>
+                  </button>
+                </th>
                 <th
                   class="px-3 py-2.5 text-center w-16 bg-brand-50 dark:bg-brand-500/10 text-brand-600 dark:text-brand-400 font-bold">
-                  คงเหลือ</th>
+                  <button onclick="setStockSort('remaining')" class="flex items-center justify-center gap-1 w-full hover:text-brand-700 dark:hover:text-brand-300 transition group">
+                    คงเหลือ
+                    <span id="sort_icon_remaining" class="text-brand-300 dark:text-brand-700 group-hover:text-brand-500 dark:group-hover:text-brand-400 transition">
+                      <i class="fa-solid fa-sort-down"></i>
+                    </span>
+                  </button>
+                </th>
               </tr>
             </thead>
             <tbody id="stockReportTableBody" class="divide-y divide-gray-100 dark:divide-darkbg-700 font-medium">
@@ -324,13 +351,13 @@
 
           <!-- ตารางรายการตามแหล่งที่มาที่คัดเลือก -->
           <div
-            class="flex-grow overflow-y-auto max-h-[220px] xl:max-h-[300px] border border-gray-100 dark:border-darkbg-700 rounded-xl">
+            class="flex-grow overflow-y-auto max-h-[450px] xl:max-h-[550px] border border-gray-100 dark:border-darkbg-700 rounded-xl">
             <table class="w-full text-[11px] text-left">
               <thead
                 class="text-[9px] text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-darkbg-700 font-semibold sticky top-0">
                 <tr>
                   <th class="px-2.5 py-2">รุ่นเครื่อง / IMEI</th>
-                  <th class="px-2 py-2 text-right">ราคาทุน</th>
+                  <th class="px-2 py-2 text-right">ข้อมูลราคา</th>
                   <th class="px-2.5 py-2 text-center w-20">สถานะ</th>
                 </tr>
               </thead>

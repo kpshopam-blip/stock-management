@@ -11,6 +11,11 @@ let salesSummary = null;
 let dashboardChart = null;
 let activeModelFilter = null; // { brand, model, storage } หรือ null = ไม่กรอง (Cross-Filter)
 
+// ตัวแปรเรียงสำหรับตารางรายงานสต็อก
+// column: 'model' | 'added' | 'sold' | 'remaining'
+let stockSortColumn = 'remaining';
+let stockSortDir = 'desc'; // 'asc' | 'desc'
+
 // ตั้งค่าเมื่อเปิดหน้าจอ
 window.onload = async function () {
   const session = getSession();
@@ -306,7 +311,16 @@ function renderStockTableReport() {
     reportList = reportList.filter(item => item.model.toLowerCase().includes(searchInput) || item.brand.toLowerCase().includes(searchInput));
   }
 
-  reportList.sort((a, b) => b.remaining - a.remaining);
+  // 3.4 เรียงตามคอลัมน์ที่เลือก
+  const dir = stockSortDir === 'asc' ? 1 : -1;
+  reportList.sort((a, b) => {
+    if (stockSortColumn === 'model') {
+      const nameA = (a.brand + ' ' + a.model).toLowerCase();
+      const nameB = (b.brand + ' ' + b.model).toLowerCase();
+      return dir * nameA.localeCompare(nameB, 'th');
+    }
+    return dir * (a[stockSortColumn] - b[stockSortColumn]);
+  });
 
   if (reportList.length === 0) {
     tbody.innerHTML = `<tr><td colspan="4" class="px-4 py-8 text-center text-gray-500 dark:text-gray-400">ไม่พบรายงานสินค้าตามตัวกรอง</td></tr>`;
@@ -343,9 +357,43 @@ function renderStockTableReport() {
     </tr>`;
   });
   tbody.innerHTML = html;
+
+  // อัปเดตไอคอนลูกศรหัวคอลัมน์
+  const cols = ['model', 'added', 'sold', 'remaining'];
+  cols.forEach(col => {
+    const el = document.getElementById(`sort_icon_${col}`);
+    if (!el) return;
+    if (col === stockSortColumn) {
+      const iconClass = stockSortDir === 'asc' ? 'fa-sort-up' : 'fa-sort-down';
+      const activeColor = col === 'remaining'
+        ? 'text-brand-500 dark:text-brand-400'
+        : 'text-indigo-500 dark:text-indigo-400';
+      el.innerHTML = `<i class="fa-solid ${iconClass}"></i>`;
+      el.className = `${activeColor} transition`;
+    } else {
+      const idleColor = col === 'remaining'
+        ? 'text-brand-300 dark:text-brand-700'
+        : 'text-gray-300 dark:text-gray-600';
+      el.innerHTML = `<i class="fa-solid fa-sort"></i>`;
+      el.className = `${idleColor} group-hover:text-gray-500 dark:group-hover:text-gray-400 transition`;
+    }
+  });
 }
 
-// ====== 3.5 Cross-Filter: เมื่อคลิกแถวรุ่นเครื่องในคอลัมน์ซ้าย ======
+// ====== 3.5 กดหัวคอลัมน์เพื่อเรียงข้อมูล ======
+function setStockSort(column) {
+  if (stockSortColumn === column) {
+    // คอลัมน์เดิม → สลับ asc/desc
+    stockSortDir = stockSortDir === 'asc' ? 'desc' : 'asc';
+  } else {
+    // คอลัมน์ใหม่ → เริ่ม desc ก่อน (ยกเว้น model เริ่ม asc)
+    stockSortColumn = column;
+    stockSortDir = column === 'model' ? 'asc' : 'desc';
+  }
+  renderStockTableReport();
+}
+
+// ====== 3.6 Cross-Filter: เมื่อคลิกแถวรุ่นเครื่องในคอลัมน์ซ้าย ======
 function onStockRowClick(brand, model, storage) {
   // Toggle: ถ้าคลิกแถวเดิมที่เลือกอยู่ → ยกเลิก filter
   if (activeModelFilter 
@@ -471,14 +519,34 @@ function renderSourceDetails() {
     else if (st === 'sold') stBadge = '<span class="px-2 py-0.5 bg-gray-500/10 text-gray-500 rounded text-[10px] font-bold">ขายแล้ว</span>';
     else if (st === 'unavailable') stBadge = '<span class="px-2 py-0.5 bg-red-500/10 text-red-500 rounded text-[10px] font-bold">ไม่พร้อมขาย</span>';
 
+    // คำนวณรายละเอียดราคาต่างๆ
+    const costVal = parseFloat(p.cost || 0);
+    const retailVal = parseFloat(p.price || 0);
+    const wholesaleVal = parseFloat(p.wholesalePrice || 0);
+
+    let priceDetailsHtml = `<div class="text-[10px] text-gray-500 dark:text-gray-400">ทุน: <span class="font-bold text-gray-700 dark:text-gray-200">฿${formatNumber(costVal)}</span></div>`;
+    priceDetailsHtml += `<div class="text-[10px] text-gray-500 dark:text-gray-400">ปลีก: <span class="font-bold text-blue-600 dark:text-blue-400">฿${formatNumber(retailVal)}</span></div>`;
+    
+    if (wholesaleVal > 0) {
+      priceDetailsHtml += `<div class="text-[10px] text-gray-500 dark:text-gray-400">ส่ง: <span class="font-bold text-indigo-600 dark:text-indigo-400">฿${formatNumber(wholesaleVal)}</span></div>`;
+    }
+
+    // หากขายไปแล้ว ให้ค้นหาราคาขายจริงจากประวัติการขาย
+    if (st === 'sold' && salesSummary && salesSummary.salesList) {
+      const saleItem = salesSummary.salesList.find(s => s.productId === p.id);
+      if (saleItem) {
+        priceDetailsHtml += `<div class="text-[10px] text-emerald-600 dark:text-emerald-400 font-extrabold mt-0.5 pt-0.5 border-t border-dashed border-gray-200 dark:border-darkbg-700">ขายจริง: ฿${formatNumber(saleItem.soldPrice)}</div>`;
+      }
+    }
+
     html += `
     <tr class="hover:bg-gray-50 dark:hover:bg-darkbg-700/50 border-b border-gray-100 dark:border-darkbg-700 font-medium">
-      <td class="px-2.5 py-2">
+      <td class="px-2.5 py-2.5">
         <div class="font-bold text-gray-800 dark:text-white">${p.brand} ${p.model}</div>
         <div class="text-[9px] text-gray-400 font-mono">IMEI: ${p.imei || '-'} ${p.color ? '| ' + p.color : ''}</div>
       </td>
-      <td class="px-2 py-2 text-right text-gray-600 dark:text-gray-300 font-bold">฿${formatNumber(p.cost)}</td>
-      <td class="px-2.5 py-2 text-center">${stBadge}</td>
+      <td class="px-2 py-2.5 text-right whitespace-nowrap">${priceDetailsHtml}</td>
+      <td class="px-2.5 py-2.5 text-center">${stBadge}</td>
     </tr>`;
   });
   tbody.innerHTML = html;
