@@ -130,8 +130,15 @@ async function API_getProducts() {
         
         const rawProducts = await response.json() || {};
         
-        // แปลงจาก Object { P10001: {...} } เป็น Array
-        const productsList = Object.values(rawProducts);
+        // แปลงจาก Object { P10001: {...} } เป็น Array และประกอบรหัสโมเดลต่อท้ายชื่อรุ่นสำหรับแสดงผลหน้าร้าน
+        const productsList = Object.values(rawProducts).map(prod => {
+            const fullModel = prod.modelCode ? `${prod.model} ${prod.modelCode}` : prod.model;
+            return {
+                ...prod,
+                rawModel: prod.model,
+                model: fullModel
+            };
+        });
 
         // กรองข้อมูลตามบทบาท (Role) ของผู้ใช้งานเหมือนใน Apps Script
         const isManager = role === 'Manager' || role === 'ผู้จัดการ';
@@ -169,7 +176,14 @@ async function API_getProducts() {
         // หาก Firebase ขัดข้อง ให้ใช้ Fallback กลับไปดึงจาก Google Apps Script แบบเดิม
         const res = await apiGet('getProducts');
         if (!res.success) throw new Error(res.error || 'getProducts failed');
-        return res.data;
+        return (res.data || []).map(prod => {
+            const fullModel = prod.modelCode ? `${prod.model} ${prod.modelCode}` : prod.model;
+            return {
+                ...prod,
+                rawModel: prod.model,
+                model: fullModel
+            };
+        });
     }
 }
 
@@ -353,4 +367,11 @@ async function API_unlockProduct(productId) {
 // บันทึกขายหลายเครื่องพร้อมกัน
 async function API_sellBulkProducts(bulkSaleData) {
     return apiPost('sellBulkProducts', { bulkSaleData });
+}
+
+// อัปเดตสถานะชำระเงินของบิลเงินเชื่อ
+async function API_updatePaymentStatus(saleId, paymentStatus) {
+    const res = await apiPost('updatePaymentStatus', { saleId, paymentStatus });
+    if (!res.success) throw new Error(res.message || 'updatePaymentStatus failed');
+    return res;
 }
