@@ -8,6 +8,7 @@
 let currentUser = null;
 let allProducts = [];
 let cart = [];
+let cartPrices = {}; // เก็บประเภทราคาที่เลือกในตะกร้า { productId: 'retail' | 'wholesale' }
 let checkoutProductIds = [];
 let fileQueue = [];
 let existingImages = [];
@@ -333,12 +334,14 @@ function filterProducts() {
 
 function executeSearch(query, brand, location) {
     let filtered = allProducts.filter(p => (p.stockType || 'Products') === currentStockTab);
-    if (brand) filtered = filtered.filter(p => p.brand.toLowerCase() === brand);
-    if (location) filtered = filtered.filter(p => p.location && p.location.toLowerCase() === location);
+    if (brand) filtered = filtered.filter(p => String(p.brand || '').toLowerCase() === brand);
+    if (location) filtered = filtered.filter(p => p.location && String(p.location).toLowerCase() === location);
     if (query) filtered = filtered.filter(p =>
-        p.model.toLowerCase().includes(query) || p.brand.toLowerCase().includes(query) ||
-        (p.color && p.color.toLowerCase().includes(query)) || (p.storage && p.storage.toLowerCase().includes(query)) ||
-        (p.imei && p.imei.toLowerCase().includes(query))
+        String(p.model || '').toLowerCase().includes(query) || 
+        String(p.brand || '').toLowerCase().includes(query) ||
+        (p.color && String(p.color).toLowerCase().includes(query)) || 
+        (p.storage && String(p.storage).toLowerCase().includes(query)) ||
+        (p.imei && String(p.imei).toLowerCase().includes(query))
     );
     renderProductGrid(filtered);
 }
@@ -448,7 +451,10 @@ function viewProduct(id) {
       <div class="w-full md:w-1/2 border-r bg-white">${galleryHtml}</div>
       <div class="w-full md:w-1/2 p-5 bg-white space-y-4">
         <div>${statusLabel}<h2 class="text-2xl font-bold text-gray-800">${product.model}</h2><div class="text-sm text-gray-500 mt-1">ยี่ห้อ: ${product.brand} | รหัส: ${product.id}</div></div>
-        <div class="text-3xl font-bold text-brand-600 border-b pb-4">฿${formatNumber(product.price)}</div>
+        <div class="text-3xl font-bold text-brand-600 border-b pb-4 flex justify-between items-baseline flex-wrap gap-2">
+          <span>฿${formatNumber(product.price)}</span>
+          <span class="text-sm font-medium text-indigo-600 bg-indigo-50 border border-indigo-100 px-2 py-1 rounded">ขายส่ง: ฿${formatNumber(product.wholesalePrice || 0)}</span>
+        </div>
         ${isManager ? `<div class="text-sm text-gray-500 mb-2 flex items-center gap-2">ราคาทุน: <span id="costValueHidden" class="font-medium">•••••</span><span id="costValueVisible" class="font-medium hidden">฿${formatNumber(product.cost || 0)}</span><button type="button" onclick="toggleCostVisibility()" class="text-gray-400 hover:text-brand-600 transition-colors focus:outline-none" title="แสดง/ซ่อนราคาทุน"><i id="costEyeIcon" class="fa-solid fa-eye-slash text-sm"></i></button></div>` : ''}
         <div class="grid grid-cols-2 gap-y-3 gap-x-4 text-sm">
           <div class="text-gray-500">RAM/ความจุ:</div><div class="font-medium">${product.ram || '-'} / ${product.storage || '-'}</div>
@@ -610,7 +616,7 @@ function loadInventory() {
 async function fetchInventoryData() {
     const tbody = document.getElementById('inventoryTableBody');
     const cardList = document.getElementById('inventoryCardList');
-    if (tbody) tbody.innerHTML = `<tr><td colspan="9" class="px-4 py-8 text-center text-gray-500"><i class="fa-solid fa-circle-notch fa-spin mr-2"></i> กำลังโหลดข้อมูล...</td></tr>`;
+    if (tbody) tbody.innerHTML = `<tr><td colspan="10" class="px-4 py-8 text-center text-gray-500"><i class="fa-solid fa-circle-notch fa-spin mr-2"></i> กำลังโหลดข้อมูล...</td></tr>`;
     if (cardList) cardList.innerHTML = `<div class="text-center text-gray-500 py-8"><i class="fa-solid fa-circle-notch fa-spin mr-2"></i> กำลังโหลดข้อมูล...</div>`;
 
     try {
@@ -618,7 +624,7 @@ async function fetchInventoryData() {
         allProducts = products;
         renderInventoryTable(products);
     } catch (err) {
-        if (tbody) tbody.innerHTML = `<tr><td colspan="9" class="px-4 py-8 text-center text-red-500">โหลดข้อมูลล้มเหลว</td></tr>`;
+        if (tbody) tbody.innerHTML = `<tr><td colspan="10" class="px-4 py-8 text-center text-red-500">โหลดข้อมูลล้มเหลว</td></tr>`;
         if (cardList) cardList.innerHTML = `<div class="text-center text-red-500 py-8">โหลดข้อมูลล้มเหลว</div>`;
     }
 }
@@ -630,7 +636,7 @@ function renderInventoryTable(products) {
     if (cardList) cardList.innerHTML = '';
 
     if (products.length === 0) {
-        if (tbody) tbody.innerHTML = `<tr><td colspan="9" class="px-4 py-8 text-center text-gray-500">ไม่มีข้อมูลสินค้าในสต็อก</td></tr>`;
+        if (tbody) tbody.innerHTML = `<tr><td colspan="10" class="px-4 py-8 text-center text-gray-500">ไม่มีข้อมูลสินค้าในสต็อก</td></tr>`;
         if (cardList) cardList.innerHTML = '<div class="text-center text-gray-400 py-8">ไม่มีข้อมูลสินค้า</div>';
         return;
     }
@@ -676,6 +682,7 @@ function renderInventoryTable(products) {
         <td class="px-4 py-3 text-xs text-gray-500">${p.imei || '-'}</td>
         <td class="px-4 py-3 text-right text-gray-600">฿${formatNumber(p.cost)}</td>
         <td class="px-4 py-3 text-right text-brand-600 font-bold">฿${formatNumber(p.price)}</td>
+        <td class="px-4 py-3 text-right text-indigo-600 font-bold">฿${formatNumber(p.wholesalePrice || 0)}</td>
         <td class="px-4 py-3 text-center"><select onchange="onStatusChange('${p.id}', this.value)" class="text-xs border rounded px-1 py-0.5 ${statusClass} font-medium cursor-pointer">${statusOptions}</select></td>
         <td class="px-4 py-3 text-center whitespace-nowrap">
           <button onclick="editProduct('${p.id}')"   class="text-indigo-600 hover:text-indigo-900 mx-1" title="แก้ไข"><i class="fa-solid fa-pen-to-square"></i></button>
@@ -705,7 +712,8 @@ function renderInventoryTable(products) {
           <div class="text-gray-500">สเปค: <span class="text-gray-700 font-medium">${spec}</span></div>
           <div class="text-gray-500">สาขา: <span class="text-blue-500 font-medium">${p.location || 'ไม่ระบุ'} (${daysText})</span></div>
           <div class="text-gray-500">ต้นทุน: <span class="text-gray-700">฿${formatNumber(p.cost)}</span></div>
-          <div class="text-gray-500">ราคาขาย: <span class="text-brand-600 font-bold">฿${formatNumber(p.price)}</span></div>
+          <div class="text-gray-500">ราคาขายปกติ: <span class="text-brand-600 font-bold">฿${formatNumber(p.price)}</span></div>
+          <div class="text-gray-500">ราคาขายส่ง: <span class="text-indigo-600 font-bold">฿${formatNumber(p.wholesalePrice || 0)}</span></div>
           <div class="text-gray-500 col-span-2">IMEI: <span class="text-gray-700 font-medium">${p.imei || '-'}</span></div>
         </div>
         <div class="flex items-center justify-between border-t pt-2 gap-2 pl-6">
@@ -976,38 +984,23 @@ function viewHistoryReceipt(index) {
 
 // ====== Dashboard ======
 async function loadDashboard() {
-    renderPage('tpl-dashboard');
-
-    // ตั้งค่า UI สำหรับพนักงานทั่วไปทันทีที่โหลดหน้าจอ ป้องกันการค้างกรณีเน็ตช้าหรือโหลดไม่ติด
-    const isManager = currentUser && (currentUser.role === 'Manager' || currentUser.role === 'ผู้จัดการ');
-    if (!isManager) {
-        const smCards = document.getElementById('managerSummaryCards');
-        if (smCards) smCards.classList.add('hidden');
-        const chartCard = document.getElementById('managerChartCard');
-        if (chartCard) chartCard.classList.add('hidden');
-        const spFilter = document.getElementById('dashSalespersonFilter');
-        if (spFilter) spFilter.classList.add('hidden');
-        
-        // ซ่อนปุ่มซิงค์ Firebase สำหรับพนักงานทั่วไป
-        const syncBtn = document.getElementById('btnForceSyncFirebase');
-        if (syncBtn) syncBtn.classList.add('hidden');
-
-        // เปลี่ยนหัวข้อ
-        const dashTitle = document.querySelector('h2');
-        if (dashTitle && dashTitle.innerText.includes('Dashboard')) {
-            dashTitle.innerHTML = '<i class="fa-solid fa-list text-brand-500"></i> รายการขายของฉัน';
-        }
+    const isManager = currentUser.role === 'Manager' || currentUser.role === 'ผู้จัดการ';
+    if (isManager) {
+        // สำหรับผู้จัดการ: เปิดหน้าต่างแดชบอร์ดรายงานเต็มรูปแบบแยกต่างหาก (เปิดแท็บใหม่)
+        window.open('dashboard.html', '_blank');
     } else {
-        // แสดงปุ่มซิงค์ Firebase สำหรับผู้จัดการ
-        const syncBtn = document.getElementById('btnForceSyncFirebase');
-        if (syncBtn) syncBtn.classList.remove('hidden');
-    }
-
-    try {
-        const data = await API_getSalesSummary();
-        renderDashboard(data);
-    } catch (e) {
-        showToast('โหลด Dashboard ไม่สำเร็จ', 'error');
+        // สำหรับพนักงาน: โหลดหน้าแดชบอร์ดย่อภายในหน้าจอหลัก POS
+        renderPage('tpl-dashboard');
+        showLoading(true);
+        try {
+            const data = await API_getSalesSummary();
+            renderDashboard(data);
+        } catch(err) {
+            console.error('Failed to load employee dashboard:', err);
+            showToast('เกิดข้อผิดพลาดในการดึงข้อมูลแดชบอร์ด: ' + err.message, 'error');
+        } finally {
+            showLoading(false);
+        }
     }
 }
 
@@ -1175,27 +1168,112 @@ function renderSalesList(list) {
 
     const isManager = currentUser.role === 'Manager' || currentUser.role === 'ผู้จัดการ';
 
-    let html = '';
+    // 1. จัดกลุ่มตาม saleId
+    const billGroups = {};
     list.forEach(s => {
-        const profitClass = s.profit >= 0 ? 'text-green-600' : 'text-red-600';
+        const billId = s.saleId || 'UNKNOWN';
+        if (!billGroups[billId]) {
+            billGroups[billId] = {
+                saleId: billId,
+                saleDate: s.saleDate,
+                saleType: s.saleType,
+                customerName: s.customerName,
+                customerPhone: s.customerPhone,
+                salesperson: s.salesperson,
+                receiptImage: s.receiptImage,
+                downPayment: parseFloat(s.downPayment || 0),
+                items: [],
+                totalPrice: 0,
+                totalProfit: 0
+            };
+        }
+        billGroups[billId].items.push(s);
+        billGroups[billId].totalPrice += parseFloat(s.soldPrice || 0);
+        billGroups[billId].totalProfit += parseFloat(s.profit || 0);
+    });
+
+    const billList = Object.values(billGroups);
+
+    let html = '';
+    billList.forEach(bill => {
+        const profitClass = bill.totalProfit >= 0 ? 'text-green-600' : 'text-red-600';
+        const isBulk = bill.items.length > 1;
+        
+        // สร้าง HTML สำหรับแสดงรายการสินค้า
+        let itemsListHtml = '';
+        if (isBulk) {
+            itemsListHtml = `
+            <div class="space-y-1.5 my-2 border-l-2 border-indigo-200 pl-2 bg-indigo-50/20 p-2 rounded">
+                ${bill.items.map(item => `
+                    <div class="text-xs text-gray-700 flex justify-between gap-2">
+                        <div>
+                            <span class="font-bold text-gray-800">${item.brand} ${item.model}</span>
+                            <span class="text-[10px] text-gray-400 block font-mono">IMEI: ${item.imei || '-'} | ${item.spec}</span>
+                        </div>
+                        <span class="text-brand-600 font-semibold self-center">฿${formatNumber(item.soldPrice)}</span>
+                    </div>
+                `).join('')}
+            </div>`;
+        } else {
+            const single = bill.items[0];
+            itemsListHtml = `
+            <div class="mb-2">
+                <div class="font-bold text-gray-800 text-sm">${single.brand} ${single.model}</div>
+                <div class="text-xs text-gray-500 font-mono">IMEI: ${single.imei || '-'} | ${single.spec}</div>
+            </div>`;
+        }
+
+        // เตรียม object ใบเสร็จดิจิทัลสำหรับส่งไปแสดงผล
+        const receiptObj = {
+            saleId: bill.saleId,
+            saleDate: bill.saleDate,
+            salesperson: bill.salesperson || '',
+            customerName: bill.customerName || '',
+            customerPhone: bill.customerPhone || '',
+            saleType: bill.saleType || '',
+            downPayment: bill.downPayment || 0,
+            isBulk: isBulk,
+            items: bill.items.map(item => ({
+                brand: item.brand,
+                model: item.model,
+                spec: item.spec,
+                imei: item.imei,
+                soldPrice: item.soldPrice
+            })),
+            brand: bill.items[0].brand,
+            model: bill.items[0].model,
+            spec: bill.items[0].spec,
+            imei: bill.items[0].imei,
+            soldPrice: bill.items[0].soldPrice,
+            costPrice: bill.items[0].cost,
+            profit: bill.items[0].profit
+        };
+
         html += `
-      <div class="bg-gray-50 border rounded-lg p-3 hover:bg-gray-100 transition">
-        <div class="flex justify-between items-start mb-1">
-          <div><div class="font-bold text-gray-800 text-sm">${s.brand} ${s.model}</div><div class="text-xs text-gray-500">IMEI: ${s.imei || '-'} | ${s.spec}</div></div>
+      <div class="bg-gray-50 border rounded-lg p-3 hover:bg-gray-100 transition shadow-sm">
+        <div class="flex justify-between items-start mb-1 pb-1 border-b border-gray-200">
+          <div>
+            <span class="text-[9px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded font-bold font-mono">${bill.saleId}</span>
+            ${isBulk ? `<span class="text-[9px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-bold">${bill.items.length} เครื่อง</span>` : ''}
+          </div>
           <div class="text-right shrink-0">
-            <div class="font-bold text-brand-600">฿${formatNumber(s.soldPrice)}</div>
-            ${isManager ? `<div class="text-xs ${profitClass}">กำไร: ฿${formatNumber(s.profit)}</div>` : ''}
+            <div class="font-bold text-brand-600 text-sm">รวม ฿${formatNumber(bill.totalPrice)}</div>
+            ${isManager ? `<div class="text-[10px] ${profitClass}">กำไรบิล: ฿${formatNumber(bill.totalProfit)}</div>` : ''}
           </div>
         </div>
+        
+        ${itemsListHtml}
+        
         <div class="grid grid-cols-2 gap-1 text-xs text-gray-500 mt-1">
-          <div><i class="fa-regular fa-calendar mr-1"></i>${s.saleDate}</div>
-          <div><i class="fa-regular fa-user mr-1"></i>${s.salesperson || '-'}</div>
-          <div><i class="fa-solid fa-tag mr-1"></i>${s.saleType || '-'}</div>
-          <div>${s.customerName ? '<i class="fa-regular fa-address-card mr-1"></i>' + s.customerName : ''}</div>
+          <div><i class="fa-regular fa-calendar mr-1"></i>${bill.saleDate}</div>
+          <div><i class="fa-regular fa-user mr-1"></i>${bill.salesperson || '-'}</div>
+          <div><i class="fa-solid fa-tag mr-1"></i>${bill.saleType || '-'}</div>
+          <div>${bill.customerName ? '<i class="fa-regular fa-address-card mr-1"></i>' + bill.customerName : ''}</div>
         </div>
+        
         <div class="flex gap-2 mt-2 border-t pt-2">
-          <button onclick='viewSaleReceipt(${JSON.stringify(s).replace(/'/g, "&#39;")})' class="text-xs text-indigo-600 hover:text-indigo-800 flex items-center gap-1"><i class="fa-solid fa-receipt"></i> ดูใบเสร็จ</button>
-          ${s.receiptImage ? `<button onclick="viewFullImage('${s.receiptImage}')" class="text-xs text-amber-600 hover:text-amber-800 flex items-center gap-1"><i class="fa-solid fa-image"></i> ใบเสร็จ POS</button>` : ''}
+          <button onclick='viewSaleReceipt(${JSON.stringify(receiptObj).replace(/'/g, "&#39;")})' class="text-xs text-indigo-600 hover:text-indigo-800 flex items-center gap-1"><i class="fa-solid fa-receipt"></i> ดูใบเสร็จ</button>
+          ${bill.receiptImage ? `<button onclick="viewFullImage('${bill.receiptImage}')" class="text-xs text-amber-600 hover:text-amber-800 flex items-center gap-1"><i class="fa-solid fa-image"></i> ใบเสร็จ POS</button>` : ''}
         </div>
       </div>`;
     });
@@ -1212,19 +1290,74 @@ async function loadSettings() {
         if (brandSel) {
             const oldVal = brandSel.value;
             brandSel.innerHTML = '<option value="">เลือกยี่ห้อ</option>';
-            settings.brands.forEach(b => { brandSel.innerHTML += `<option value="${b}">${b}</option>`; });
+            if (settings.brands) {
+                settings.brands.forEach(b => { brandSel.innerHTML += `<option value="${b}">${b}</option>`; });
+            }
             if (oldVal) brandSel.value = oldVal;
         }
         const locSel = document.getElementById('p_location');
         if (locSel) {
             const oldVal = locSel.value;
             locSel.innerHTML = '<option value="">เลือกสาขา</option>';
-            settings.locations.forEach(l => { locSel.innerHTML += `<option value="${l}">${l}</option>`; });
+            if (settings.locations) {
+                settings.locations.forEach(l => { locSel.innerHTML += `<option value="${l}">${l}</option>`; });
+            }
             if (oldVal) locSel.value = oldVal;
         }
+        
+        // ความจุ (Storage)
+        const storageSel = document.getElementById('p_storage');
+        if (storageSel) {
+            const oldVal = storageSel.value;
+            storageSel.innerHTML = '<option value="">เลือกความจุ</option>';
+            if (settings.storages) {
+                settings.storages.forEach(s => { storageSel.innerHTML += `<option value="${s}">${s}</option>`; });
+            }
+            if (oldVal) storageSel.value = oldVal;
+        }
+
+        // แหล่งที่มา (Source)
+        const sourceList = document.getElementById('sourceOptions');
+        if (sourceList) {
+            sourceList.innerHTML = '';
+            if (settings.sources) {
+                settings.sources.forEach(src => { sourceList.innerHTML += `<option value="${src}">`; });
+            }
+        }
+
+        // รุ่นสินค้า (Model)
+        updateModelDatalist(settings.brandModels, brandSel ? brandSel.value : '');
+
         window._appSettings = settings;
     } catch (err) {
         console.error('โหลด Settings ไม่สำเร็จ:', err);
+    }
+}
+
+// อัปเดตรายชื่อรุ่นตามยี่ห้อที่เลือก
+function updateModelDatalist(brandModels, selectedBrand) {
+    const modelList = document.getElementById('modelOptions');
+    if (!modelList) return;
+    modelList.innerHTML = '';
+    if (!brandModels) return;
+
+    if (selectedBrand && brandModels[selectedBrand]) {
+        brandModels[selectedBrand].forEach(m => {
+            modelList.innerHTML += `<option value="${m}">`;
+        });
+    } else {
+        Object.keys(brandModels).forEach(brand => {
+            brandModels[brand].forEach(m => {
+                modelList.innerHTML += `<option value="${m}">`;
+            });
+        });
+    }
+}
+
+// จับ Event change ยี่ห้อในฟอร์มรับเข้าสินค้า
+function onBrandChange(selectedBrand) {
+    if (window._appSettings && window._appSettings.brandModels) {
+        updateModelDatalist(window._appSettings.brandModels, selectedBrand);
     }
 }
 
@@ -1375,18 +1508,23 @@ async function submitProduct(event) {
         }
     }
 
+    const rawModel = document.getElementById('p_model').value.trim();
+    const modelCode = document.getElementById('p_model_code') ? document.getElementById('p_model_code').value.trim() : '';
+
     showLoading(true);
 
     const productData = {
         targetSheet: document.getElementById('p_targetSheet') ? document.getElementById('p_targetSheet').value : 'Products',
         brand: document.getElementById('p_brand').value,
-        model: document.getElementById('p_model').value,
+        model: rawModel,
+        modelCode: modelCode,
         ram: document.getElementById('p_ram').value,
         storage: document.getElementById('p_storage').value,
         color: document.getElementById('p_color').value,
         source: document.getElementById('p_source').value,
         cost: document.getElementById('p_cost').value,
         price: document.getElementById('p_price').value,
+        wholesalePrice: document.getElementById('p_wholesalePrice').value || 0,
         imei: imeiVal,
         condition: document.getElementById('p_condition').value,
         defect: document.getElementById('p_defect').value,
@@ -1428,6 +1566,10 @@ function resetProductForm() {
     document.getElementById('addProductForm').reset();
     document.getElementById('imagePreviewContainer').innerHTML = '';
     fileQueue = []; existingImages = []; editingProductId = null;
+    
+    const codeInput = document.getElementById('p_model_code');
+    if (codeInput) codeInput.value = '';
+    
     // reset IMEI warning
     const imeiInput = document.getElementById('p_imei');
     const warningDiv = document.getElementById('imei_warning');
@@ -1452,13 +1594,26 @@ async function editProduct(id) {
     const newBrandDropdown = document.getElementById('p_brand');
     if (newBrandDropdown) newBrandDropdown.value = p.brand;
 
-    document.getElementById('p_model').value = p.model;
+    // ตรวจหาและแยกโมเดลรหัสภูมิภาคต่อท้าย จากฐานข้อมูลโดยตรง หรือสำรองด้วย Regex
+    let modelOnly = p.model || '';
+    let modelCode = p.modelCode || '';
+    if (!modelCode) {
+        const modelMatch = (p.model || '').match(/(.*)\s+([A-Z0-9\/]{2,10})$/i);
+        if (modelMatch) {
+            modelOnly = modelMatch[1].trim();
+            modelCode = modelMatch[2].trim();
+        }
+    }
+    document.getElementById('p_model').value = modelOnly;
+    const codeInput = document.getElementById('p_model_code');
+    if (codeInput) codeInput.value = modelCode;
     document.getElementById('p_ram').value = p.ram || '';
     document.getElementById('p_storage').value = p.storage || '';
     document.getElementById('p_color').value = p.color || '';
     document.getElementById('p_source').value = p.source || '';
     document.getElementById('p_cost').value = p.cost;
     document.getElementById('p_price').value = p.price;
+    document.getElementById('p_wholesalePrice').value = p.wholesalePrice || 0;
     document.getElementById('p_imei').value = p.imei || '';
     document.getElementById('p_condition').value = p.condition || '';
     document.getElementById('p_defect').value = p.defect || '';
@@ -1567,14 +1722,63 @@ async function loadComments(productId) {
 function toggleDownPayment() {
     const type = document.getElementById('sell_type').value;
     const dpContainer = document.getElementById('sell_downPaymentContainer');
+    const dueContainer = document.getElementById('sell_dueDateContainer');
+    const partnerPayContainer = document.getElementById('partner_payment_container');
     if (!dpContainer) return;
 
-    // แสดงช่องเงินดาวน์ทุกกรณี ยกเว้นยังไม่ได้เลือก, มีคำว่า "สด" หรือมีคำว่า "พาร์ทเนอร์"
-    if (type && !type.includes('สด') && !type.includes('พาร์ทเนอร์')) {
-        dpContainer.classList.remove('hidden');
+    // ตรวจสอบว่าเป็นประเภท "ส่งร้านพาร์ทเนอร์" หรือไม่
+    const isPartner = type && type.includes('พาร์ทเนอร์');
+
+    if (isPartner) {
+        if (partnerPayContainer) partnerPayContainer.classList.remove('hidden');
+        
+        // อ่านค่าประเภทชำระเงินของพาร์ทเนอร์ (สด หรือ เชื่อ)
+        const partnerPayType = document.querySelector('input[name="partner_payment_type"]:checked')?.value || 'สด';
+        
+        if (partnerPayType === 'เชื่อ') {
+            // แสดงช่องกำหนดชำระและเงินดาวน์สำหรับพาร์ทเนอร์เงินเชื่อ
+            if (dueContainer) {
+                dueContainer.classList.remove('hidden');
+                const sellDueDate = document.getElementById('sell_dueDate');
+                if (sellDueDate && !sellDueDate.value) {
+                    const d = new Date();
+                    d.setDate(d.getDate() + 30);
+                    const pad = (n) => n.toString().padStart(2, '0');
+                    sellDueDate.value = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+                }
+            }
+            if (dpContainer) dpContainer.classList.remove('hidden');
+        } else {
+            // ซ่อนเมื่อเลือกพาร์ทเนอร์ขายสด
+            if (dueContainer) {
+                dueContainer.classList.add('hidden');
+                const sellDueDate = document.getElementById('sell_dueDate');
+                if (sellDueDate) sellDueDate.value = '';
+            }
+            if (dpContainer) {
+                dpContainer.classList.add('hidden');
+                const dpInput = document.getElementById('sell_downPayment');
+                if (dpInput) dpInput.value = '';
+            }
+        }
     } else {
-        dpContainer.classList.add('hidden');
-        document.getElementById('sell_downPayment').value = '';
+        if (partnerPayContainer) partnerPayContainer.classList.add('hidden');
+        
+        // โลจิกเดิมสำหรับประเภทอื่นๆ: แสดงช่องเงินดาวน์ทุกกรณี ยกเว้นยังไม่ได้เลือก, มีคำว่า "สด"
+        if (type && !type.includes('สด')) {
+            dpContainer.classList.remove('hidden');
+        } else {
+            dpContainer.classList.add('hidden');
+            const dpInput = document.getElementById('sell_downPayment');
+            if (dpInput) dpInput.value = '';
+        }
+
+        // แสดงช่องวันกำหนดชำระเงินเชื่อ (ตามเงื่อนไขใหม่ ซ่อนช่องวันครบกำหนดชำระเงินเชื่อสำหรับประเภทการขายอื่นทั้งหมด)
+        if (dueContainer) {
+            dueContainer.classList.add('hidden');
+            const sellDueDate = document.getElementById('sell_dueDate');
+            if (sellDueDate) sellDueDate.value = '';
+        }
     }
 }
 
@@ -1602,6 +1806,11 @@ function openSellModal(productId) {
     if (dpContainer) dpContainer.classList.add('hidden');
     const dpInput = document.getElementById('sell_downPayment');
     if (dpInput) dpInput.value = '';
+    
+    const dueContainer = document.getElementById('sell_dueDateContainer');
+    if (dueContainer) dueContainer.classList.add('hidden');
+    const dueInput = document.getElementById('sell_dueDate');
+    if (dueInput) dueInput.value = '';
 
     const isManager = currentUser && (currentUser.role === 'Manager' || currentUser.role === 'ผู้จัดการ');
     const costHtml = isManager ? `ต้นทุน: ฿${formatNumber(p.cost)} | ` : ``;
@@ -1609,7 +1818,7 @@ function openSellModal(productId) {
     document.getElementById('sellProductInfo').innerHTML = `
                 <div class="font-bold text-gray-800">${p.brand} ${p.model}</div>
     <div class="text-xs text-gray-500">สเปค: ${p.ram || '-'}/${p.storage || '-'} ${p.color || ''} | IMEI: ${p.imei || '-'}</div>
-    <div class="text-xs text-gray-500 mt-1">${costHtml}ราคาตั้ง: ฿${formatNumber(p.price)}</div>`;
+    <div class="text-xs text-gray-500 mt-1">${costHtml}ราคาปลีก: ฿${formatNumber(p.price)} | ขายส่ง: ฿${formatNumber(p.wholesalePrice || 0)}</div>`;
 
     const typeSel = document.getElementById('sell_type');
     typeSel.innerHTML = '<option value="">เลือกรูปแบบ</option>';
@@ -1619,10 +1828,31 @@ function openSellModal(productId) {
         API_getSettings().then(s => { window._appSettings = s; s.saleTypes.forEach(t => typeSel.innerHTML += `<option value="${t}">${t}</option>`); }).catch(() => { });
     }
 
+    const btnUseRetail = document.getElementById('btnUseRetailPrice');
+    const btnUseWholesale = document.getElementById('btnUseWholesalePrice');
+    if (btnUseRetail) {
+        btnUseRetail.onclick = () => {
+            document.getElementById('sell_price').value = p.price || '';
+        };
+    }
+    if (btnUseWholesale) {
+        btnUseWholesale.onclick = () => {
+            document.getElementById('sell_price').value = p.wholesalePrice || 0;
+        };
+    }
+
     document.getElementById('sellModal').classList.remove('hidden');
+    toggleDownPayment();
 }
 
-function closeSellModal() { document.getElementById('sellModal').classList.add('hidden'); sellReceiptDataURI = null; }
+function closeSellModal() { 
+    document.getElementById('sellModal').classList.add('hidden'); 
+    sellReceiptDataURI = null; 
+    
+    // รีเซ็ตปุ่มวิทยุพาร์ทเนอร์กลับไปเป็น สด
+    const firstRadio = document.querySelector('input[name="partner_payment_type"][value="สด"]');
+    if (firstRadio) firstRadio.checked = true;
+}
 
 function previewReceiptImage(input) {
     if (!input.files || input.files.length === 0) return;
@@ -1630,10 +1860,10 @@ function previewReceiptImage(input) {
     const file = input.files[0];
     const reader = new FileReader();
 
-    // ตั้งค่าขนาดบีบอัดใบเสร็จ POS
-    const MAX_WIDTH = 1200;
-    const MAX_HEIGHT = 1200;
-    const QUALITY = 0.7;
+    // ตั้งค่าขนาดบีบอัดใบเสร็จ POS (ลดขนาดลงเพื่อป้องกัน payload เกินข้อจำกัดของ Google Apps Script)
+    const MAX_WIDTH = 800;
+    const MAX_HEIGHT = 800;
+    const QUALITY = 0.5;
 
     reader.onload = function (e) {
         const img = new Image();
@@ -1672,11 +1902,21 @@ async function confirmSell() {
     const customerName = document.getElementById('sell_customerName').value;
     const customerPhone = document.getElementById('sell_customerPhone').value;
     const downPayment = document.getElementById('sell_downPayment') ? document.getElementById('sell_downPayment').value : '';
+    const dueDate = document.getElementById('sell_dueDate') ? document.getElementById('sell_dueDate').value : '';
 
     if (!saleType) { showToast('กรุณาเลือกรูปแบบการขาย', 'warning'); return; }
     if (!customerName || !customerName.trim()) { showToast('กรุณากรอกชื่อลูกค้า', 'warning'); return; }
     if (!customerPhone || !customerPhone.trim()) { showToast('กรุณากรอกเบอร์โทรลูกค้า', 'warning'); return; }
     if (saleType && !saleType.includes('สด') && !saleType.includes('พาร์ทเนอร์') && !downPayment) { showToast('กรุณากรอกเงินดาวน์ตามที่ไฟแนนซ์อนุมัติ', 'warning'); return; }
+    
+    // ตรวจสอบข้อมูลพาร์ทเนอร์และเงื่อนไขการขายเชื่อตามข้อกำหนด
+    const isPartner = saleType && saleType.includes('พาร์ทเนอร์');
+    const partnerPayType = isPartner ? (document.querySelector('input[name="partner_payment_type"]:checked')?.value || 'สด') : '';
+    const isPartnerCredit = isPartner && partnerPayType === 'เชื่อ';
+
+    // บังคับกรอกวันกำหนดชำระเงินเชื่อเฉพาะการส่งร้านพาร์ทเนอร์ที่เป็นเงินเชื่อเท่านั้น
+    if (isPartnerCredit && !dueDate) { showToast('กรุณาระบุวันกำหนดชำระเงินเชื่อ', 'warning'); return; }
+    
     if (!sellReceiptDataURI) { showToast('กรุณาอัปโหลดรูปใบเสร็จจากเครื่อง POS ก่อนกดยืนยัน', 'warning'); return; }
 
     let salePrices = {};
@@ -1702,14 +1942,23 @@ async function confirmSell() {
         if (!confirm('ยืนยันการขายสินค้าในราคา ฿' + formatNumber(soldPrice) + ' ใช่หรือไม่?')) return;
     }
 
+    // กำหนดประเภทการขายที่ถูกบันทึกลงฐานข้อมูล โดยส่งวงเล็บประเภทชำระเงินไปด้วยสำหรับพาร์ทเนอร์
+    let finalSaleType = saleType;
+    if (isPartner) {
+        finalSaleType = `${saleType} (เงิน${partnerPayType})`;
+    }
+
+    const isCredit = finalSaleType.includes('เชื่อ');
+
     showLoading(true);
     try {
         if (isBulk) {
             const saleData = {
                 productIds: checkoutProductIds,
                 prices: salePrices,
-                saleType, customerName, customerPhone,
+                saleType: finalSaleType, customerName, customerPhone,
                 downPayment: downPayment ? parseFloat(downPayment) : 0,
+                dueDate: isCredit && dueDate ? formatDateToDMY(dueDate) : '',
                 salesperson: currentUser ? (currentUser.saleName || currentUser.name) : '',
                 recordedBy: currentUser ? currentUser.name : '',
                 receiptImage: sellReceiptDataURI ? { filename: 'receipt_bulk_' + Date.now() + '.jpg', dataURI: sellReceiptDataURI } : null
@@ -1720,7 +1969,7 @@ async function confirmSell() {
                 cart = [];
                 renderCart();
                 closeSellModal();
-                showToast(res.message, 'success');
+                showReceipt(res.receipt); // แสดงใบเสร็จดิจิตอลทันที (มีรายการครบทุกชิ้น)
                 fetchProducts();
                 if (typeof fetchInventoryData === 'function') fetchInventoryData();
             } else {
@@ -1730,8 +1979,9 @@ async function confirmSell() {
             const productId = checkoutProductIds[0];
             const soldPrice = salePrices[productId];
             const saleData = {
-                productId, soldPrice, saleType, customerName, customerPhone,
+                productId, soldPrice, saleType: finalSaleType, customerName, customerPhone,
                 downPayment: downPayment ? parseFloat(downPayment) : 0,
+                dueDate: isCredit && dueDate ? formatDateToDMY(dueDate) : '',
                 salesperson: currentUser ? (currentUser.saleName || currentUser.name) : '',
                 recordedBy: currentUser ? currentUser.name : '',
                 receiptImage: sellReceiptDataURI ? { filename: 'receipt_' + Date.now() + '.jpg', dataURI: sellReceiptDataURI } : null
@@ -1756,34 +2006,54 @@ async function confirmSell() {
 }
 
 function showReceipt(r) {
+    let itemsHtml = '';
+    let totalAmount = 0;
+
+    if (r.isBulk && Array.isArray(r.items)) {
+        r.items.forEach(item => {
+            totalAmount += parseFloat(item.soldPrice) || 0;
+            itemsHtml += `
+            <div class="bg-gray-50 p-2.5 rounded mb-1.5 border border-gray-100">
+                <div class="font-bold text-gray-800 text-sm">${item.brand} ${item.model}</div>
+                <div class="text-[11px] text-gray-500">สเปค: ${item.spec} | IMEI: ${item.imei || '-'}</div>
+                <div class="text-right text-brand-600 font-bold text-xs mt-0.5">฿${formatNumber(item.soldPrice)}</div>
+            </div>`;
+        });
+    } else {
+        totalAmount = parseFloat(r.soldPrice) || 0;
+        itemsHtml = `
+        <div class="bg-gray-50 p-2 rounded border border-gray-100">
+            <div class="font-bold text-gray-800 text-sm">${r.brand} ${r.model}</div>
+            <div class="text-[11px] text-gray-500">สเปค: ${r.spec} | IMEI: ${r.imei || '-'}</div>
+        </div>`;
+    }
+
     document.getElementById('receiptBody').innerHTML = `
-                <div class="text-center border-b pb-3 mb-3">
-      <h2 class="text-lg font-bold text-gray-800">KP Shop</h2>
-      <p class="text-xs text-gray-500">ใบเสร็จดิจิทัล</p>
-      <p class="text-xs text-gray-400 mt-1">เลขที่: ${r.saleId}</p>
-    </div>
-                <div class="space-y-2 text-xs">
-                    <div class="flex justify-between"><span class="text-gray-500">วันที่ขาย:</span><span class="font-medium">${r.saleDate}</span></div>
-                    <div class="flex justify-between"><span class="text-gray-500">พนักงานขาย:</span><span class="font-medium">${r.salesperson}</span></div>
-                    ${r.location ? `<div class="flex justify-between"><span class="text-gray-500">สาขา:</span><span class="font-medium">${r.location}</span></div>` : ''}
-                    <hr>
-                        <div class="bg-gray-50 p-2 rounded">
-                            <div class="font-bold text-gray-800">${r.brand} ${r.model}</div>
-                            <div class="text-gray-500">สเปค: ${r.spec}</div>
-                            <div class="text-gray-500">IMEI: ${r.imei || '-'}</div>
-                        </div>
-                        <div class="flex justify-between"><span class="text-gray-500">รูปแบบการขาย:</span><span class="font-medium">${r.saleType}</span></div>
-                        <hr>
-                            <div class="flex justify-between text-base"><span class="font-bold text-gray-800">ราคาขาย:</span><span class="font-bold text-brand-600">฿${formatNumber(r.soldPrice)}</span></div>
-                            ${r.downPayment > 0 ? `
-                            <div class="flex justify-between text-sm mt-1"><span class="text-gray-500">เงินดาวน์:</span><span class="font-medium">฿${formatNumber(r.downPayment)}</span></div>
-                            <div class="flex justify-between text-sm"><span class="text-gray-500">ยอดจัด:</span><span class="font-medium text-red-500">฿${formatNumber(r.soldPrice - r.downPayment)}</span></div>
-                            ` : ''}
-                            <hr>
-                                ${r.customerName ? `<div class="flex justify-between"><span class="text-gray-500">ลูกค้า:</span><span class="font-medium">${r.customerName}</span></div>` : ''}
-                                ${r.customerPhone ? `<div class="flex justify-between"><span class="text-gray-500">เบอร์โทร:</span><span class="font-medium">${r.customerPhone}</span></div>` : ''}
-                            </div>
-                            <div class="text-center mt-4 text-xs text-gray-400"><p>ขอบคุณที่ใช้บริการ KP Shop</p></div>`;
+        <div class="text-center border-b pb-3 mb-3">
+          <h2 class="text-lg font-bold text-gray-800">KP Shop</h2>
+          <p class="text-xs text-gray-500">ใบเสร็จดิจิทัล</p>
+          <p class="text-xs text-gray-400 mt-1">เลขที่: ${r.saleId}</p>
+        </div>
+        <div class="space-y-2 text-xs">
+            <div class="flex justify-between"><span class="text-gray-500">วันที่ขาย:</span><span class="font-medium">${r.saleDate}</span></div>
+            <div class="flex justify-between"><span class="text-gray-500">พนักงานขาย:</span><span class="font-medium">${r.salesperson}</span></div>
+            ${r.location ? `<div class="flex justify-between"><span class="text-gray-500">สาขา:</span><span class="font-medium">${r.location}</span></div>` : ''}
+            <hr>
+            <div class="space-y-1">
+                ${itemsHtml}
+            </div>
+            <div class="flex justify-between"><span class="text-gray-500">รูปแบบการขาย:</span><span class="font-medium">${r.saleType}</span></div>
+            <hr>
+            <div class="flex justify-between text-base"><span class="font-bold text-gray-800">ราคาขายรวม:</span><span class="font-bold text-brand-600">฿${formatNumber(totalAmount)}</span></div>
+            ${r.downPayment > 0 ? `
+            <div class="flex justify-between text-sm mt-1"><span class="text-gray-500">เงินดาวน์:</span><span class="font-medium">฿${formatNumber(r.downPayment)}</span></div>
+            <div class="flex justify-between text-sm"><span class="text-gray-500">ยอดจัด:</span><span class="font-medium text-red-500">฿${formatNumber(totalAmount - r.downPayment)}</span></div>
+            ` : ''}
+            <hr>
+            ${r.customerName ? `<div class="flex justify-between"><span class="text-gray-500">ลูกค้า:</span><span class="font-medium">${r.customerName}</span></div>` : ''}
+            ${r.customerPhone ? `<div class="flex justify-between"><span class="text-gray-500">เบอร์โทร:</span><span class="font-medium">${r.customerPhone}</span></div>` : ''}
+        </div>
+        <div class="text-center mt-4 text-xs text-gray-400"><p>ขอบคุณที่ใช้บริการ KP Shop</p></div>`;
     document.getElementById('receiptModal').classList.remove('hidden');
 }
 
@@ -1971,6 +2241,7 @@ async function addToCart(productId) {
         showLoading(false); // ปิดตัวหมุน
         if (res.success) {
             cart.push(productId);
+            cartPrices[productId] = 'retail'; // ค่าเริ่มต้นเป็นราคาปลีก
             showToast('เพิ่มสินค้าเข้าตะกร้าและจองชั่วคราวแล้ว (10 นาที)', 'success');
             
             const prod = allProducts.find(p => p.id === productId);
@@ -1999,6 +2270,7 @@ async function removeFromCart(productId) {
         showLoading(false); // ปิดตัวหมุน
         if (res.success) {
             cart = cart.filter(id => id !== productId);
+            delete cartPrices[productId]; // ลบการตั้งค่าราคา
             showToast('ลบสินค้าออกจากตะกร้าแล้ว', 'info');
             
             const prod = allProducts.find(p => p.id === productId);
@@ -2043,6 +2315,7 @@ async function clearCart() {
         
         // ล้างตะกร้าฝั่ง Client
         cart = [];
+        cartPrices = {}; // รีเซ็ตประเภทราคา
         itemsToUnlock.forEach(id => {
             const prod = allProducts.find(p => p.id === id);
             if (prod) {
@@ -2149,7 +2422,10 @@ function renderCart() {
         const p = allProducts.find(prod => prod.id === id);
         if (!p) return;
         
-        totalPrice += parseFloat(p.price) || 0;
+        const priceType = cartPrices[id] || 'retail';
+        const currentPrice = priceType === 'wholesale' ? (parseFloat(p.wholesalePrice) || 0) : (parseFloat(p.price) || 0);
+        totalPrice += currentPrice;
+        
         const img = p.images && p.images.length > 0 && p.images[0].trim() !== '' ? p.images[0] : NO_IMAGE;
         
         itemsHtml += `
@@ -2159,8 +2435,11 @@ function renderCart() {
                 <h4 class="font-medium text-sm text-gray-800 truncate">${p.model}</h4>
                 <p class="text-xs text-gray-500 truncate">${p.brand} | ${p.ram || '-'}/${p.storage || '-'}</p>
                 <div class="flex justify-between items-center mt-1">
-                    <span class="text-brand-600 font-bold text-xs">฿${formatNumber(p.price)}</span>
-                    <span class="text-[9px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded truncate max-w-[125px] font-mono">IMEI: ${p.imei || '-'}</span>
+                    <select onchange="updateCartItemPriceType('${p.id}', this.value)" class="text-[10px] border border-gray-200 rounded px-1 py-0.5 bg-white font-semibold cursor-pointer">
+                        <option value="retail" ${priceType === 'retail' ? 'selected' : ''}>ราคาปลีก: ฿${formatNumber(p.price)}</option>
+                        <option value="wholesale" ${priceType === 'wholesale' ? 'selected' : ''}>ราคาขายส่ง: ฿${formatNumber(p.wholesalePrice || 0)}</option>
+                    </select>
+                    <span class="text-[9px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded truncate max-w-[110px] font-mono">IMEI: ${p.imei || '-'}</span>
                 </div>
             </div>
             <button onclick="removeFromCart('${p.id}')" class="shrink-0 text-red-500 hover:text-red-700 hover:bg-red-50 w-7 h-7 rounded-full flex items-center justify-center transition" title="ลบชิ้นนี้">
@@ -2171,6 +2450,11 @@ function renderCart() {
     
     listContainer.innerHTML = itemsHtml;
     if (totalPriceText) totalPriceText.innerText = formatNumber(totalPrice);
+}
+
+function updateCartItemPriceType(productId, type) {
+    cartPrices[productId] = type;
+    renderCart();
 }
 
 function checkoutCart() {
@@ -2199,6 +2483,11 @@ function checkoutCart() {
     if (dpContainer) dpContainer.classList.add('hidden');
     const dpInput = document.getElementById('sell_downPayment');
     if (dpInput) dpInput.value = '';
+    
+    const dueContainer = document.getElementById('sell_dueDateContainer');
+    if (dueContainer) dueContainer.classList.add('hidden');
+    const dueInput = document.getElementById('sell_dueDate');
+    if (dueInput) dueInput.value = '';
 
     let infoHtml = `<div class="space-y-2 mb-2 max-h-[45vh] overflow-y-auto pr-1">
       <div class="text-xs font-bold text-gray-700 mb-1 flex items-center gap-1"><i class="fa-solid fa-list-check text-brand-500"></i> รายการสินค้าที่จะขาย (${checkoutProductIds.length} เครื่อง)</div>`;
@@ -2209,17 +2498,24 @@ function checkoutCart() {
         const p = allProducts.find(x => x.id === pId);
         if (!p) return;
         
+        const priceType = cartPrices[pId] || 'retail';
+        const defaultPrice = priceType === 'wholesale' ? (p.wholesalePrice || 0) : p.price;
+        
         const costHtml = isManager ? `ต้นทุน: ฿${formatNumber(p.cost)} | ` : '';
         infoHtml += `
         <div class="bg-gray-50 p-2.5 rounded border border-gray-200 flex flex-col gap-1">
           <div class="font-bold text-gray-800 text-xs">${p.brand} ${p.model}</div>
           <div class="text-[10px] text-gray-500 flex justify-between">
             <span>IMEI: ${p.imei || '-'}</span>
-            <span>${costHtml}ราคาตั้ง: ฿${formatNumber(p.price)}</span>
+            <span>${costHtml}ราคาตั้ง: ฿${formatNumber(p.price)} | ส่ง: ฿${formatNumber(p.wholesalePrice || 0)}</span>
           </div>
           <div class="flex items-center gap-2 mt-1">
-            <span class="text-[11px] font-semibold text-gray-600 shrink-0">ราคาขายจริง (บาท):</span>
-            <input type="number" id="bulk_price_${p.id}" value="${p.price}" class="w-full text-xs font-bold text-brand-600 p-1 border border-gray-300 rounded focus:ring-brand-500 outline-none bg-brand-50">
+            <span class="text-[11px] font-semibold text-gray-600 shrink-0">ราคาขายจริง:</span>
+            <input type="number" id="bulk_price_${p.id}" value="${defaultPrice}" class="w-full text-xs font-bold text-brand-600 p-1 border border-gray-300 rounded focus:ring-brand-500 outline-none bg-brand-50">
+            <div class="flex gap-1 shrink-0">
+              <button type="button" onclick="setBulkPrice('${p.id}', ${p.price})" class="px-1.5 py-0.5 bg-rose-50 text-rose-600 border border-rose-200 rounded text-[9px] hover:bg-rose-100 transition">ปลีก</button>
+              <button type="button" onclick="setBulkPrice('${p.id}', ${p.wholesalePrice || 0})" class="px-1.5 py-0.5 bg-indigo-50 text-indigo-600 border border-indigo-200 rounded text-[9px] hover:bg-indigo-100 transition">ส่ง</button>
+            </div>
           </div>
         </div>`;
     });
@@ -2227,13 +2523,34 @@ function checkoutCart() {
     
     document.getElementById('sellProductInfo').innerHTML = infoHtml;
 
+    // เติมประเภทรูปแบบการขายใน Dropdown
     const typeSel = document.getElementById('sell_type');
     typeSel.innerHTML = '<option value="">เลือกรูปแบบ</option>';
     if (window._appSettings && window._appSettings.saleTypes) {
         window._appSettings.saleTypes.forEach(t => { typeSel.innerHTML += `<option value="${t}">${t}</option>`; });
     } else {
-        API_getSettings().then(s => { window._appSettings = s; s.saleTypes.forEach(t => typeSel.innerHTML += `<option value="${t}">${t}</option>`); }).catch(() => { });
+        API_getSettings().then(s => { 
+            window._appSettings = s; 
+            s.saleTypes.forEach(t => typeSel.innerHTML += `<option value="${t}">${t}</option>`); 
+        }).catch(() => { });
     }
 
+    // แสดง Modal สำหรับกรอกข้อมูลขาย
     document.getElementById('sellModal').classList.remove('hidden');
+    toggleDownPayment();
+}
+
+function setBulkPrice(productId, price) {
+    const input = document.getElementById(`bulk_price_${productId}`);
+    if (input) {
+        input.value = price;
+    }
+}
+
+// แปลงรูปแบบวันที่จาก YYYY-MM-DD เป็น DD/MM/YYYY
+function formatDateToDMY(dateStr) {
+    if (!dateStr) return '';
+    const parts = dateStr.split('-');
+    if (parts.length < 3) return dateStr;
+    return `${parts[2]}/${parts[1]}/${parts[0]}`;
 }
