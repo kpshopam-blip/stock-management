@@ -344,9 +344,9 @@
               </select>
             </div>
             <div class="lg:col-span-2">
-              <label class="block text-sm font-medium text-gray-700 mb-1">IMEI / Serial Number</label>
+              <label class="block text-sm font-medium text-gray-700 mb-1">IMEI / Serial Number <span class="text-red-500">*</span></label>
               <div class="flex gap-2">
-                <input type="text" id="p_imei" placeholder="กรอกเลข IMEI เครื่อง (ถ้ามี)"
+                <input type="text" id="p_imei" placeholder="กรอกเลข IMEI เครื่อง (บังคับกรอก)"
                   class="flex-grow p-2 border border-gray-300 rounded focus:ring-brand-500 outline-none transition-colors"
                   oninput="onImeiInput(this.value)">
                 <button type="button" onclick="startScanner()"
@@ -443,10 +443,10 @@
                 class="w-full p-2 border border-gray-300 rounded focus:ring-brand-500 outline-none">
             </div>
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">ที่อยู่/สาขา</label>
+              <label class="block text-sm font-medium text-gray-700 mb-1">ที่อยู่/สาขา <span class="text-red-500">*</span></label>
               <select id="p_location"
                 class="w-full p-2 border border-gray-300 rounded focus:ring-brand-500 outline-none">
-                <option value="">เลือกสาขา</option>
+                <option value="">เลือกสาขา (บังคับเลือก)</option>
               </select>
             </div>
             <div class="lg:col-span-2">

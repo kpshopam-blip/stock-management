@@ -1497,6 +1497,22 @@ async function submitProduct(event) {
     event.preventDefault();
 
     const imeiVal = document.getElementById('p_imei').value.trim();
+    const locationVal = document.getElementById('p_location').value.trim();
+    const isNewProduct = !editingProductId;
+
+    // บังคับกรอก IMEI และ ที่อยู่/สาขา เฉพาะตอนเพิ่มสินค้าใหม่
+    if (isNewProduct) {
+        if (!imeiVal) {
+            showToast('กรุณากรอกเลข IMEI / Serial Number เพราะเป็นข้อมูลจำเป็น', 'error', 4000);
+            document.getElementById('p_imei').focus();
+            return;
+        }
+        if (!locationVal) {
+            showToast('กรุณาเลือก ที่อยู่/สาขา เพราะเป็นข้อมูลจำเป็น', 'error', 4000);
+            document.getElementById('p_location').focus();
+            return;
+        }
+    }
 
     // ตรวจสอบ IMEI ซ้ำใน Frontend (ความปลอดภัยชั้นที่ 1)
     if (imeiVal) {

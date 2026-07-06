@@ -66,7 +66,10 @@ function toggleTheme() {
 async function refreshDashboard() {
   showLoading(true);
   try {
-    allProducts = await API_getProducts();
+    const rawProducts = await API_getProducts();
+    // แดชบอร์ดผู้จัดการใช้เฉพาะข้อมูลจากชีต Products และ SalesData เท่านั้น
+    // ไม่รวม Stock_Employee และ Stock_Spare
+    allProducts = rawProducts.filter(p => (p.stockType || 'Products') === 'Products');
     salesSummary = await API_getSalesSummary();
 
     // เริ่มสร้าง Dropdown ตัวกรองหลักก่อน
@@ -484,9 +487,32 @@ function renderSourceDetails() {
 // ====== 5. รายงานบิลขายส่งและเงินเชื่อ (Column 3) คัดกรองตามแหล่งที่มา ======
 function parseDueDate(dateStr) {
   if (!dateStr) return null;
-  const parts = dateStr.split('/');
-  if (parts.length < 3) return null;
-  return new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+  const s = dateStr.toString().trim();
+  
+  // รูปแบบ dd/mm/yyyy (เก็บใน Sheets ปกติ)
+  if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(s)) {
+    const parts = s.split('/');
+    return new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+  }
+  
+  // รูปแบบ Date string เต็ม (Sun Jul 19 2026...) หรือ ISO format
+  const d = new Date(s);
+  if (!isNaN(d.getTime())) return d;
+  
+  return null;
+}
+
+// แปลงวันที่เป็นรูปแบบภาษาไทยที่อ่านง่าย: เช่น "19 ก.ค. 69"
+function formatDueDateDisplay(dateStr) {
+  const d = parseDueDate(dateStr);
+  if (!d) return dateStr || '-';
+  
+  const thMonths = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  const day = d.getDate();
+  const month = thMonths[d.getMonth()];
+  const yearBE = d.getFullYear() + 543;
+  const yearShort = String(yearBE).slice(-2);
+  return `${day} ${month} ${yearShort}`;
 }
 
 function renderWholesaleReport() {
@@ -574,8 +600,10 @@ function renderWholesaleReport() {
         saleType: s.saleType,
         customerName: s.customerName,
         customerPhone: s.customerPhone,
+        salesperson: s.salesperson || '',
         paymentStatus: s.paymentStatus,
         dueDate: s.dueDate,
+        receiptImage: s.receiptImage || '',
         downPayment: parseFloat(s.downPayment || 0),
         items: [],
         totalPrice: 0,
@@ -592,6 +620,9 @@ function renderWholesaleReport() {
       billGroups[billId].dueDate = s.dueDate;
       billGroups[billId].downPayment = parseFloat(s.downPayment || 0);
     }
+    // อัปเดตรูปใบเสร็จ POS และพนักงานขายจากแถวล่าสุดที่มีข้อมูล
+    if (s.receiptImage) billGroups[billId].receiptImage = s.receiptImage;
+    if (s.salesperson) billGroups[billId].salesperson = s.salesperson;
   });
 
   let html = '';
@@ -639,11 +670,26 @@ function renderWholesaleReport() {
           <i class="fa-solid fa-check"></i> เปลี่ยนเป็นจ่ายแล้ว
         </button>` : '';
 
+      // คำนวณสีของวันครบกำหนดจ่าย
+      let dueDateColor = 'text-gray-600 dark:text-gray-300';
+      if (isUnpaid && dDate) {
+        const diffMs = dDate.getTime() - today.getTime();
+        const diffDays = Math.ceil(diffMs / 86400000);
+        if (diffDays < 0) dueDateColor = 'text-red-500 dark:text-red-400 font-bold';
+        else if (diffDays <= 3) dueDateColor = 'text-orange-500 dark:text-orange-400 font-bold';
+      } else if (!isUnpaid) {
+        dueDateColor = 'text-emerald-600 dark:text-emerald-400';
+      }
+
       debtPanel = `
       <div class="mt-2 pt-2 border-t border-dashed border-gray-200 dark:border-darkbg-700 flex flex-wrap items-center justify-between gap-2 bg-gray-50/50 dark:bg-darkbg-900/30 p-2 rounded-lg">
         <div class="text-[11px]">
           <span class="text-gray-400">เงินเชื่อค้างชำระ:</span> <b class="text-red-500 dark:text-red-400 text-sm">฿${formatNumber(balance)}</b>
-          <div class="text-[10px] text-gray-500 mt-0.5">กำหนดจ่าย: <b>${bill.dueDate || '-'}</b></div>
+          <div class="text-[10px] text-gray-400 dark:text-gray-500 mt-1 flex items-center gap-1.5">
+            <i class="fa-regular fa-calendar-days text-indigo-400"></i>
+            <span>กำหนดจ่าย:</span>
+            <b class="${dueDateColor}">${formatDueDateDisplay(bill.dueDate)}</b>
+          </div>
         </div>
         <div class="flex items-center gap-2">
           ${countdownHtml}
@@ -674,6 +720,8 @@ function renderWholesaleReport() {
       customerPhone: bill.customerPhone || '',
       saleType: bill.saleType || '',
       downPayment: bill.downPayment || 0,
+      dueDate: bill.dueDate || '',
+      receiptImage: bill.receiptImage || '',
       isBulk: bill.items.length > 1,
       items: bill.items.map(item => ({
         brand: item.brand,
@@ -1001,16 +1049,33 @@ function openEditBillModal(bill) {
   document.getElementById('edit_billId').value = bill.saleId;
   document.getElementById('edit_customerName').value = bill.customerName || '';
   document.getElementById('edit_customerPhone').value = bill.customerPhone || '';
-  document.getElementById('edit_salesperson').value = bill.salesperson || '';
   document.getElementById('edit_downPayment').value = bill.downPayment || 0;
+  document.getElementById('edit_saleType').value = bill.saleType || '';
+  document.getElementById('edit_totalPrice').value = bill.soldPrice || '';
+  
+  // แสดงชื่อพนักงานเป็นข้อความ (readonly - ไม่อนุญาตให้แก้ไข)
+  const salespersonDisplay = document.getElementById('edit_salesperson_display');
+  if (salespersonDisplay) salespersonDisplay.textContent = bill.salesperson || '(ไม่ระบุ)';
+  
+  // แสดงรูปใบเสร็จ POS ถ้ามี
+  const posReceiptBtn = document.getElementById('edit_posReceiptBtn');
+  if (posReceiptBtn) {
+    if (bill.receiptImage) {
+      posReceiptBtn.classList.remove('hidden');
+      posReceiptBtn.onclick = () => viewFullImage(bill.receiptImage);
+    } else {
+      posReceiptBtn.classList.add('hidden');
+    }
+  }
   
   // แปลงรูปแบบวันที่ DD/MM/YYYY ของ Google Sheets เป็น YYYY-MM-DD สำหรับอินพุตเดท
+  const dDate = parseDueDate(bill.dueDate);
   let dateVal = '';
-  if (bill.dueDate) {
-    const parts = bill.dueDate.split('/');
-    if (parts.length === 3) {
-      dateVal = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
-    }
+  if (dDate) {
+    const y = dDate.getFullYear();
+    const m = String(dDate.getMonth() + 1).padStart(2, '0');
+    const d = String(dDate.getDate()).padStart(2, '0');
+    dateVal = `${y}-${m}-${d}`;
   }
   document.getElementById('edit_dueDate').value = dateVal;
   
@@ -1029,9 +1094,13 @@ async function handleEditBillSubmit(e) {
   const saleId = document.getElementById('edit_billId').value;
   const customerName = document.getElementById('edit_customerName').value.trim();
   const customerPhone = document.getElementById('edit_customerPhone').value.trim();
-  const salesperson = document.getElementById('edit_salesperson').value.trim();
+  const saleType = document.getElementById('edit_saleType').value.trim();
+  const totalPrice = parseFloat(document.getElementById('edit_totalPrice').value) || 0;
   const downPayment = parseFloat(document.getElementById('edit_downPayment').value) || 0;
   const rawDueDate = document.getElementById('edit_dueDate').value; // YYYY-MM-DD
+  
+  // ไม่เปลี่ยนชื่อพนักงาน (salesperson) ใช้ค่าเดิมเสมอ
+  const salesperson = currentEditBill.salesperson || '';
   
   // แปลงรูปแบบวันที่กลับเป็น DD/MM/YYYY สำหรับ Google Sheets
   let dueDate = '';
@@ -1048,7 +1117,8 @@ async function handleEditBillSubmit(e) {
     salesperson,
     downPayment,
     dueDate,
-    saleType: currentEditBill.saleType
+    saleType,
+    totalPrice,
   };
 
   showLoading(true);
