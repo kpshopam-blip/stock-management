@@ -359,15 +359,30 @@
             </div>
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">ยี่ห้อ (Brand) *</label>
-              <select id="p_brand" required
+              <select id="p_brand" required onchange="onBrandChange(this.value)"
                 class="w-full p-2 border border-gray-300 rounded focus:ring-brand-500 outline-none">
                 <option value="">เลือกยี่ห้อ</option>
               </select>
             </div>
-            <div class="lg:col-span-2">
+            <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">รุ่น (Model) *</label>
-              <input type="text" id="p_model" required placeholder="เช่น iPhone 13 Pro Max"
+              <input type="text" id="p_model" required placeholder="เช่น iPhone 13 Pro Max (เลือกหรือพิมพ์เองได้)" list="modelOptions"
                 class="w-full p-2 border border-gray-300 rounded focus:ring-brand-500 outline-none">
+              <datalist id="modelOptions"></datalist>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">โมเดล (Model Code)</label>
+              <input type="text" id="p_model_code" placeholder="เช่น TH/A, ZP/A (ระบุหรือพิมพ์เอง)" list="modelCodeOptions"
+                class="w-full p-2 border border-gray-300 rounded focus:ring-brand-500 outline-none">
+              <datalist id="modelCodeOptions">
+                <option value="TH/A">
+                <option value="ZP/A">
+                <option value="LL/A">
+                <option value="ZA/A">
+                <option value="VN/A">
+                <option value="J/A">
+                <option value="KH/A">
+              </datalist>
             </div>
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">RAM</label>
@@ -376,8 +391,10 @@
             </div>
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">ความจุ (Storage)</label>
-              <input type="text" id="p_storage" placeholder="เช่น 128GB, 256GB"
+              <select id="p_storage"
                 class="w-full p-2 border border-gray-300 rounded focus:ring-brand-500 outline-none">
+                <option value="">เลือกความจุ</option>
+              </select>
             </div>
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">สี (Color)</label>
@@ -386,8 +403,9 @@
             </div>
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">ประเภทเครื่อง/แหล่งที่มา</label>
-              <input type="text" id="p_source" placeholder="เช่น รับซื้อหน้าร้าน, เทิร์น"
+              <input type="text" id="p_source" placeholder="เช่น รับซื้อหน้าร้าน (เลือกหรือพิมพ์เองได้)" list="sourceOptions"
                 class="w-full p-2 border border-gray-300 rounded focus:ring-brand-500 outline-none">
+              <datalist id="sourceOptions"></datalist>
             </div>
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">ราคาต้นทุน (บาท) *</label>
@@ -398,6 +416,11 @@
               <label class="block text-sm font-medium text-gray-700 mb-1">ราคาขาย (บาท) *</label>
               <input type="number" id="p_price" required placeholder="0"
                 class="w-full p-2 border border-gray-300 rounded focus:ring-brand-500 outline-none text-brand-600 font-bold bg-brand-50">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">ราคาขายส่ง (บาท)</label>
+              <input type="number" id="p_wholesalePrice" placeholder="0"
+                class="w-full p-2 border border-gray-300 rounded focus:ring-brand-500 outline-none text-indigo-600 font-bold bg-indigo-50">
             </div>
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">สภาพสินค้า (%)</label>
@@ -508,7 +531,8 @@
                 <th class="px-4 py-3">สเปค</th>
                 <th class="px-4 py-3">IMEI</th>
                 <th class="px-4 py-3 text-right">ต้นทุน</th>
-                <th class="px-4 py-3 text-right">ราคาขาย</th>
+                <th class="px-4 py-3 text-right">ราคาขายปกติ</th>
+                <th class="px-4 py-3 text-right">ราคาขายส่ง</th>
                 <th class="px-4 py-3 text-center">สถานะ</th>
                 <th class="px-4 py-3 text-center">จัดการ</th>
               </tr>
@@ -652,7 +676,13 @@
         <div id="sellProductInfo" class="bg-gray-50 p-3 rounded-lg text-sm"></div>
         <input type="hidden" id="sell_productId">
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">ราคาที่ขายจริง (บาท) *</label>
+          <div class="flex justify-between items-center mb-1">
+            <label class="block text-sm font-medium text-gray-700">ราคาที่ขายจริง (บาท) *</label>
+            <div class="flex gap-1">
+              <button type="button" id="btnUseRetailPrice" class="text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 px-2 py-0.5 rounded transition">ราคาปลีก</button>
+              <button type="button" id="btnUseWholesalePrice" class="text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-600 px-2 py-0.5 rounded border border-indigo-100 transition">ราคาส่ง</button>
+            </div>
+          </div>
           <input type="number" id="sell_price" required placeholder="0"
             class="w-full p-2 border border-gray-300 rounded focus:ring-brand-500 outline-none text-brand-600 font-bold bg-brand-50 text-lg">
         </div>
@@ -663,11 +693,31 @@
             <option value="">เลือกรูปแบบ</option>
           </select>
         </div>
+        <!-- ตัวเลือกย่อยสำหรับ ส่งร้านพาร์ทเนอร์ -->
+        <div id="partner_payment_container" class="hidden">
+          <label class="block text-sm font-medium text-gray-700 mb-1">ประเภทการชำระ (สด/เชื่อ) *</label>
+          <div class="flex gap-4 p-2 bg-gray-50 rounded-lg border border-gray-200">
+            <label class="flex items-center gap-2 text-sm font-semibold text-gray-700 cursor-pointer">
+              <input type="radio" name="partner_payment_type" value="สด" checked onchange="toggleDownPayment()" class="text-brand-600 focus:ring-brand-500">
+              ขายสด
+            </label>
+            <label class="flex items-center gap-2 text-sm font-semibold text-gray-700 cursor-pointer">
+              <input type="radio" name="partner_payment_type" value="เชื่อ" onchange="toggleDownPayment()" class="text-brand-600 focus:ring-brand-500">
+              เงินเชื่อ
+            </label>
+          </div>
+        </div>
         <div id="sell_downPaymentContainer" class="hidden">
           <label class="block text-sm font-medium text-gray-700 mb-1">เงินดาวน์ (บาท) *</label>
           <input type="number" id="sell_downPayment" placeholder="0"
             class="w-full p-2 border border-gray-300 rounded focus:ring-brand-500 outline-none text-brand-600 font-bold bg-brand-50 text-lg">
           <p class="text-xs text-red-500 mt-1"><i class="fa-solid fa-circle-info mr-1"></i>กรุณากรอกเงินดาวน์ตามที่ไฟแนนซ์อนุมัติ</p>
+        </div>
+        <div id="sell_dueDateContainer" class="hidden">
+          <label class="block text-sm font-medium text-gray-700 mb-1">วันกำหนดชำระเงินเชื่อ *</label>
+          <input type="date" id="sell_dueDate"
+            class="w-full p-2 border border-gray-300 rounded focus:ring-brand-500 outline-none text-brand-600 font-bold bg-brand-50 text-lg">
+          <p class="text-xs text-red-500 mt-1"><i class="fa-solid fa-circle-info mr-1"></i>กรุณาระบุวันกำหนดชำระเงินเชื่อของลูกค้า</p>
         </div>
         <div class="grid grid-cols-2 gap-3">
           <div>

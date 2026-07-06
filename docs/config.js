@@ -1,3 +1,13 @@
+// docs/config.js
+// ====================================================================
+// ⚠️  ไฟล์นี้อยู่ใน .gitignore — ห้าม push ขึ้น GitHub !!!
+// ====================================================================
+// วิธีใช้:
+// 1. Copy ไฟล์นี้จาก config.example.js แล้วตั้งชื่อ config.js
+// 2. กรอก GAS_URL และ API_KEY ของคุณ
+// 3. Save แล้วเปิด index.html ได้เลย
+// ====================================================================
+
 const CONFIG = {
     // URL ของ Google Apps Script Web App ของคุณ
     // ได้มาจาก: Apps Script → Deploy → New deployment → Web app → Copy URL

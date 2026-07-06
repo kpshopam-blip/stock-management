@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="th" class="dark">
+
+<head>
+  <meta charset="UTF-8">
+  <title>KP Shop — Dashboard รายงานสต็อกและการเงินเชื่อเต็มรูปแบบ</title>
+  <meta name="description" content="หน้าจอรายงานระบบสต็อกสินค้าและการขายส่งเต็มระบบ สำหรับผู้จัดการร้าน KP Shop">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts: Kanit -->
+  <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- Tailwind Configuration for Dark Theme & Colors -->
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Kanit', 'sans-serif'] },
+          colors: {
+            brand: { 50: '#fff1f2', 100: '#ffe4e6', 500: '#f43f5e', 600: '#e11d48', 700: '#be123c' },
+            darkbg: { 900: '#0b0f19', 800: '#111827', 700: '#1f2937', 600: '#374151' }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: rgba(17, 24, 39, 0.1);
+    }
+
+    .dark ::-webkit-scrollbar-track {
+      background: #111827;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 10px;
+    }
+
+    .dark ::-webkit-scrollbar-thumb {
+      background: #374151;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+
+    .dark ::-webkit-scrollbar-thumb:hover {
+      background: #4b5563;
+    }
+
+    .neon-border-green {
+      box-shadow: 0 0 10px rgba(16, 185, 129, 0.2);
+    }
+
+    .neon-border-red {
+      box-shadow: 0 0 10px rgba(239, 68, 68, 0.2);
+    }
+
+    .neon-border-brand {
+      box-shadow: 0 0 15px rgba(244, 63, 94, 0.25);
+    }
+
+    /* ป้องกันการกะพริบระหว่างโหลด */
+    [v-cloak] {
+      display: none;
+    }
+
+    /* Animation สำหรับ cross-filter badge */
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .animate-fadeIn {
+      animation: fadeIn 0.2s ease-out;
+    }
+  </style>
+</head>
+
+<body
+  class="bg-gray-100 dark:bg-darkbg-900 text-gray-800 dark:text-gray-100 font-sans transition-colors duration-300 min-h-screen flex flex-col overflow-x-hidden">
+
+  <!-- Loading Animation Overlay -->
+  <div id="loadingOverlay"
+    class="fixed inset-0 bg-black/60 backdrop-blur-md z-[9999] flex flex-col items-center justify-center transition-all duration-300">
+    <div
+      class="bg-white dark:bg-darkbg-800 rounded-3xl shadow-2xl p-8 flex flex-col items-center gap-4 border border-gray-200 dark:border-darkbg-700">
+      <div class="relative w-16 h-16">
+        <div class="absolute inset-0 rounded-full border-4 border-gray-200 dark:border-darkbg-600"></div>
+        <div class="absolute inset-0 rounded-full border-4 border-transparent border-t-brand-500 animate-spin"></div>
+      </div>
+      <h2 class="text-xl font-bold text-gray-800 dark:text-white">กำลังรวบรวมข้อมูลหลังบ้าน...</h2>
+      <p class="text-xs text-gray-500 dark:text-gray-400">กรุณารอระบบจัดทำรายงานสักครู่</p>
+    </div>
+  </div>
+
+  <!-- Main Fullscreen Layout -->
+  <div class="flex-grow flex flex-col p-4 space-y-4 max-w-[1920px] mx-auto w-full">
+
+    <!-- Top Header Bar -->
+    <header
+      class="flex flex-col sm:flex-row justify-between items-center bg-white dark:bg-darkbg-800 rounded-2xl shadow-sm border border-gray-200 dark:border-darkbg-700 p-4 gap-4 shrink-0">
+      <div class="flex items-center gap-3">
+        <div
+          class="w-12 h-12 bg-brand-500 rounded-xl flex items-center justify-center text-white text-2xl shadow-lg shadow-brand-500/25">
+          <i class="fa-solid fa-chart-pie"></i>
+        </div>
+        <div>
+          <h1 class="text-xl font-bold tracking-tight text-gray-900 dark:text-white flex items-center gap-2">
+            KP Shop — แดชบอร์ดผู้จัดการร้าน
+            <span
+              class="text-xs bg-brand-100 dark:bg-brand-500/20 text-brand-600 dark:text-brand-400 px-2 py-0.5 rounded-full font-medium">FULLSCREEN
+              REPORT</span>
+          </h1>
+          <p class="text-xs text-gray-500 dark:text-gray-400">รายงานข้อมูลสต็อกและการขายส่ง สำหรับจอคอมพิวเตอร์เต็มจอ
+          </p>
+        </div>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-3">
+        <!-- ตัวกรองแหล่งที่มาหลัก (Global Filter) -->
+        <div
+          class="flex items-center gap-1.5 bg-gray-100 dark:bg-darkbg-700 border border-gray-200 dark:border-darkbg-600 rounded-xl px-3 py-2 text-xs">
+          <span class="text-gray-500 dark:text-gray-400 font-bold"><i
+              class="fa-solid fa-filter text-indigo-500 mr-1"></i> แหล่งที่มาหลัก:</span>
+          <select id="global_source_filter" onchange="onGlobalSourceChange()"
+            class="bg-transparent font-extrabold text-gray-800 dark:text-white outline-none cursor-pointer">
+            <option value="">ทุกแหล่งที่มา</option>
+          </select>
+        </div>
+
+        <!-- ปุ่มสลับ Dark/Light Theme -->
+        <button onclick="toggleTheme()"
+          class="w-10 h-10 rounded-xl bg-gray-100 dark:bg-darkbg-700 hover:bg-gray-200 dark:hover:bg-darkbg-600 text-gray-600 dark:text-gray-300 flex items-center justify-center transition-all border border-gray-200 dark:border-darkbg-600"
+          title="เปลี่ยนธีม สีสว่าง/สีมืด">
+          <i id="themeIcon" class="fa-solid fa-moon text-lg"></i>
+        </button>
+
+        <!-- แสดงชื่อผู้ใช้ปัจจุบัน -->
+        <div
+          class="bg-gray-100 dark:bg-darkbg-700 border border-gray-200 dark:border-darkbg-600 rounded-xl px-4 py-2 text-xs flex items-center gap-2">
+          <div class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></div>
+          <span class="text-gray-500 dark:text-gray-400">ผู้จัดการ:</span>
+          <span id="userName" class="font-bold text-gray-800 dark:text-white">กำลังโหลด...</span>
+        </div>
+
+        <button onclick="refreshDashboard()"
+          class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md hover:shadow-lg transition-all flex items-center gap-1.5">
+          <i class="fa-solid fa-arrows-rotate"></i> <span>รีเฟรชข้อมูล</span>
+        </button>
+
+        <button onclick="syncFirebaseFromDashboard()"
+          class="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold shadow-md hover:shadow-lg transition-all flex items-center gap-1.5"
+          title="ซิงค์ข้อมูลจาก Google Sheets ไปยัง Firebase ใหม่ทั้งหมด">
+          <i class="fa-solid fa-cloud-arrow-up"></i> <span>Sync Firebase</span>
+        </button>
+
+        <a href="index.html"
+          class="px-4 py-2 bg-gray-200 dark:bg-darkbg-700 hover:bg-gray-300 dark:hover:bg-darkbg-600 text-gray-700 dark:text-gray-200 rounded-xl text-xs font-bold border border-gray-300 dark:border-darkbg-600 transition-all flex items-center gap-1.5">
+          <i class="fa-solid fa-arrow-left-long"></i> กลับหน้าร้านหลัก
+        </a>
+      </div>
+    </header>
+
+    <!-- Top KPI Cards Row -->
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
+      <!-- Card 1: ยอดขายส่งสะสม -->
+      <div
+        class="bg-white dark:bg-darkbg-800 rounded-2xl shadow-sm border border-gray-200 dark:border-darkbg-700 p-4 relative overflow-hidden group">
+        <div
+          class="absolute -right-4 -bottom-4 text-brand-500/10 text-7xl transition-transform group-hover:scale-110 duration-300">
+          <i class="fa-solid fa-handshake"></i></div>
+        <div class="text-xs text-gray-500 dark:text-gray-400 font-medium mb-1">ยอดขายรวมทั้งหมด</div>
+        <div id="kpi_totalSales" class="text-2xl sm:text-3xl font-extrabold text-gray-900 dark:text-white">฿0</div>
+        <div id="kpi_totalSalesCount" class="text-xs text-brand-600 dark:text-brand-400 mt-1 font-semibold">ขายไปแล้ว: 0
+          เครื่อง</div>
+      </div>
+
+      <!-- Card 2: กำไรสะสม -->
+      <div
+        class="bg-white dark:bg-darkbg-800 rounded-2xl shadow-sm border border-gray-200 dark:border-darkbg-700 p-4 relative overflow-hidden group">
+        <div
+          class="absolute -right-4 -bottom-4 text-emerald-500/10 text-7xl transition-transform group-hover:scale-110 duration-300">
+          <i class="fa-solid fa-arrow-trend-up"></i></div>
+        <div class="text-xs text-gray-500 dark:text-gray-400 font-medium mb-1">กำไรสุทธิทั้งหมด</div>
+        <div id="kpi_totalProfit" class="text-2xl sm:text-3xl font-extrabold text-emerald-600 dark:text-emerald-400">฿0
+        </div>
+        <div id="kpi_profitMargin" class="text-xs text-emerald-600 dark:text-emerald-500 mt-1 font-semibold">
+          คิดเป็นยอดเงินเฉลี่ยต่อเครื่อง</div>
+      </div>
+
+      <!-- Card 3: มูลค่าสต็อกคงเหลือ -->
+      <div
+        class="bg-white dark:bg-darkbg-800 rounded-2xl shadow-sm border border-gray-200 dark:border-darkbg-700 p-4 relative overflow-hidden group">
+        <div
+          class="absolute -right-4 -bottom-4 text-amber-500/10 text-7xl transition-transform group-hover:scale-110 duration-300">
+          <i class="fa-solid fa-boxes-stacked"></i></div>
+        <div class="text-xs text-gray-500 dark:text-gray-400 font-medium mb-1">มูลค่าสต็อกคงคลังปัจจุบัน (ทุน)</div>
+        <div id="kpi_stockValue" class="text-2xl sm:text-3xl font-extrabold text-amber-600 dark:text-amber-400">฿0</div>
+        <div id="kpi_stockCount" class="text-xs text-amber-600 dark:text-amber-500 mt-1 font-semibold">คงเหลือในร้าน: 0
+          เครื่อง</div>
+      </div>
+
+      <!-- Card 4: ยอดค้างชำระเงินเชื่อ -->
+      <div
+        class="bg-white dark:bg-darkbg-800 rounded-2xl shadow-sm border border-gray-200 dark:border-darkbg-700 p-4 relative overflow-hidden group">
+        <div
+          class="absolute -right-4 -bottom-4 text-indigo-500/10 text-7xl transition-transform group-hover:scale-110 duration-300">
+          <i class="fa-solid fa-clock"></i></div>
+        <div class="text-xs text-gray-500 dark:text-gray-400 font-medium mb-1">ยอดค้างจ่ายเงินเชื่อ (ที่รอชำระ)</div>
+        <div id="kpi_unpaidCredit" class="text-2xl sm:text-3xl font-extrabold text-indigo-600 dark:text-indigo-400">฿0
+        </div>
+        <div id="kpi_unpaidCreditCount" class="text-xs text-indigo-600 dark:text-indigo-500 mt-1 font-semibold">
+          บิลค้างชำระ: 0 รายการ</div>
+      </div>
+    </div>
+
+    <!-- Main Grid Content: 3 Columns Layout for Fullscreen Widescreen -->
+    <div class="flex-grow grid grid-cols-1 xl:grid-cols-12 gap-4 overflow-hidden min-h-[500px]">
+
+      <!-- COLUMN 1: รายงานจำแนกสินค้าแยกตาม ยี่ห้อ / รุ่น (XL-Width: 4/12) -->
+      <section
+        class="xl:col-span-4 bg-white dark:bg-darkbg-800 rounded-2xl shadow-sm border border-gray-200 dark:border-darkbg-700 flex flex-col overflow-hidden">
+        <div
+          class="p-4 border-b border-gray-200 dark:border-darkbg-700 flex justify-between items-center bg-gray-50/50 dark:bg-darkbg-800/50">
+          <h2 class="font-bold text-gray-900 dark:text-white flex items-center gap-1.5 text-sm">
+            <i class="fa-solid fa-list-check text-brand-500"></i> รายงานสต็อกจำแนก รุ่น/ยี่ห้อ
+          </h2>
+          <!-- แถบคัดกรองยี่ห้อในคอลัมน์ 1 -->
+          <select id="stock_brand_filter" onchange="renderStockTableReport()"
+            class="text-xs bg-gray-100 dark:bg-darkbg-700 border border-gray-200 dark:border-darkbg-600 rounded px-2 py-1 outline-none text-gray-700 dark:text-gray-300 font-medium">
+            <option value="">ทุกยี่ห้อ</option>
+          </select>
+        </div>
+        <div
+          class="p-3 bg-gray-50/80 dark:bg-darkbg-800/80 border-b border-gray-200 dark:border-darkbg-700 flex items-center gap-2">
+          <div class="relative flex-grow">
+            <span class="absolute inset-y-0 left-0 pl-2.5 flex items-center text-gray-400"><i
+                class="fa-solid fa-magnifying-glass text-xs"></i></span>
+            <input type="text" id="stock_search_input" oninput="renderStockTableReport()"
+              placeholder="พิมพ์ชื่อรุ่นเพื่อกรองด่วน..."
+              class="w-full pl-8 pr-3 py-1 bg-white dark:bg-darkbg-700 border border-gray-200 dark:border-darkbg-600 rounded-lg text-xs outline-none text-gray-700 dark:text-gray-300 focus:ring-1 focus:ring-brand-500">
+          </div>
+        </div>
+
+        <!-- รายละเอียดตารางจำแนก -->
+        <div class="flex-grow overflow-y-auto min-h-[300px]">
+          <table class="w-full text-xs text-left">
+            <thead
+              class="text-[10px] text-gray-500 dark:text-gray-400 uppercase bg-gray-100 dark:bg-darkbg-700 sticky top-0 font-semibold">
+              <tr>
+                <th class="px-3 py-2.5">ยี่ห้อ / รุ่นเครื่อง</th>
+                <th class="px-2 py-2.5 text-center w-14">รับเข้า</th>
+                <th class="px-2 py-2.5 text-center w-14">ขายแล้ว</th>
+                <th
+                  class="px-3 py-2.5 text-center w-16 bg-brand-50 dark:bg-brand-500/10 text-brand-600 dark:text-brand-400 font-bold">
+                  คงเหลือ</th>
+              </tr>
+            </thead>
+            <tbody id="stockReportTableBody" class="divide-y divide-gray-100 dark:divide-darkbg-700 font-medium">
+              <!-- แถวข้อมูลถูกสอดแทรกจาก JavaScript -->
+              <tr>
+                <td colspan="4" class="px-4 py-8 text-center text-gray-400"><i
+                    class="fa-solid fa-spinner fa-spin mr-2"></i>กำลังคำนวณข้อมูล...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- COLUMN 2: กราฟวิเคราะห์สถิติ & แหล่งที่มาเครื่อง (XL-Width: 4/12) -->
+      <section class="xl:col-span-4 flex flex-col gap-4 overflow-hidden">
+
+        <!-- แผงรายงานวิเคราะห์แยกตาม แหล่งที่มาเครื่อง (Source) -->
+        <div
+          class="bg-white dark:bg-darkbg-800 rounded-2xl shadow-sm border border-gray-200 dark:border-darkbg-700 p-4 flex flex-col flex-grow overflow-hidden">
+          <div class="flex justify-between items-center border-b border-gray-200 dark:border-darkbg-700 pb-2 mb-3">
+            <h2 class="font-bold text-gray-900 dark:text-white flex items-center gap-1.5 text-sm">
+              <i class="fa-solid fa-magnifying-glass-chart text-indigo-500"></i> วิเคราะห์เจาะลึกแหล่งที่มา
+            </h2>
+            <span
+              class="text-[10px] text-indigo-500 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-500/10 px-2 py-0.5 rounded font-bold uppercase"><i
+                class="fa-solid fa-circle-info mr-1"></i>ฟิลเตอร์หลักด้านบน</span>
+          </div>
+
+          <!-- Badge แสดง cross-filter ที่เลือก -->
+          <div id="source_model_filter_badge" class="px-4"></div>
+
+          <!-- สรุปตัวเลขแหล่งที่มา -->
+          <div id="source_stat_grid" class="grid grid-cols-3 gap-2 mb-3">
+            <!-- ข้อมูลสรุปแหล่งที่มา -->
+          </div>
+
+          <!-- ตารางรายการตามแหล่งที่มาที่คัดเลือก -->
+          <div
+            class="flex-grow overflow-y-auto max-h-[220px] xl:max-h-[300px] border border-gray-100 dark:border-darkbg-700 rounded-xl">
+            <table class="w-full text-[11px] text-left">
+              <thead
+                class="text-[9px] text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-darkbg-700 font-semibold sticky top-0">
+                <tr>
+                  <th class="px-2.5 py-2">รุ่นเครื่อง / IMEI</th>
+                  <th class="px-2 py-2 text-right">ราคาทุน</th>
+                  <th class="px-2.5 py-2 text-center w-20">สถานะ</th>
+                </tr>
+              </thead>
+              <tbody id="sourceDetailsTableBody" class="divide-y divide-gray-100 dark:divide-darkbg-700">
+                <tr>
+                  <td colspan="3" class="px-3 py-6 text-center text-gray-400">กรุณาเลือกแหล่งที่มาด้านบนเพื่อแสดงตาราง
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- วิชวลกราฟ Chart.js -->
+        <div
+          class="bg-white dark:bg-darkbg-800 rounded-2xl shadow-sm border border-gray-200 dark:border-darkbg-700 p-4 shrink-0 flex flex-col h-[280px]">
+          <h3 class="font-bold text-gray-900 dark:text-white text-xs mb-3 flex items-center gap-1.5">
+            <i class="fa-solid fa-chart-column text-emerald-500"></i> แนวโน้มยอดขาย & การวิเคราะห์
+          </h3>
+          <div class="flex-grow relative w-full h-full flex justify-center items-center">
+            <canvas id="dashboardChart"></canvas>
+          </div>
+        </div>
+      </section>
+
+      <!-- COLUMN 3: รายงานขายส่ง & การจัดการวันครบชำระเงินเชื่อ (XL-Width: 4/12) -->
+      <section
+        class="xl:col-span-4 bg-white dark:bg-darkbg-800 rounded-2xl shadow-sm border border-gray-200 dark:border-darkbg-700 flex flex-col overflow-hidden">
+        <div
+          class="p-4 border-b border-gray-200 dark:border-darkbg-700 flex justify-between items-center bg-gray-50/50 dark:bg-darkbg-800/50">
+          <h2 class="font-bold text-gray-900 dark:text-white flex items-center gap-1.5 text-sm">
+            <i class="fa-solid fa-handshake-angle text-indigo-500"></i> การขายส่งและติดตามเงินเชื่อ
+          </h2>
+          <!-- แถบเลือกคัดกรองสถานะเงินเชื่อ -->
+          <select id="wholesale_payment_filter" onchange="renderWholesaleReport()"
+            class="text-xs bg-gray-100 dark:bg-darkbg-700 border border-gray-200 dark:border-darkbg-600 rounded px-2 py-1 outline-none text-gray-700 dark:text-gray-300 font-medium">
+            <option value="">ทั้งหมด</option>
+            <option value="unpaid">🔴 เฉพาะค้างชำระ (เงินเชื่อ)</option>
+            <option value="paid">🟢 เฉพาะที่ชำระเงินแล้ว</option>
+            <option value="cash">💵 เฉพาะขายส่งเงินสด</option>
+          </select>
+        </div>
+        <div
+          class="p-3 bg-gray-50/80 dark:bg-darkbg-800/80 border-b border-gray-200 dark:border-darkbg-700 flex items-center gap-2">
+          <div class="relative flex-grow">
+            <span class="absolute inset-y-0 left-0 pl-2.5 flex items-center text-gray-400"><i
+                class="fa-solid fa-user-tag text-xs"></i></span>
+            <input type="text" id="wholesale_search_input" oninput="renderWholesaleReport()"
+              placeholder="ค้นหาตามชื่อลูกค้า/เบอร์โทร/บิล..."
+              class="w-full pl-8 pr-3 py-1 bg-white dark:bg-darkbg-700 border border-gray-200 dark:border-darkbg-600 rounded-lg text-xs outline-none text-gray-700 dark:text-gray-300 focus:ring-1 focus:ring-brand-500">
+          </div>
+        </div>
+
+        <!-- Badge แสดง cross-filter ที่เลือก -->
+        <div id="wholesale_model_filter_badge" class="px-3 pt-2"></div>
+
+        <!-- รายการขายส่งและบิลเงินเชื่อ -->
+        <div id="wholesaleListContainer" class="flex-grow overflow-y-auto p-3 space-y-3 min-h-[300px]">
+          <div class="text-center text-gray-400 py-12"><i class="fa-solid fa-circle-notch fa-spin mr-1"></i>
+            กำลังประมวลผลรายการเงินเชื่อ...</div>
+        </div>
+      </section>
+
+    </div>
+
+  </div>
+
+  <!-- Modal ใบเสร็จดิจิทัล -->
+  <div id="receiptModal"
+    class="fixed inset-0 bg-black/60 z-[95] hidden flex items-center justify-center p-2 sm:p-4 backdrop-blur-sm">
+    <div class="bg-white dark:bg-darkbg-800 w-full max-w-sm rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[95vh]">
+      <div class="px-4 py-3 border-b bg-green-50 dark:bg-emerald-950/20 flex justify-between items-center shrink-0">
+        <h3 class="font-bold text-green-700 dark:text-emerald-400 text-lg"><i class="fa-solid fa-receipt mr-1"></i> ใบเสร็จการขาย</h3>
+        <button onclick="document.getElementById('receiptModal').classList.add('hidden')"
+          class="w-8 h-8 rounded-full bg-gray-200 dark:bg-darkbg-700 text-gray-600 dark:text-gray-400 hover:bg-red-100 hover:text-red-500 flex justify-center items-center transition"><i
+            class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div id="receiptBody" class="p-4 overflow-y-auto flex-grow text-sm bg-white dark:bg-darkbg-900"></div>
+      <div class="px-4 py-3 border-t bg-gray-50 dark:bg-darkbg-800 flex flex-col items-center shrink-0">
+        <button onclick="document.getElementById('receiptModal').classList.add('hidden')"
+          class="w-full py-2 bg-gray-300 dark:bg-darkbg-700 text-gray-700 dark:text-gray-300 font-medium rounded hover:bg-gray-400 transition shadow text-sm">
+          <i class="fa-solid fa-xmark"></i> ปิดหน้าต่าง
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Image Viewer Modal -->
+  <div id="imageViewerModal"
+    class="fixed inset-0 bg-black/90 z-[100] hidden flex flex-col justify-center items-center backdrop-blur-md transition-opacity">
+    <button onclick="closeImageViewer()"
+      class="absolute top-4 right-4 text-white hover:text-red-500 bg-black/50 hover:bg-black w-10 h-10 rounded-full flex justify-center items-center transition z-10">
+      <i class="fa-solid fa-xmark text-xl"></i>
+    </button>
+    <img id="imageViewerImg" src="" class="max-w-[95%] max-h-[90vh] object-contain select-none" alt="Full Image">
+  </div>
+
+  <!-- Modal แก้ไขบิลการขาย -->
+  <div id="editBillModal"
+    class="fixed inset-0 bg-black/60 z-[90] hidden flex items-center justify-center p-2 sm:p-4 backdrop-blur-sm">
+    <div class="bg-white dark:bg-darkbg-800 w-full max-w-md rounded-xl shadow-2xl overflow-hidden flex flex-col">
+      <div class="px-4 py-3 border-b bg-blue-50 dark:bg-blue-950/20 flex justify-between items-center">
+        <h3 class="font-bold text-blue-700 dark:text-blue-400 text-lg"><i class="fa-solid fa-pen-to-square mr-1"></i> แก้ไขบิลการขาย</h3>
+        <button onclick="closeEditBillModal()"
+          class="w-8 h-8 rounded-full bg-gray-200 dark:bg-darkbg-700 text-gray-600 dark:text-gray-400 hover:bg-red-100 hover:text-red-500 flex justify-center items-center transition"><i
+            class="fa-solid fa-xmark"></i></button>
+      </div>
+      <form onsubmit="handleEditBillSubmit(event)" class="p-4 space-y-4">
+        <input type="hidden" id="edit_billId">
+        
+        <div>
+          <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">ชื่อลูกค้า *</label>
+          <input type="text" id="edit_customerName" required class="w-full p-2 border border-gray-300 dark:border-darkbg-600 dark:bg-darkbg-700 dark:text-white rounded outline-none focus:ring-1 focus:ring-blue-500 text-sm">
+        </div>
+        
+        <div>
+          <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">เบอร์โทรลูกค้า *</label>
+          <input type="text" id="edit_customerPhone" required class="w-full p-2 border border-gray-300 dark:border-darkbg-600 dark:bg-darkbg-700 dark:text-white rounded outline-none focus:ring-1 focus:ring-blue-500 text-sm">
+        </div>
+        
+        <div>
+          <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">พนักงานขาย *</label>
+          <input type="text" id="edit_salesperson" required class="w-full p-2 border border-gray-300 dark:border-darkbg-600 dark:bg-darkbg-700 dark:text-white rounded outline-none focus:ring-1 focus:ring-blue-500 text-sm">
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">เงินดาวน์ (บาท)</label>
+            <input type="number" id="edit_downPayment" class="w-full p-2 border border-gray-300 dark:border-darkbg-600 dark:bg-darkbg-700 dark:text-white rounded outline-none focus:ring-1 focus:ring-blue-500 text-sm">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">วันกำหนดชำระเงินเชื่อ (ถ้ามี)</label>
+            <input type="date" id="edit_dueDate" class="w-full p-2 border border-gray-300 dark:border-darkbg-600 dark:bg-darkbg-700 dark:text-white rounded outline-none focus:ring-1 focus:ring-blue-500 text-sm">
+          </div>
+        </div>
+        
+        <div class="px-4 py-3 border-t bg-gray-50 dark:bg-darkbg-800 -mx-4 -mb-4 flex justify-end gap-2 text-sm">
+          <button type="button" onclick="closeEditBillModal()" class="px-4 py-2 border rounded text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-darkbg-700 font-medium transition">ยกเลิก</button>
+          <button type="submit" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded font-medium shadow transition"><i class="fa-solid fa-check"></i> บันทึกการแก้ไข</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Script การควบคุมหลักแดชบอร์ด (เพิ่ม v เพื่อแก้ปัญหา Browser/Netlify Cache ค้าง) -->
+  <script src="config.js?v=1.0.1"></script>
+  <script src="api.js?v=1.0.1"></script>
+  <script src="dashboard.js?v=1.0.1"></script>
+
+</body>
+
+</html>
