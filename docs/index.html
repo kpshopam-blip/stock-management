@@ -275,6 +275,13 @@
             class="text-sm border-gray-300 rounded py-1 pl-2 pr-6 focus:ring-brand-500 outline-none text-gray-600">
             <option value="">ทุกสาขา / ทุกที่อยู่</option>
           </select>
+          <select id="filterStatus" onchange="filterProducts()"
+            class="text-sm border-gray-300 rounded py-1 pl-2 pr-6 focus:ring-brand-500 outline-none text-gray-600 hidden">
+            <option value="available" selected>🟢 พร้อมขาย</option>
+            <option value="unavailable_others">🔴 ไม่พร้อมขาย (ส่งซ่อม/จอง)</option>
+            <option value="sold">⚫ ขายแล้ว</option>
+            <option value="all">แสดงทั้งหมด</option>
+          </select>
         </div>
       </div>
       <div id="productGrid" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4">

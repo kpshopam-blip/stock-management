@@ -245,29 +245,23 @@ function renderProductGrid(products) {
     const noData = document.getElementById('noProductFound');
     grid.innerHTML = '';
 
-    // กรองสินค้าตามสิทธิ์ (Role)
-    const isManager = currentUser && (currentUser.role === 'Manager' || currentUser.role === 'ผู้จัดการ');
-    const isTech = currentUser && (currentUser.role === 'ช่าง' || currentUser.role === 'Technician');
-    
-    let filtered;
-    if (isManager) {
-        filtered = products; // ผู้จัดการเห็นสินค้าทุกสถานะ
-    } else if (isTech) {
-        // ช่างเห็นเกือบหมด ยกเว้น 'Sold' และ 'Unavailable'
-        filtered = products.filter(p => {
-            const st = (p.status || 'Available').toLowerCase();
-            return st !== 'sold' && st !== 'unavailable';
-        });
-    } else {
-        // พนักงานขายทั่วไปเห็นเฉพาะสินค้าพร้อมขาย 'Available' เท่านั้น
-        filtered = products.filter(p => (p.status || 'Available').toLowerCase() === 'available');
+    // แสดง/ซ่อนตัวกรองสถานะของหน้าร้านหลักตามสิทธิ์
+    const statusSelect = document.getElementById('filterStatus');
+    if (statusSelect && currentUser) {
+        const isManagerOrTech = currentUser.role === 'Manager' || currentUser.role === 'ผู้จัดการ' || currentUser.role === 'ช่าง' || currentUser.role === 'Technician';
+        if (isManagerOrTech) {
+            statusSelect.classList.remove('hidden');
+        } else {
+            statusSelect.classList.add('hidden');
+        }
     }
-    document.getElementById('totalProductCount').innerText = filtered.length;
 
-    if (filtered.length === 0) { noData.classList.remove('hidden'); return; }
+    document.getElementById('totalProductCount').innerText = products.length;
+
+    if (products.length === 0) { noData.classList.remove('hidden'); return; }
     noData.classList.add('hidden');
 
-    filtered.forEach(p => {
+    products.forEach(p => {
         const coverImage = p.images && p.images.length > 0 && p.images[0].trim() !== '' ? p.images[0] : NO_IMAGE;
         const statusLower = (p.status || 'Available').toLowerCase();
         
@@ -319,7 +313,7 @@ function renderProductGrid(products) {
 }
 
 function searchProducts(inputId) {
-    const query = document.getElementById(inputId).value.toLowerCase();
+    const query = document.getElementById(inputId) ? document.getElementById(inputId).value.toLowerCase() : '';
     const filterBrand = document.getElementById('filterBrand').value.toLowerCase();
     const locFilter = document.getElementById('filterLocation');
     const filterLocation = locFilter ? locFilter.value.toLowerCase() : '';
@@ -336,6 +330,47 @@ function filterProducts() {
 
 function executeSearch(query, brand, location) {
     let filtered = allProducts.filter(p => (p.stockType || 'Products') === currentStockTab);
+    
+    // กรองตามสิทธิ์และสถานะ
+    const isManager = currentUser && (currentUser.role === 'Manager' || currentUser.role === 'ผู้จัดการ');
+    const isTech = currentUser && (currentUser.role === 'ช่าง' || currentUser.role === 'Technician');
+    
+    // ดึงค่าฟิลเตอร์สถานะ
+    const statusSelect = document.getElementById('filterStatus');
+    const filterStatus = statusSelect ? statusSelect.value : 'available';
+    
+    if (isManager) {
+        if (filterStatus === 'available') {
+            filtered = filtered.filter(p => (p.status || 'Available').toLowerCase() === 'available');
+        } else if (filterStatus === 'unavailable_others') {
+            filtered = filtered.filter(p => {
+                const st = (p.status || 'Available').toLowerCase();
+                return st === 'unavailable' || st === 'repair' || st === 'reserved';
+            });
+        } else if (filterStatus === 'sold') {
+            filtered = filtered.filter(p => (p.status || 'Available').toLowerCase() === 'sold');
+        }
+        // 'all' -> no filter
+    } else if (isTech) {
+        if (filterStatus === 'available') {
+            filtered = filtered.filter(p => (p.status || 'Available').toLowerCase() === 'available');
+        } else if (filterStatus === 'unavailable_others') {
+            filtered = filtered.filter(p => {
+                const st = (p.status || 'Available').toLowerCase();
+                return st === 'repair' || st === 'reserved';
+            });
+        } else {
+            // default or all / sold -> ช่างเห็นเกือบหมด ยกเว้น 'Sold' และ 'Unavailable'
+            filtered = filtered.filter(p => {
+                const st = (p.status || 'Available').toLowerCase();
+                return st !== 'sold' && st !== 'unavailable';
+            });
+        }
+    } else {
+        // พนักงานขายทั่วไปเห็นเฉพาะสินค้าพร้อมขาย 'Available' เท่านั้น
+        filtered = filtered.filter(p => (p.status || 'Available').toLowerCase() === 'available');
+    }
+
     if (brand) filtered = filtered.filter(p => String(p.brand || '').toLowerCase() === brand);
     if (location) filtered = filtered.filter(p => p.location && String(p.location).toLowerCase() === location);
     if (query) filtered = filtered.filter(p =>
@@ -353,6 +388,7 @@ function resetFilters() {
     if (document.getElementById('storeSearchMobile')) document.getElementById('storeSearchMobile').value = '';
     document.getElementById('filterBrand').value = '';
     if (document.getElementById('filterLocation')) document.getElementById('filterLocation').value = '';
+    if (document.getElementById('filterStatus')) document.getElementById('filterStatus').value = 'available';
     filterProducts();
 }
 
