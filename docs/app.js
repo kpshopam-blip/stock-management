@@ -1687,16 +1687,9 @@ async function editProduct(id) {
     const newBrandDropdown = document.getElementById('p_brand');
     if (newBrandDropdown) newBrandDropdown.value = p.brand;
 
-    // ตรวจหาและแยกโมเดลรหัสภูมิภาคต่อท้าย จากฐานข้อมูลโดยตรง หรือสำรองด้วย Regex
-    let modelOnly = p.model || '';
+    // โหลดค่ารุ่นและรหัสโมเดลจากฐานข้อมูลตรงๆ (ไม่มีการแยกอัตโนมัติด้วย Regex เพื่อป้องกันชื่อรุ่นที่มีคำลงท้าย เช่น Max, Plus ผิดเพี้ยน)
+    let modelOnly = p.rawModel || p.model || '';
     let modelCode = p.modelCode || '';
-    if (!modelCode) {
-        const modelMatch = (p.model || '').match(/(.*)\s+([A-Z0-9\/]{2,10})$/i);
-        if (modelMatch) {
-            modelOnly = modelMatch[1].trim();
-            modelCode = modelMatch[2].trim();
-        }
-    }
     document.getElementById('p_model').value = modelOnly;
     const codeInput = document.getElementById('p_model_code');
     if (codeInput) codeInput.value = modelCode;
