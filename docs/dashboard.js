@@ -387,6 +387,11 @@ function renderStockTableReport() {
         return; // กรองออกตามแหล่งที่มาหลัก
       }
 
+      // ตรวจสอบว่ามีสินค้านี้อยู่ใน allProducts หรือไม่
+      // หากมีอยู่แล้ว แสดงว่าถูกคำนวณไปแล้วในรอบ 3.1 เพื่อป้องกันการนับเบิ้ล
+      const existsInInventory = allProducts.some(x => x.id === s.productId);
+      if (existsInInventory) return;
+
       const cleanModel = getCleanModelName(s.model);
       const storage = normalizeStorage(extractStorageFromSpec(s.spec || '') || s.storage || '');
       const key = `${(s.brand || '').trim().toLowerCase()}|${cleanModel.toLowerCase()}|${storage.toLowerCase()}`;
