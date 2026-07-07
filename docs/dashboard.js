@@ -553,9 +553,10 @@ function renderSourceDetails() {
   const matchesModelFilter = (p) => {
     if (!activeModelFilter) return true;
     const cleanModel = p.rawModel || getCleanModelName(p.model);
+    const pStorage = normalizeStorage(p.storage || '');
     return p.brand.toLowerCase() === activeModelFilter.brand.toLowerCase() 
       && cleanModel.toLowerCase() === activeModelFilter.model.toLowerCase() 
-      && (p.storage || '').toLowerCase() === activeModelFilter.storage.toLowerCase();
+      && pStorage.toLowerCase() === activeModelFilter.storage.toLowerCase();
   };
 
   // 4.1 คำนวณยอดสรุป — กรองตาม source + cross-filter
@@ -752,10 +753,11 @@ function renderWholesaleReport() {
   };
   const matchesSaleModelFilter = (s) => {
     if (!activeModelFilter) return true;
-    const cleanModel = s.modelCode ? s.model : getCleanModelName(s.model);
+    const cleanModel = getCleanModelName(s.model);
+    const sStorage = normalizeStorage(extractStorageFromSpec(s.spec || '') || s.storage || '');
     return s.brand.toLowerCase() === activeModelFilter.brand.toLowerCase() 
       && cleanModel.toLowerCase() === activeModelFilter.model.toLowerCase() 
-      && extractStorageFromSpec(s.spec || '').toLowerCase() === activeModelFilter.storage.toLowerCase();
+      && sStorage.toLowerCase() === activeModelFilter.storage.toLowerCase();
   };
 
   // เมื่อ cross-filter เปิดอยู่ → แสดงทุกประเภทขาย / ไม่มี cross-filter → เฉพาะขายส่ง/เชื่อ
