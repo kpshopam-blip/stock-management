@@ -159,6 +159,21 @@
             <option value="">ทุกแหล่งที่มา</option>
           </select>
         </div>
+        
+        <!-- ตัวกรองช่วงวันที่ (Date Range Filter) -->
+        <div
+          class="flex items-center gap-1.5 bg-gray-100 dark:bg-darkbg-700 border border-gray-200 dark:border-darkbg-600 rounded-xl px-3 py-1.5 text-xs">
+          <span class="text-gray-500 dark:text-gray-400 font-bold"><i
+              class="fa-solid fa-calendar-days text-indigo-500 mr-1"></i> วันที่ขาย:</span>
+          <input type="date" id="filter_start_date" onchange="renderAllFilteredReports()"
+            class="bg-transparent text-gray-800 dark:text-white outline-none border-none cursor-pointer font-semibold">
+          <span class="text-gray-400 font-medium">ถึง</span>
+          <input type="date" id="filter_end_date" onchange="renderAllFilteredReports()"
+            class="bg-transparent text-gray-800 dark:text-white outline-none border-none cursor-pointer font-semibold">
+          <button onclick="clearDateFilter()" class="text-red-500 hover:text-red-700 font-bold ml-1" title="ล้างวันที่">
+            <i class="fa-solid fa-circle-xmark text-sm"></i>
+          </button>
+        </div>
 
         <!-- ปุ่มสลับ Dark/Light Theme -->
         <button onclick="toggleTheme()"
@@ -345,7 +360,7 @@
           <div id="source_model_filter_badge" class="px-4"></div>
 
           <!-- สรุปตัวเลขแหล่งที่มา -->
-          <div id="source_stat_grid" class="grid grid-cols-3 gap-2 mb-3">
+          <div id="source_stat_grid" class="flex flex-col gap-2 mb-3">
             <!-- ข้อมูลสรุปแหล่งที่มา -->
           </div>
 

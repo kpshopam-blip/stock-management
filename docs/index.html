@@ -175,6 +175,7 @@
           </div>
           <div class="flex-1 max-w-lg mx-4 hidden md:flex relative text-gray-800">
             <input type="text" id="storeSearchDesktop" placeholder="ค้นหารุ่น, ยี่ห้อ, ความจุ, สี, หรือ IMEI..."
+              onkeydown="if(event.key === 'Enter') searchProducts('storeSearchDesktop')"
               class="w-full py-2 pl-4 pr-24 rounded-sm focus:outline-none border-none shadow-inner text-sm">
             <button type="button" onclick="startScanner(null, 'storeSearchDesktop')"
               class="absolute top-0 right-12 h-full w-10 text-brand-600 hover:text-brand-800 transition flex justify-center items-center" title="สแกนบาร์โค้ด / IMEI">
@@ -215,6 +216,7 @@
       <div class="md:hidden px-4 pb-3 flex text-gray-800 gap-1">
         <div class="relative flex-grow flex text-gray-800">
           <input type="text" id="storeSearchMobile" placeholder="ค้นหาสินค้า, IMEI..."
+            onkeydown="if(event.key === 'Enter') searchProducts('storeSearchMobile')"
             class="w-full py-2 pl-3 pr-10 rounded-l-sm focus:outline-none text-sm shadow-inner">
           <button type="button" onclick="startScanner(null, 'storeSearchMobile')"
             class="absolute top-0 right-0 h-full w-10 text-brand-600 hover:text-brand-800 transition flex justify-center items-center" title="สแกนบาร์โค้ด / IMEI">
@@ -500,6 +502,13 @@
           <h3 class="font-bold text-gray-800 shrink-0"><i class="fa-solid fa-list"></i> รายการสินค้าสต็อก</h3>
           <div class="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
             <button onclick="openTransferHistoryModal()" class="text-xs bg-white text-indigo-700 font-bold border border-indigo-200 px-3 py-1.5 rounded hover:bg-indigo-50 shrink-0 w-full sm:w-auto flex items-center gap-1 justify-center transition shadow-sm"><i class="fa-solid fa-clock-rotate-left"></i> ประวัติการโอน</button>
+            <select id="inventoryStatusFilter" onchange="filterInventory()"
+              class="text-xs bg-white border border-gray-300 rounded px-2.5 py-1.5 focus:ring-brand-500 outline-none text-gray-700 font-semibold cursor-pointer transition shadow-sm">
+              <option value="available" selected>🟢 พร้อมขาย</option>
+              <option value="unavailable_others">🔴 ไม่พร้อมขาย (ส่งซ่อม/จอง)</option>
+              <option value="sold">⚫ ขายแล้ว</option>
+              <option value="all">แสดงทั้งหมด</option>
+            </select>
             <div class="relative w-full sm:w-64">
               <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400"><i
                   class="fa-solid fa-search"></i></span>

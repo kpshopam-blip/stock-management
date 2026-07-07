@@ -141,6 +141,7 @@ function loadStore() {
     renderPage('tpl-store');
     currentStockTab = 'Products';
     document.getElementById('storeUserName').innerText = currentUser.name;
+    loadCartFromLocalStorage();
 
     if (currentUser.role === 'Manager' || currentUser.role === 'ผู้จัดการ') {
         document.getElementById('btnOpenInventory').classList.remove('hidden');
@@ -196,6 +197,7 @@ async function fetchProducts() {
     try {
         const products = await API_getProducts();
         allProducts = products;
+        syncCartWithProducts();
 
         // Populate Location Filter dynamically
         const filterLocation = document.getElementById('filterLocation');
@@ -596,11 +598,38 @@ function toggleCostVisibility() {
 // ====== Inventory ======
 function filterInventory() {
     const text = document.getElementById('inventorySearch').value.toLowerCase();
+    const statusFilter = document.getElementById('inventoryStatusFilter') ? document.getElementById('inventoryStatusFilter').value : 'all';
+    
     document.querySelectorAll('.inv-row').forEach(row => {
-        row.style.display = (row.getAttribute('data-search') || row.innerText.toLowerCase()).indexOf(text) > -1 ? '' : 'none';
+        const matchesSearch = (row.getAttribute('data-search') || row.innerText.toLowerCase()).indexOf(text) > -1;
+        const status = row.getAttribute('data-status') || '';
+        
+        let matchesStatus = true;
+        if (statusFilter === 'available') {
+            matchesStatus = (status === 'available');
+        } else if (statusFilter === 'unavailable_others') {
+            matchesStatus = (status === 'unavailable' || status === 'repair' || status === 'reserved');
+        } else if (statusFilter === 'sold') {
+            matchesStatus = (status === 'sold');
+        }
+        
+        row.style.display = (matchesSearch && matchesStatus) ? '' : 'none';
     });
+    
     document.querySelectorAll('.inv-card').forEach(card => {
-        card.style.display = (card.getAttribute('data-search') || card.innerText.toLowerCase()).indexOf(text) > -1 ? '' : 'none';
+        const matchesSearch = (card.getAttribute('data-search') || card.innerText.toLowerCase()).indexOf(text) > -1;
+        const status = card.getAttribute('data-status') || '';
+        
+        let matchesStatus = true;
+        if (statusFilter === 'available') {
+            matchesStatus = (status === 'available');
+        } else if (statusFilter === 'unavailable_others') {
+            matchesStatus = (status === 'unavailable' || status === 'repair' || status === 'reserved');
+        } else if (statusFilter === 'sold') {
+            matchesStatus = (status === 'sold');
+        }
+        
+        card.style.display = (matchesSearch && matchesStatus) ? '' : 'none';
     });
 }
 
@@ -623,6 +652,7 @@ async function fetchInventoryData() {
         const products = await API_getProducts();
         allProducts = products;
         renderInventoryTable(products);
+        filterInventory();
     } catch (err) {
         if (tbody) tbody.innerHTML = `<tr><td colspan="10" class="px-4 py-8 text-center text-red-500">โหลดข้อมูลล้มเหลว</td></tr>`;
         if (cardList) cardList.innerHTML = `<div class="text-center text-red-500 py-8">โหลดข้อมูลล้มเหลว</div>`;
@@ -641,7 +671,16 @@ function renderInventoryTable(products) {
         return;
     }
 
-    products.forEach(p => {
+    // เรียงสินค้าพร้อมขาย (Available) ขึ้นก่อน
+    const sortedProducts = [...products].sort((a, b) => {
+        const stA = (a.status || 'Available').toLowerCase();
+        const stB = (b.status || 'Available').toLowerCase();
+        if (stA === 'available' && stB !== 'available') return -1;
+        if (stA !== 'available' && stB === 'available') return 1;
+        return 0;
+    });
+
+    sortedProducts.forEach(p => {
         const st = (p.status || 'Available').toLowerCase();
         let statusClass = 'bg-green-100 text-green-800', statusText = 'พร้อมขาย';
         if (st === 'reserved') { statusClass = 'bg-yellow-100 text-yellow-800'; statusText = 'ติดจอง'; }
@@ -671,6 +710,7 @@ function renderInventoryTable(products) {
             const tr = document.createElement('tr');
             tr.className = 'hover:bg-gray-50 transition border-b inv-row';
             tr.setAttribute('data-search', `${p.model} ${p.brand} ${p.id} ${p.imei || ''} ${p.color || ''}`.toLowerCase());
+            tr.setAttribute('data-status', st);
             tr.innerHTML = `
         <td class="px-4 py-3 align-middle text-center w-10">${checkboxHtml}</td>
         <td class="px-4 py-3"><div class="font-medium text-gray-800 flex items-center">${p.model} ${noImageBadge}</div><div class="text-xs text-gray-500">${p.brand} | ${p.id}</div></td>
@@ -697,6 +737,7 @@ function renderInventoryTable(products) {
             const card = document.createElement('div');
             card.className = 'bg-white border rounded-lg p-3 shadow-sm inv-card relative';
             card.setAttribute('data-search', `${p.model} ${p.brand} ${p.id} ${p.imei || ''} ${p.color || ''}`.toLowerCase());
+            card.setAttribute('data-status', st);
             card.innerHTML = `
         <div class="flex justify-between items-start mb-2">
           <div class="flex items-start gap-2">
@@ -738,7 +779,7 @@ async function onStatusChange(productId, newStatus) {
     }
     const statusNames = { Available: 'พร้อมขาย', Reserved: 'ติดจอง', Repair: 'ส่งซ่อม/เคลม', Sold: 'ขายแล้ว' };
     const statusName = statusNames[newStatus] || newStatus;
-    if (!confirm('ต้องการเปลี่ยนสถานะเป็น "' + statusName + '" ใช่หรือไม่?')) { fetchInventoryData(); return; }
+    if (!await showCustomConfirm('ต้องการเปลี่ยนสถานะเป็น "' + statusName + '" ใช่หรือไม่?', 'ยืนยันเปลี่ยนสถานะ')) { fetchInventoryData(); return; }
     showLoading(true);
     try {
         const res = await API_changeStatus(productId, newStatus);
@@ -757,7 +798,7 @@ async function deleteProduct(productId) {
     if (!currentUser || (currentUser.role !== 'Manager' && currentUser.role !== 'ผู้จัดการ')) { showToast('เฉพาะผู้จัดการเท่านั้นที่สามารถลบสินค้าได้', 'warning'); return; }
     const p = allProducts.find(x => x.id === productId);
     const pName = p ? (p.brand + ' ' + p.model) : productId;
-    if (!confirm('⚠️ ต้องการลบ "' + pName + '" ออกจากสต็อกใช่หรือไม่?\n\nการลบจะไม่สามารถย้อนกลับได้!')) return;
+    if (!await showCustomConfirm('⚠️ ต้องการลบ "' + pName + '" ออกจากสต็อกใช่หรือไม่?\n\nการลบจะไม่สามารถย้อนกลับได้!', 'ยืนยันการลบสินค้า')) return;
     showLoading(true);
     try {
         const res = await API_deleteProduct(productId);
@@ -832,7 +873,7 @@ async function confirmBulkTransfer() {
     const productIds = Array.from(checkboxes).map(cb => cb.value);
     
     // ยืนยัน
-    if (!confirm(`ยืนยันการโอนสินค้าจำนวน ${productIds.length} รายการ ไปยังสาขา "${targetLocation}" หรือไม่?`)) return;
+    if (!await showCustomConfirm(`ยืนยันการโอนสินค้าจำนวน ${productIds.length} รายการ ไปยังสาขา "${targetLocation}" หรือไม่?`, 'ยืนยันการโอนข้ามสาขา')) return;
 
     closeTransferSetupModal();
     showLoading(true);
@@ -1006,7 +1047,7 @@ async function loadDashboard() {
 
 // ฟังก์ชันบังคับซิงค์ข้อมูลจาก Sheets ไป Firebase
 async function forceSyncFirebase() {
-    if (!confirm('คุณต้องการซิงค์ข้อมูลสินค้าจาก Google Sheets ไปยัง Firebase ทั้งหมดใหม่หรือไม่?\n(ระบบจะอ่านข้อมูลล่าสุดจากชีตเพื่ออัปเดต Firebase ให้ตรงกัน)')) {
+    if (!await showCustomConfirm('คุณต้องการซิงค์ข้อมูลสินค้าจาก Google Sheets ไปยัง Firebase ทั้งหมดใหม่หรือไม่?\n(ระบบจะอ่านข้อมูลล่าสุดจากชีตเพื่ออัปเดต Firebase ให้ตรงกัน)', 'ซิงค์สต็อกกับระบบคลาวด์')) {
         return;
     }
     
@@ -1949,13 +1990,13 @@ async function confirmSell() {
             salePrices[pId] = price;
             totalBulkPrice += price;
         }
-        if (!confirm('ยืนยันการขายสินค้าทั้งหมด ' + checkoutProductIds.length + ' เครื่อง รวมเป็นเงิน ฿' + formatNumber(totalBulkPrice) + ' ใช่หรือไม่?')) return;
+        if (!await showCustomConfirm('ยืนยันการขายสินค้าทั้งหมด ' + checkoutProductIds.length + ' เครื่อง รวมเป็นเงิน ฿' + formatNumber(totalBulkPrice) + ' ใช่หรือไม่?', 'ยืนยันการขาย (เหมา)')) return;
     } else {
         const soldPrice = parseFloat(document.getElementById('sell_price').value) || 0;
         if (!soldPrice) { showToast('กรุณากรอกราคาขายจริง', 'warning'); return; }
         const productId = checkoutProductIds[0];
         salePrices[productId] = soldPrice;
-        if (!confirm('ยืนยันการขายสินค้าในราคา ฿' + formatNumber(soldPrice) + ' ใช่หรือไม่?')) return;
+        if (!await showCustomConfirm('ยืนยันการขายสินค้าในราคา ฿' + formatNumber(soldPrice) + ' ใช่หรือไม่?', 'ยืนยันการขาย')) return;
     }
 
     // กำหนดประเภทการขายที่ถูกบันทึกลงฐานข้อมูล โดยส่งวงเล็บประเภทชำระเงินไปด้วยสำหรับพาร์ทเนอร์
@@ -1983,6 +2024,7 @@ async function confirmSell() {
             showLoading(false);
             if (res.success) {
                 cart = [];
+                saveCartToLocalStorage();
                 renderCart();
                 closeSellModal();
                 showReceipt(res.receipt); // แสดงใบเสร็จดิจิตอลทันที (มีรายการครบทุกชิ้น)
@@ -2006,6 +2048,7 @@ async function confirmSell() {
             showLoading(false);
             if (res.success) {
                 cart = cart.filter(id => id !== productId);
+                saveCartToLocalStorage();
                 renderCart();
                 closeSellModal();
                 showReceipt(res.receipt);
@@ -2226,6 +2269,48 @@ function onBarcodeDetected(result) {
     }
 }
 
+// ====== ระบบบันทึกตะกร้าสินค้าข้ามเซสชัน (Cart Persistence) ======
+function saveCartToLocalStorage() {
+    if (currentUser && currentUser.name) {
+        localStorage.setItem(`cart_${currentUser.name}`, JSON.stringify(cart));
+        localStorage.setItem(`cartPrices_${currentUser.name}`, JSON.stringify(cartPrices));
+    }
+}
+
+function loadCartFromLocalStorage() {
+    if (currentUser && currentUser.name) {
+        try {
+            const savedCart = localStorage.getItem(`cart_${currentUser.name}`);
+            const savedPrices = localStorage.getItem(`cartPrices_${currentUser.name}`);
+            cart = savedCart ? JSON.parse(savedCart) : [];
+            cartPrices = savedPrices ? JSON.parse(savedPrices) : {};
+        } catch (e) {
+            console.error('Error loading cart from localStorage:', e);
+            cart = [];
+            cartPrices = {};
+        }
+    }
+}
+
+function syncCartWithProducts() {
+    if (!currentUser || !allProducts || allProducts.length === 0) return;
+    const now = Date.now();
+    cart = cart.filter(id => {
+        const p = allProducts.find(prod => prod.id === id);
+        if (!p) return false;
+        const statusLower = (p.status || 'Available').toLowerCase();
+        // ตรวจสอบว่ายังพร้อมขายอยู่ และผู้จองเป็นเราและเวลาจองยังไม่หมดอายุ
+        const isLockedByMe = statusLower === 'available' && p.lockedBy && p.lockedBy === currentUser.name && p.lockExpires > now;
+        return isLockedByMe;
+    });
+    for (const id in cartPrices) {
+        if (!cart.includes(id)) {
+            delete cartPrices[id];
+        }
+    }
+    saveCartToLocalStorage();
+}
+
 // ====================================================================
 // ฟังก์ชันจัดการตะกร้าสินค้าและระบบล็อกชั่วคราว (Cart & Booking Logic)
 // ====================================================================
@@ -2258,6 +2343,7 @@ async function addToCart(productId) {
         if (res.success) {
             cart.push(productId);
             cartPrices[productId] = 'retail'; // ค่าเริ่มต้นเป็นราคาปลีก
+            saveCartToLocalStorage();
             showToast('เพิ่มสินค้าเข้าตะกร้าและจองชั่วคราวแล้ว (10 นาที)', 'success');
             
             const prod = allProducts.find(p => p.id === productId);
@@ -2287,6 +2373,7 @@ async function removeFromCart(productId) {
         if (res.success) {
             cart = cart.filter(id => id !== productId);
             delete cartPrices[productId]; // ลบการตั้งค่าราคา
+            saveCartToLocalStorage();
             showToast('ลบสินค้าออกจากตะกร้าแล้ว', 'info');
             
             const prod = allProducts.find(p => p.id === productId);
@@ -2308,7 +2395,7 @@ async function removeFromCart(productId) {
 
 async function clearCart() {
     if (cart.length === 0) return;
-    if (!confirm('ยืนยันล้างตะกร้าสินค้าทั้งหมด? (สินค้าทั้งหมดจะกลับมาพร้อมขายทันที)')) return;
+    if (!await showCustomConfirm('ยืนยันล้างตะกร้าสินค้าทั้งหมด? (สินค้าทั้งหมดจะกลับมาพร้อมขายทันที)', 'ล้างตะกร้าสินค้า')) return;
     
     const itemsToUnlock = [...cart];
     
@@ -2332,6 +2419,7 @@ async function clearCart() {
         // ล้างตะกร้าฝั่ง Client
         cart = [];
         cartPrices = {}; // รีเซ็ตประเภทราคา
+        saveCartToLocalStorage();
         itemsToUnlock.forEach(id => {
             const prod = allProducts.find(p => p.id === id);
             if (prod) {
@@ -2470,6 +2558,7 @@ function renderCart() {
 
 function updateCartItemPriceType(productId, type) {
     cartPrices[productId] = type;
+    saveCartToLocalStorage();
     renderCart();
 }
 
@@ -2569,4 +2658,174 @@ function formatDateToDMY(dateStr) {
     const parts = dateStr.split('-');
     if (parts.length < 3) return dateStr;
     return `${parts[2]}/${parts[1]}/${parts[0]}`;
+}
+
+// ====== ระบบแจ้งเตือนและกล่องยืนยันแบบทันสมัย (Modern Custom Dialogs) ======
+function showCustomAlert(message, title = 'แจ้งเตือน') {
+  return new Promise((resolve) => {
+    const oldModal = document.getElementById('custom-alert-modal');
+    if (oldModal) oldModal.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'custom-alert-modal';
+    modal.className = 'fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm transition-all duration-300';
+    modal.innerHTML = `
+      <div class="bg-white dark:bg-darkbg-850 rounded-2xl shadow-2xl border border-gray-150 dark:border-darkbg-700 w-full max-w-sm overflow-hidden transform scale-95 opacity-0 transition-all duration-300 flex flex-col">
+        <div class="px-5 py-4 border-b border-gray-100 dark:border-darkbg-700 bg-gray-50 dark:bg-darkbg-900/30 flex items-center justify-between">
+          <h3 class="text-sm font-extrabold text-gray-900 dark:text-white flex items-center gap-2">
+            <i class="fa-solid fa-circle-info text-brand-500 text-base"></i> ${title}
+          </h3>
+        </div>
+        <div class="px-6 py-6 text-xs text-gray-600 dark:text-gray-300 whitespace-pre-line leading-relaxed">
+          ${message}
+        </div>
+        <div class="px-5 py-3.5 border-t border-gray-100 dark:border-darkbg-700 bg-gray-50 dark:bg-darkbg-900/30 flex justify-end">
+          <button id="custom-alert-ok" class="px-5 py-2 bg-brand-500 hover:bg-brand-600 text-white rounded-xl font-bold text-xs shadow-md shadow-brand-500/10 active:scale-95 transition-all">
+            ตกลง
+          </button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    setTimeout(() => {
+      const box = modal.querySelector('div');
+      box.classList.remove('scale-95', 'opacity-0');
+      box.classList.add('scale-100', 'opacity-100');
+    }, 10);
+
+    const close = () => {
+      const box = modal.querySelector('div');
+      box.classList.remove('scale-100', 'opacity-100');
+      box.classList.add('scale-95', 'opacity-0');
+      setTimeout(() => {
+        modal.remove();
+        resolve();
+      }, 200);
+    };
+
+    modal.querySelector('#custom-alert-ok').addEventListener('click', close);
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) close();
+    });
+  });
+}
+
+function showCustomConfirm(message, title = 'ยืนยันการทำรายการ') {
+  return new Promise((resolve) => {
+    const oldModal = document.getElementById('custom-confirm-modal');
+    if (oldModal) oldModal.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'custom-confirm-modal';
+    modal.className = 'fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm transition-all duration-300';
+    modal.innerHTML = `
+      <div class="bg-white dark:bg-darkbg-850 rounded-2xl shadow-2xl border border-gray-150 dark:border-darkbg-700 w-full max-w-sm overflow-hidden transform scale-95 opacity-0 transition-all duration-300 flex flex-col">
+        <div class="px-5 py-4 border-b border-gray-100 dark:border-darkbg-700 bg-gray-50 dark:bg-darkbg-900/30 flex items-center justify-between">
+          <h3 class="text-sm font-extrabold text-gray-900 dark:text-white flex items-center gap-2">
+            <i class="fa-solid fa-circle-question text-brand-500 text-base"></i> ${title}
+          </h3>
+        </div>
+        <div class="px-6 py-6 text-xs text-gray-600 dark:text-gray-300 whitespace-pre-line leading-relaxed">
+          ${message}
+        </div>
+        <div class="px-5 py-3.5 border-t border-gray-100 dark:border-darkbg-700 bg-gray-50 dark:bg-darkbg-900/30 flex justify-end gap-2">
+          <button id="custom-confirm-cancel" class="px-4 py-2 border border-gray-250 dark:border-darkbg-600 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-darkbg-700 rounded-xl font-bold text-xs transition-all">
+            ยกเลิก
+          </button>
+          <button id="custom-confirm-ok" class="px-5 py-2 bg-brand-500 hover:bg-brand-600 text-white rounded-xl font-bold text-xs shadow-md shadow-brand-500/10 active:scale-95 transition-all">
+            ยืนยัน
+          </button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    setTimeout(() => {
+      const box = modal.querySelector('div');
+      box.classList.remove('scale-95', 'opacity-0');
+      box.classList.add('scale-100', 'opacity-100');
+    }, 10);
+
+    const close = (result) => {
+      const box = modal.querySelector('div');
+      box.classList.remove('scale-100', 'opacity-100');
+      box.classList.add('scale-95', 'opacity-0');
+      setTimeout(() => {
+        modal.remove();
+        resolve(result);
+      }, 200);
+    };
+
+    modal.querySelector('#custom-confirm-ok').addEventListener('click', () => close(true));
+    modal.querySelector('#custom-confirm-cancel').addEventListener('click', () => close(false));
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) close(false);
+    });
+  });
+}
+
+function showCustomPrompt(message, defaultValue = '', title = 'กรอกข้อมูล') {
+  return new Promise((resolve) => {
+    const oldModal = document.getElementById('custom-prompt-modal');
+    if (oldModal) oldModal.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'custom-prompt-modal';
+    modal.className = 'fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm transition-all duration-300';
+    modal.innerHTML = `
+      <div class="bg-white dark:bg-darkbg-850 rounded-2xl shadow-2xl border border-gray-150 dark:border-darkbg-700 w-full max-w-sm overflow-hidden transform scale-95 opacity-0 transition-all duration-300 flex flex-col">
+        <div class="px-5 py-4 border-b border-gray-100 dark:border-darkbg-700 bg-gray-50 dark:bg-darkbg-900/30 flex items-center justify-between">
+          <h3 class="text-sm font-extrabold text-gray-900 dark:text-white flex items-center gap-2">
+            <i class="fa-solid fa-pen-to-square text-brand-500 text-base"></i> ${title}
+          </h3>
+        </div>
+        <div class="px-6 py-4 flex flex-col gap-3">
+          <label class="text-xs text-gray-500 dark:text-gray-400 font-medium">${message}</label>
+          <input type="text" id="custom-prompt-input" value="${defaultValue}" class="w-full px-3.5 py-2 bg-gray-50 dark:bg-darkbg-900 border border-gray-200 dark:border-darkbg-600 rounded-xl text-xs outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition text-gray-800 dark:text-white font-medium" />
+        </div>
+        <div class="px-5 py-3.5 border-t border-gray-100 dark:border-darkbg-700 bg-gray-50 dark:bg-darkbg-900/30 flex justify-end gap-2">
+          <button id="custom-prompt-cancel" class="px-4 py-2 border border-gray-250 dark:border-darkbg-600 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-darkbg-700 rounded-xl font-bold text-xs transition-all">
+            ยกเลิก
+          </button>
+          <button id="custom-prompt-ok" class="px-5 py-2 bg-brand-500 hover:bg-brand-600 text-white rounded-xl font-bold text-xs shadow-md shadow-brand-500/10 active:scale-95 transition-all">
+            ตกลง
+          </button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    const input = modal.querySelector('#custom-prompt-input');
+    setTimeout(() => {
+      const box = modal.querySelector('div');
+      box.classList.remove('scale-95', 'opacity-0');
+      box.classList.add('scale-100', 'opacity-100');
+      input.focus();
+      input.select();
+    }, 10);
+
+    const close = (result) => {
+      const box = modal.querySelector('div');
+      box.classList.remove('scale-100', 'opacity-100');
+      box.classList.add('scale-95', 'opacity-0');
+      setTimeout(() => {
+        modal.remove();
+        resolve(result);
+      }, 200);
+    };
+
+    modal.querySelector('#custom-prompt-ok').addEventListener('click', () => close(input.value));
+    modal.querySelector('#custom-prompt-cancel').addEventListener('click', () => close(null));
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') close(input.value);
+      if (e.key === 'Escape') close(null);
+    });
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) close(null);
+    });
+  });
 }

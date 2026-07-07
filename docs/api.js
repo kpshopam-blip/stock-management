@@ -370,8 +370,8 @@ async function API_sellBulkProducts(bulkSaleData) {
 }
 
 // อัปเดตสถานะชำระเงินของบิลเงินเชื่อ
-async function API_updatePaymentStatus(saleId, paymentStatus) {
-    const res = await apiPost('updatePaymentStatus', { saleId, paymentStatus });
+async function API_updatePaymentStatus(saleId, paymentStatus, paymentSlipDataURI = null) {
+    const res = await apiPost('updatePaymentStatus', { saleId, paymentStatus, paymentSlipDataURI });
     if (!res.success) throw new Error(res.message || 'updatePaymentStatus failed');
     return res;
 }

@@ -27,7 +27,7 @@ window.onload = async function () {
   currentUser = session.user;
   const isManager = currentUser.role === 'Manager' || currentUser.role === 'ผู้จัดการ';
   if (!isManager) {
-    alert('สิทธิ์ในการเข้าถึงแดชบอร์ดเฉพาะผู้จัดการเท่านั้น');
+    await showCustomAlert('สิทธิ์ในการเข้าถึงแดชบอร์ดเฉพาะผู้จัดการเท่านั้น', 'ปฏิเสธการเข้าถึง');
     window.location.href = 'index.html';
     return;
   }
@@ -67,6 +67,83 @@ function toggleTheme() {
   }
 }
 
+// ====== ฟังก์ชันจัดการการกรองวันที่ ======
+function parseSaleDate(dateStr) {
+  if (!dateStr) return null;
+  const clean = dateStr.replace(/,/g, '').split(' ')[0];
+  const parts = clean.split('/');
+  if (parts.length === 3) {
+    return new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+  }
+  return null;
+}
+
+function parseDateAdded(dateStr) {
+  if (!dateStr) return null;
+  const clean = dateStr.replace(/,/g, '').split(' ')[0];
+  const parts = clean.split('/');
+  if (parts.length === 3) {
+    return new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+  }
+  return null;
+}
+
+function isSaleInDateRange(sale) {
+  const startDateStr = document.getElementById('filter_start_date') ? document.getElementById('filter_start_date').value : '';
+  const endDateStr = document.getElementById('filter_end_date') ? document.getElementById('filter_end_date').value : '';
+  
+  if (!startDateStr && !endDateStr) return true;
+  
+  const saleDateObj = parseSaleDate(sale.saleDate);
+  if (!saleDateObj) return false;
+  
+  if (startDateStr) {
+    const startDate = new Date(startDateStr);
+    startDate.setHours(0, 0, 0, 0);
+    if (saleDateObj < startDate) return false;
+  }
+  
+  if (endDateStr) {
+    const endDate = new Date(endDateStr);
+    endDate.setHours(23, 59, 59, 999);
+    if (saleDateObj > endDate) return false;
+  }
+  
+  return true;
+}
+
+function isProductAddedInDateRange(p) {
+  const startDateStr = document.getElementById('filter_start_date') ? document.getElementById('filter_start_date').value : '';
+  const endDateStr = document.getElementById('filter_end_date') ? document.getElementById('filter_end_date').value : '';
+  
+  if (!startDateStr && !endDateStr) return true;
+  
+  const addedDate = parseDateAdded(p.dateAdded);
+  if (!addedDate) return false;
+  
+  if (startDateStr) {
+    const startDate = new Date(startDateStr);
+    startDate.setHours(0, 0, 0, 0);
+    if (addedDate < startDate) return false;
+  }
+  
+  if (endDateStr) {
+    const endDate = new Date(endDateStr);
+    endDate.setHours(23, 59, 59, 999);
+    if (addedDate > endDate) return false;
+  }
+  
+  return true;
+}
+
+function clearDateFilter() {
+  const start = document.getElementById('filter_start_date');
+  const end = document.getElementById('filter_end_date');
+  if (start) start.value = '';
+  if (end) end.value = '';
+  renderAllFilteredReports();
+}
+
 // ====== ดึงข้อมูลจากหลังบ้านเพื่อเรนเดอร์แดชบอร์ด ======
 async function refreshDashboard() {
   showLoading(true);
@@ -87,7 +164,7 @@ async function refreshDashboard() {
   } catch (err) {
     showLoading(false);
     console.error('Refresh dashboard error:', err);
-    alert('เกิดข้อผิดพลาดในการดึงข้อมูลรายงานสต็อกและการขายส่ง: ' + err.message);
+    await showCustomAlert('เกิดข้อผิดพลาดในการดึงข้อมูลรายงานสต็อกและการขายส่ง: ' + err.message, 'เกิดข้อผิดพลาด');
   }
 }
 
@@ -140,6 +217,7 @@ function renderKpiCards() {
     if (selectedSource && pSource !== selectedSource) {
       return; // ข้ามถ้ารายการขายไม่ตรงกับแหล่งที่มาที่คัดเลือก
     }
+    if (!isSaleInDateRange(s)) return;
     totalSalesAmt += parseFloat(s.soldPrice || 0);
     totalProfitAmt += parseFloat(s.profit || 0);
     totalSalesCount++;
@@ -161,6 +239,7 @@ function renderKpiCards() {
       if (selectedSource && pSource !== selectedSource) {
         return; // ข้ามถ้าสินค้าในคลังไม่ตรงกับแหล่งที่มาที่คัดเลือก
       }
+      if (!isProductAddedInDateRange(p)) return;
       remainingCount++;
       remainingValue += parseFloat(p.cost || 0);
     }
@@ -180,6 +259,7 @@ function renderKpiCards() {
       if (selectedSource && pSource !== selectedSource) {
         return; // ข้ามถ้าบิลเงินเชื่อไม่ตรงกับแหล่งที่มาที่คัดเลือก
       }
+      if (!isSaleInDateRange(s)) return;
       unpaidCreditAmt += parseFloat(s.soldPrice || 0) - parseFloat(s.downPayment || 0);
       unpaidCreditCount++;
     }
@@ -480,6 +560,8 @@ function renderSourceDetails() {
 
   // 4.1 คำนวณยอดสรุป — กรองตาม source + cross-filter
   let totalDevices = 0, availableDevices = 0, totalCosts = 0;
+  let totalCostAll = 0, totalProfitAll = 0;
+  
   allProducts.forEach(p => {
     // กรองตามแหล่งที่มา
     if (selectedSource) {
@@ -490,26 +572,58 @@ function renderSourceDetails() {
     if (!matchesModelFilter(p)) return;
 
     const status = (p.status || '').toLowerCase();
+    
+    // กรองตามวันที่ (ถ้ามีตัวกรอง)
+    if (status !== 'sold') {
+      if (!isProductAddedInDateRange(p)) return;
+    } else {
+      const saleItem = salesSummary && salesSummary.salesList ? salesSummary.salesList.find(s => s.productId === p.id) : null;
+      if (saleItem && !isSaleInDateRange(saleItem)) return;
+    }
+
     totalDevices++;
+    totalCostAll += parseFloat(p.cost || 0);
+
     if (status !== 'sold' && status !== 'unavailable') {
       availableDevices++;
       totalCosts += parseFloat(p.cost || 0);
+    }
+    
+    if (status === 'sold' && salesSummary && salesSummary.salesList) {
+      const saleItem = salesSummary.salesList.find(s => s.productId === p.id);
+      if (saleItem) {
+        totalProfitAll += parseFloat(saleItem.profit || 0);
+      }
     }
   });
 
   const srcLabel = selectedSource || 'ทุกแหล่ง';
   statGrid.innerHTML = `
-    <div class="bg-gray-50 dark:bg-darkbg-800 rounded-xl border border-gray-200 dark:border-darkbg-700 p-2.5 text-center shadow-inner">
-      <div class="text-[9px] text-gray-400 font-bold uppercase mb-0.5">${selectedSource ? 'รับมาสะสม' : 'ทุกแหล่งรับมา'}</div>
-      <div class="text-sm font-extrabold text-gray-900 dark:text-white">${totalDevices} เครื่อง</div>
+    <!-- แถวแรก: รับมาสะสม, พร้อมขายจริง, ทุนคงคลัง -->
+    <div class="grid grid-cols-3 gap-2">
+      <div class="bg-gray-50 dark:bg-darkbg-800 rounded-xl border border-gray-200 dark:border-darkbg-700 p-2 text-center shadow-inner">
+        <div class="text-[9px] text-gray-400 font-bold uppercase mb-0.5">${selectedSource ? 'รับมาสะสม' : 'ทุกแหล่งรับมา'}</div>
+        <div class="text-xs font-extrabold text-gray-900 dark:text-white">${totalDevices} เครื่อง</div>
+      </div>
+      <div class="bg-brand-50/50 dark:bg-brand-500/10 rounded-xl border border-brand-100 dark:border-brand-500/20 p-2 text-center shadow-inner">
+        <div class="text-[9px] text-brand-600 dark:text-brand-400 font-bold uppercase mb-0.5">${selectedSource ? 'พร้อมขายจริง' : 'พร้อมขายรวม'}</div>
+        <div class="text-xs font-extrabold text-brand-600 dark:text-brand-400">${availableDevices} เครื่อง</div>
+      </div>
+      <div class="bg-indigo-50/50 dark:bg-indigo-500/10 rounded-xl border border-indigo-100 dark:border-indigo-500/20 p-2 text-center shadow-inner">
+        <div class="text-[9px] text-indigo-600 dark:text-indigo-400 font-bold uppercase mb-0.5">ทุนคงคลัง</div>
+        <div class="text-xs font-extrabold text-indigo-600 dark:text-indigo-400">฿${formatNumber(totalCosts)}</div>
+      </div>
     </div>
-    <div class="bg-brand-50/50 dark:bg-brand-500/10 rounded-xl border border-brand-100 dark:border-brand-500/20 p-2.5 text-center shadow-inner">
-      <div class="text-[9px] text-brand-600 dark:text-brand-400 font-bold uppercase mb-0.5">${selectedSource ? 'พร้อมขายจริง' : 'พร้อมขายรวม'}</div>
-      <div class="text-sm font-extrabold text-brand-600 dark:text-brand-400">${availableDevices} เครื่อง</div>
-    </div>
-    <div class="bg-indigo-50/50 dark:bg-indigo-500/10 rounded-xl border border-indigo-100 dark:border-indigo-500/20 p-2.5 text-center shadow-inner">
-      <div class="text-[9px] text-indigo-600 dark:text-indigo-400 font-bold uppercase mb-0.5">${selectedSource ? 'มูลค่าคงคลัง' : 'มูลค่ารวมคลัง'}</div>
-      <div class="text-xs font-extrabold text-indigo-600 dark:text-indigo-400 mt-0.5">฿${formatNumber(totalCosts)}</div>
+    <!-- แถวสอง: ทุนสะสมทั้งหมด, กำไรสะสมทั้งหมด -->
+    <div class="grid grid-cols-2 gap-2">
+      <div class="bg-amber-50/50 dark:bg-amber-500/10 rounded-xl border border-amber-100 dark:border-amber-500/20 p-2 text-center shadow-inner">
+        <div class="text-[9px] text-amber-600 dark:text-amber-400 font-bold uppercase mb-0.5">ทุนสะสมทั้งหมด</div>
+        <div class="text-xs font-extrabold text-amber-600 dark:text-amber-400">฿${formatNumber(totalCostAll)}</div>
+      </div>
+      <div class="bg-emerald-50/50 dark:bg-emerald-500/10 rounded-xl border border-emerald-100 dark:border-emerald-500/20 p-2 text-center shadow-inner">
+        <div class="text-[9px] text-emerald-600 dark:text-emerald-400 font-bold uppercase mb-0.5">กำไรสะสมทั้งหมด</div>
+        <div class="text-xs font-extrabold text-emerald-600 dark:text-emerald-400">฿${formatNumber(totalProfitAll)}</div>
+      </div>
     </div>`;
 
   // 4.2 กรองลงตารางแสดงรายการสินค้า
@@ -520,6 +634,19 @@ function renderSourceDetails() {
   // กรองตาม cross-filter
   if (activeModelFilter) {
     filtered = filtered.filter(p => matchesModelFilter(p));
+  }
+  // กรองตามช่วงวันที่
+  const hasDateFilter = document.getElementById('filter_start_date').value || document.getElementById('filter_end_date').value;
+  if (hasDateFilter) {
+    filtered = filtered.filter(p => {
+      const status = (p.status || '').toLowerCase();
+      if (status === 'sold') {
+        const saleItem = salesSummary && salesSummary.salesList ? salesSummary.salesList.find(s => s.productId === p.id) : null;
+        return saleItem && isSaleInDateRange(saleItem);
+      } else {
+        return isProductAddedInDateRange(p);
+      }
+    });
   }
 
   if (filtered.length === 0) {
@@ -651,6 +778,9 @@ function renderWholesaleReport() {
     list = list.filter(s => matchesSaleModelFilter(s));
   }
 
+  // กรองตามช่วงวันที่
+  list = list.filter(s => isSaleInDateRange(s));
+
   // กรองตามสถานะการชำระเงิน
   if (paymentFilter === 'unpaid') {
     list = list.filter(s => s.saleType && s.saleType.includes('พาร์ทเนอร์') && s.saleType.includes('เชื่อ') && s.paymentStatus !== 'จ่ายแล้ว');
@@ -690,6 +820,7 @@ function renderWholesaleReport() {
         paymentStatus: s.paymentStatus,
         dueDate: s.dueDate,
         receiptImage: s.receiptImage || '',
+        paymentSlip: s.paymentSlip || '',
         downPayment: parseFloat(s.downPayment || 0),
         items: [],
         totalPrice: 0,
@@ -708,6 +839,7 @@ function renderWholesaleReport() {
     }
     // อัปเดตรูปใบเสร็จ POS และพนักงานขายจากแถวล่าสุดที่มีข้อมูล
     if (s.receiptImage) billGroups[billId].receiptImage = s.receiptImage;
+    if (s.paymentSlip) billGroups[billId].paymentSlip = s.paymentSlip;
     if (s.salesperson) billGroups[billId].salesperson = s.salesperson;
   });
 
@@ -832,6 +964,10 @@ function renderWholesaleReport() {
       <button onclick="event.stopPropagation(); viewFullImage('${bill.receiptImage}')" class="text-[10px] bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 px-2.5 py-1 rounded font-bold transition flex items-center gap-1 shadow-sm hover:bg-amber-100">
         <i class="fa-solid fa-image"></i> ใบเสร็จ POS
       </button>` : ''}
+      ${bill.paymentSlip ? `
+      <button onclick="event.stopPropagation(); viewFullImage('${bill.paymentSlip}')" class="text-[10px] bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 px-2.5 py-1 rounded font-bold transition flex items-center gap-1 shadow-sm hover:bg-emerald-100">
+        <i class="fa-solid fa-receipt"></i> สลิปการโอน
+      </button>` : ''}
       <button onclick='event.stopPropagation(); openEditBillModal(${JSON.stringify(receiptObj).replace(/'/g, "&#39;")})' class="text-[10px] bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-400 px-2.5 py-1 rounded font-bold transition flex items-center gap-1 shadow-sm hover:bg-blue-100">
         <i class="fa-solid fa-pen"></i> แก้ไขบิล
       </button>
@@ -901,20 +1037,19 @@ function toggleBillAccordion(id) {
 
 // ====== 6. สั่งอัปเดตบิลเงินเชื่อเป็นจ่ายแล้ว ======
 async function markAsPaid(saleId) {
-  if (!confirm(`ยืนยันเปลี่ยนสถานะบิลรหัส "${saleId}" เป็น "จ่ายแล้ว" ใช่หรือไม่?\n(ระบบจะแก้ไขข้อมูลในชีตประวัติการขายทันที)`)) {
-    return;
-  }
+  const result = await openPaymentSlipUploadModal(saleId);
+  if (!result) return;
   
   showLoading(true);
   try {
-    const res = await API_updatePaymentStatus(saleId, 'จ่ายแล้ว');
+    const res = await API_updatePaymentStatus(saleId, 'จ่ายแล้ว', result.slipDataURI);
     showLoading(false);
-    alert(res.message || 'บันทึกสถานะการชำระเงินเรียบร้อยแล้ว!');
+    await showCustomAlert(res.message || 'บันทึกสถานะการชำระเงินเรียบร้อยแล้ว!', 'สำเร็จ');
     await refreshDashboard();
   } catch (err) {
     showLoading(false);
     console.error('Update payment status error:', err);
-    alert('อัปเดตสถานะชำระเงินไม่สำเร็จ: ' + err.message);
+    await showCustomAlert('อัปเดตสถานะชำระเงินไม่สำเร็จ: ' + err.message, 'เกิดข้อผิดพลาด');
   }
 }
 
@@ -932,8 +1067,8 @@ function renderCharts(d) {
   const labelColor = isDark ? '#9ca3af' : '#4b5563';
   const gridColor = isDark ? 'rgba(55, 65, 81, 0.3)' : 'rgba(229, 231, 235, 0.5)';
 
-  // คำนวณยอดสรุปตามวันแบบ Dynamic โดยใช้ข้อมูลประวัติการขายเพื่อกรองตามแหล่งที่มา
-  const dynamicDays = getDynamicLast7DaysData(selectedSource);
+  // คำนวณยอดสรุปตามวันแบบ Dynamic โดยใช้ข้อมูลประวัติการขายเพื่อกรองตามแหล่งที่มาและวันที่
+  const dynamicDays = getDynamicChartData(selectedSource);
 
   const labels = dynamicDays.map(day => day.label);
   const revenues = dynamicDays.map(day => day.revenue);
@@ -1000,20 +1135,65 @@ function renderCharts(d) {
   });
 }
 
-// ฟังก์ชันจำลองประมวลผลประวัติการขายย้อนหลัง 7 วันแบบกรองแหล่งที่มา
-function getDynamicLast7DaysData(selectedSource) {
-  const daysData = [];
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+// ฟังก์ชันจำลองประมวลผลประวัติการขายย้อนหลัง แบบกรองแหล่งที่มาและช่วงวันที่
+function getDynamicChartData(selectedSource) {
+  const startDateStr = document.getElementById('filter_start_date') ? document.getElementById('filter_start_date').value : '';
+  const endDateStr = document.getElementById('filter_end_date') ? document.getElementById('filter_end_date').value : '';
   
-  // สร้างอาเรย์ย้อนหลัง 7 วัน [ D-6, D-5, ..., D-0 ]
-  for (let i = 6; i >= 0; i--) {
-    const d = new Date();
-    d.setDate(today.getDate() - i);
-    const pad = (n) => n.toString().padStart(2, '0');
-    const dateKey = `${pad(d.getDate())}/${pad(d.getMonth() + 1)}`;
-    const fullDateStr = `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
-    daysData.push({ label: dateKey, fullDateStr: fullDateStr, revenue: 0, profit: 0 });
+  let daysData = [];
+  let isDaily = true;
+  
+  const parseInputDate = (str) => {
+    if (!str) return null;
+    const parts = str.split('-'); // yyyy-MM-dd
+    return new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+  };
+  
+  let start = parseInputDate(startDateStr);
+  let end = parseInputDate(endDateStr);
+  
+  if (!start || !end) {
+    // ไม่มีตัวกรอง หรือมีตัวกรองไม่ครบ -> ใช้ 7 วันล่าสุด
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(today.getDate() - i);
+      const pad = (n) => n.toString().padStart(2, '0');
+      const dateKey = `${pad(d.getDate())}/${pad(d.getMonth() + 1)}`;
+      const fullDateStr = `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
+      daysData.push({ label: dateKey, key: fullDateStr, revenue: 0, profit: 0 });
+    }
+  } else {
+    // คำนวณจำนวนวัน
+    const diffTime = Math.abs(end - start);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+    
+    if (diffDays <= 31) {
+      // น้อยกว่าหรือเท่ากับ 31 วัน -> แสดงรายวัน
+      isDaily = true;
+      for (let i = 0; i < diffDays; i++) {
+        const d = new Date(start.getTime());
+        d.setDate(start.getDate() + i);
+        const pad = (n) => n.toString().padStart(2, '0');
+        const dateKey = `${pad(d.getDate())}/${pad(d.getMonth() + 1)}`;
+        const fullDateStr = `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
+        daysData.push({ label: dateKey, key: fullDateStr, revenue: 0, profit: 0 });
+      }
+    } else {
+      // มากกว่า 31 วัน -> แสดงรายเดือน
+      isDaily = false;
+      let current = new Date(start.getFullYear(), start.getMonth(), 1);
+      const endMonth = new Date(end.getFullYear(), end.getMonth(), 1);
+      
+      while (current <= endMonth) {
+        const pad = (n) => n.toString().padStart(2, '0');
+        const label = `${pad(current.getMonth() + 1)}/${current.getFullYear() + 543}`; // พ.ศ.
+        const key = `${pad(current.getMonth() + 1)}/${current.getFullYear()}`; // MM/yyyy
+        daysData.push({ label: label, key: key, revenue: 0, profit: 0 });
+        current.setMonth(current.getMonth() + 1);
+      }
+    }
   }
   
   // ประมวลผลจากรายการขายที่มีอยู่ทั้งหมด
@@ -1025,12 +1205,29 @@ function getDynamicLast7DaysData(selectedSource) {
         if (pSource !== selectedSource) return;
       }
       
-      // ดึงส่วนวันที่จากฟอร์แมต "DD/MM/YYYY HH:MM" หรือ "DD/MM/YYYY"
-      const datePart = (s.saleDate || '').split(' ')[0];
-      const matchDay = daysData.find(day => day.fullDateStr === datePart);
-      if (matchDay) {
-        matchDay.revenue += parseFloat(s.soldPrice || 0);
-        matchDay.profit += parseFloat(s.profit || 0);
+      // กรองตามช่วงเวลาที่กำหนด
+      if (!isSaleInDateRange(s)) return;
+      
+      const datePart = (s.saleDate || '').split(' ')[0]; // DD/MM/YYYY
+      const parts = datePart.split('/');
+      if (parts.length === 3) {
+        const day = parts[0];
+        const month = parts[1];
+        const year = parts[2];
+        
+        let match;
+        if (isDaily) {
+          const fullDateStr = `${day}/${month}/${year}`;
+          match = daysData.find(d => d.key === fullDateStr);
+        } else {
+          const monthYearStr = `${month}/${year}`;
+          match = daysData.find(d => d.key === monthYearStr);
+        }
+        
+        if (match) {
+          match.revenue += parseFloat(s.soldPrice || 0);
+          match.profit += parseFloat(s.profit || 0);
+        }
       }
     });
   }
@@ -1040,7 +1237,7 @@ function getDynamicLast7DaysData(selectedSource) {
 
 // ====== 8. ซิงค์ข้อมูลสินค้าทั้งหมดจาก Google Sheets ขึ้น Firebase ======
 async function syncFirebaseFromDashboard() {
-  if (!confirm('คุณต้องการซิงค์ข้อมูลสินค้าจาก Google Sheets ไปยัง Firebase ทั้งหมดใหม่หรือไม่?\n(ระบบจะอ่านข้อมูลล่าสุดจากชีตเพื่ออัปเดต Firebase ให้ตรงกัน)')) {
+  if (!await showCustomConfirm('คุณต้องการซิงค์ข้อมูลสินค้าจาก Google Sheets ไปยัง Firebase ทั้งหมดใหม่หรือไม่?\n(ระบบจะอ่านข้อมูลล่าสุดจากชีตเพื่ออัปเดต Firebase ให้ตรงกัน)')) {
     return;
   }
   
@@ -1049,15 +1246,15 @@ async function syncFirebaseFromDashboard() {
     const response = await apiPost('syncAllProducts', {});
     showLoading(false);
     if (response.success) {
-      alert('ซิงค์ข้อมูลสำเร็จ! จำนวน ' + (response.count || 0) + ' รายการ');
+      await showCustomAlert('ซิงค์ข้อมูลสำเร็จ! จำนวน ' + (response.count || 0) + ' รายการ', 'สำเร็จ');
       await refreshDashboard();
     } else {
-      alert('ซิงค์ข้อมูลไม่สำเร็จ: ' + (response.error || response.message || 'ไม่ทราบสาเหตุ'));
+      await showCustomAlert('ซิงค์ข้อมูลไม่สำเร็จ: ' + (response.error || response.message || 'ไม่ทราบสาเหตุ'), 'ผิดพลาด');
     }
   } catch (err) {
     showLoading(false);
     console.error('Sync Firebase error:', err);
-    alert('เกิดข้อผิดพลาดในการเชื่อมต่อ: ' + err.message);
+    await showCustomAlert('เกิดข้อผิดพลาดในการเชื่อมต่อ: ' + err.message, 'ผิดพลาด');
   }
 }
 
@@ -1212,21 +1409,21 @@ async function handleEditBillSubmit(e) {
     const res = await apiPost('updateSaleBill', { saleId, billData });
     showLoading(false);
     if (res.success) {
-      alert(res.message || 'แก้ไขข้อมูลบิลสำเร็จ!');
+      await showCustomAlert(res.message || 'แก้ไขข้อมูลบิลสำเร็จ!', 'สำเร็จ');
       closeEditBillModal();
       await refreshDashboard();
     } else {
-      alert(res.message || 'แก้ไขข้อมูลบิลไม่สำเร็จ: ' + (res.error || res.message));
+      await showCustomAlert(res.message || 'แก้ไขข้อมูลบิลไม่สำเร็จ: ' + (res.error || res.message), 'เกิดข้อผิดพลาด');
     }
   } catch (err) {
     showLoading(false);
     console.error('Update sale bill error:', err);
-    alert('เกิดข้อผิดพลาดในการแก้ไขบิล: ' + err.message);
+    await showCustomAlert('เกิดข้อผิดพลาดในการแก้ไขบิล: ' + err.message, 'เกิดข้อผิดพลาด');
   }
 }
 
 async function deleteSaleBill(saleId) {
-  if (!confirm(`⚠️ คำเตือนสำคัญ:\nคุณแน่ใจหรือไม่ที่จะทำการลบบิลการขายรหัส "${saleId}"?\n\nการลบนี้จะ:\n1. ลบประวัติการขายใน Google Sheets\n2. คืนสถานะสินค้าในบิลกลับเป็น "พร้อมขาย" (Available) ในคลังสินค้าและ Firebase โดยอัตโนมัติ`)) {
+  if (!await showCustomConfirm(`⚠️ คำเตือนสำคัญ:\nคุณแน่ใจหรือไม่ที่จะทำการลบบิลการขายรหัส "${saleId}"?\n\nการลบนี้จะ:\n1. ลบประวัติการขายใน Google Sheets\n2. คืนสถานะสินค้าในบิลกลับเป็น "พร้อมขาย" (Available) ในคลังสินค้าและ Firebase โดยอัตโนมัติ`, 'ลบบิลการขาย')) {
     return;
   }
   
@@ -1235,15 +1432,259 @@ async function deleteSaleBill(saleId) {
     const res = await apiPost('deleteSaleBill', { saleId });
     showLoading(false);
     if (res.success) {
-      alert(res.message || 'ลบบิลการขายสำเร็จ!');
+      await showCustomAlert(res.message || 'ลบบิลการขายสำเร็จ!', 'สำเร็จ');
       await refreshDashboard();
     } else {
-      alert(res.message || 'ลบบิลไม่สำเร็จ: ' + (res.error || res.message));
+      await showCustomAlert(res.message || 'ลบบิลไม่สำเร็จ: ' + (res.error || res.message), 'ผิดพลาด');
     }
   } catch (err) {
     showLoading(false);
     console.error('Delete sale bill error:', err);
-    alert('เกิดข้อผิดพลาดในการเชื่อมต่อ: ' + err.message);
+    await showCustomAlert('เกิดข้อผิดพลาดในการเชื่อมต่อ: ' + err.message, 'ผิดพลาด');
   }
+}
+
+// ====== ระบบแจ้งเตือนและกล่องยืนยันแบบทันสมัย (Modern Custom Dialogs) ======
+function showCustomAlert(message, title = 'แจ้งเตือน') {
+  return new Promise((resolve) => {
+    const oldModal = document.getElementById('custom-alert-modal');
+    if (oldModal) oldModal.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'custom-alert-modal';
+    modal.className = 'fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm transition-all duration-300';
+    modal.innerHTML = `
+      <div class="bg-white dark:bg-darkbg-800 rounded-2xl shadow-2xl border border-gray-150 dark:border-darkbg-700 w-full max-w-sm overflow-hidden transform scale-95 opacity-0 transition-all duration-300 flex flex-col">
+        <div class="px-5 py-4 border-b border-gray-100 dark:border-darkbg-700 bg-gray-50 dark:bg-darkbg-900/30 flex items-center justify-between">
+          <h3 class="text-sm font-extrabold text-gray-900 dark:text-white flex items-center gap-2">
+            <i class="fa-solid fa-circle-info text-indigo-500 text-base"></i> ${title}
+          </h3>
+        </div>
+        <div class="px-6 py-6 text-xs text-gray-600 dark:text-gray-300 whitespace-pre-line leading-relaxed">
+          ${message}
+        </div>
+        <div class="px-5 py-3.5 border-t border-gray-100 dark:border-darkbg-700 bg-gray-50 dark:bg-darkbg-900/30 flex justify-end">
+          <button id="custom-alert-ok" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs shadow-md shadow-indigo-500/10 active:scale-95 transition-all">
+            ตกลง
+          </button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    setTimeout(() => {
+      const box = modal.querySelector('div');
+      box.classList.remove('scale-95', 'opacity-0');
+      box.classList.add('scale-100', 'opacity-100');
+    }, 10);
+
+    const close = () => {
+      const box = modal.querySelector('div');
+      box.classList.remove('scale-100', 'opacity-100');
+      box.classList.add('scale-95', 'opacity-0');
+      setTimeout(() => {
+        modal.remove();
+        resolve();
+      }, 200);
+    };
+
+    modal.querySelector('#custom-alert-ok').addEventListener('click', close);
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) close();
+    });
+  });
+}
+
+function showCustomConfirm(message, title = 'ยืนยันการทำรายการ') {
+  return new Promise((resolve) => {
+    const oldModal = document.getElementById('custom-confirm-modal');
+    if (oldModal) oldModal.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'custom-confirm-modal';
+    modal.className = 'fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm transition-all duration-300';
+    modal.innerHTML = `
+      <div class="bg-white dark:bg-darkbg-800 rounded-2xl shadow-2xl border border-gray-150 dark:border-darkbg-700 w-full max-w-sm overflow-hidden transform scale-95 opacity-0 transition-all duration-300 flex flex-col">
+        <div class="px-5 py-4 border-b border-gray-100 dark:border-darkbg-700 bg-gray-50 dark:bg-darkbg-900/30 flex items-center justify-between">
+          <h3 class="text-sm font-extrabold text-gray-900 dark:text-white flex items-center gap-2">
+            <i class="fa-solid fa-circle-question text-indigo-500 text-base"></i> ${title}
+          </h3>
+        </div>
+        <div class="px-6 py-6 text-xs text-gray-600 dark:text-gray-300 whitespace-pre-line leading-relaxed">
+          ${message}
+        </div>
+        <div class="px-5 py-3.5 border-t border-gray-100 dark:border-darkbg-700 bg-gray-50 dark:bg-darkbg-900/30 flex justify-end gap-2">
+          <button id="custom-confirm-cancel" class="px-4 py-2 border border-gray-250 dark:border-darkbg-600 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-darkbg-700 rounded-xl font-bold text-xs transition-all">
+            ยกเลิก
+          </button>
+          <button id="custom-confirm-ok" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs shadow-md shadow-indigo-500/10 active:scale-95 transition-all">
+            ยืนยัน
+          </button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    setTimeout(() => {
+      const box = modal.querySelector('div');
+      box.classList.remove('scale-95', 'opacity-0');
+      box.classList.add('scale-100', 'opacity-100');
+    }, 10);
+
+    const close = (result) => {
+      const box = modal.querySelector('div');
+      box.classList.remove('scale-100', 'opacity-100');
+      box.classList.add('scale-95', 'opacity-0');
+      setTimeout(() => {
+        modal.remove();
+        resolve(result);
+      }, 200);
+    };
+
+    modal.querySelector('#custom-confirm-ok').addEventListener('click', () => close(true));
+    modal.querySelector('#custom-confirm-cancel').addEventListener('click', () => close(false));
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) close(false);
+    });
+  });
+}
+
+function openPaymentSlipUploadModal(saleId) {
+  return new Promise((resolve) => {
+    const oldModal = document.getElementById('payment-slip-modal');
+    if (oldModal) oldModal.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'payment-slip-modal';
+    modal.className = 'fixed inset-0 z-[99] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm transition-all duration-300';
+    modal.innerHTML = `
+      <div class="bg-white dark:bg-darkbg-800 w-full max-w-sm rounded-2xl shadow-2xl border border-gray-150 dark:border-darkbg-700 overflow-hidden transform scale-95 opacity-0 transition-all duration-300 flex flex-col">
+        <div class="px-5 py-4 border-b border-gray-100 dark:border-darkbg-700 flex justify-between items-center bg-gray-50 dark:bg-darkbg-900/30">
+          <h3 class="font-bold text-gray-900 dark:text-white text-sm flex items-center gap-2">
+            <i class="fa-solid fa-receipt text-emerald-500"></i> ยืนยันการชำระเงินบิลเงินเชื่อ
+          </h3>
+          <button id="payment-slip-close" class="w-8 h-8 rounded-full bg-gray-100 dark:bg-darkbg-700 text-gray-600 dark:text-gray-400 hover:bg-red-50 hover:text-red-500 flex justify-center items-center transition"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="p-5 space-y-4 flex-grow overflow-y-auto">
+          <p class="text-[11px] text-gray-500 dark:text-gray-400">
+            โปรดแนบรูปภาพสลิปการโอนเงินเพื่อเปลี่ยนสถานะบิล <b class="text-gray-750 dark:text-gray-200 font-mono">${saleId}</b> เป็น <b>"จ่ายแล้ว"</b>
+          </p>
+          
+          <div class="flex flex-col items-center justify-center border-2 border-dashed border-gray-250 dark:border-darkbg-600 rounded-2xl p-6 bg-gray-50 dark:bg-darkbg-900/10 hover:bg-gray-100 dark:hover:bg-darkbg-900/20 cursor-pointer relative group transition-all" id="payment-slip-dropzone">
+            <input type="file" id="payment-slip-input" accept="image/*" class="absolute inset-0 opacity-0 cursor-pointer" />
+            <i class="fa-solid fa-cloud-arrow-up text-3xl text-gray-400 group-hover:text-emerald-500 transition-colors mb-2"></i>
+            <span class="text-[11px] font-bold text-gray-600 dark:text-gray-300">เลือกรูปภาพสลิป หรือลากมาวาง</span>
+            <span class="text-[9px] text-gray-400 mt-1">รองรับไฟล์ JPG, PNG</span>
+          </div>
+
+          <div id="payment-slip-preview-container" class="hidden relative rounded-xl border border-gray-200 dark:border-darkbg-700 overflow-hidden max-h-[220px] flex items-center justify-center bg-gray-50 dark:bg-darkbg-900/30 p-2">
+            <img id="payment-slip-preview" src="" class="max-h-[200px] object-contain rounded" />
+            <button id="payment-slip-remove-btn" class="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/60 text-white hover:bg-red-600 flex items-center justify-center transition shadow-lg"><i class="fa-solid fa-trash-can text-xs"></i></button>
+          </div>
+        </div>
+        <div class="px-5 py-3.5 border-t border-gray-100 dark:border-darkbg-700 bg-gray-50 dark:bg-darkbg-900/30 flex justify-end gap-2 shrink-0">
+          <button id="payment-slip-cancel" class="px-4 py-2 border border-gray-250 dark:border-darkbg-600 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-darkbg-700 rounded-xl font-bold text-xs transition">ยกเลิก</button>
+          <button id="payment-slip-submit" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs shadow-md shadow-emerald-500/10 active:scale-95 transition-all flex items-center gap-1.5">
+            <i class="fa-solid fa-circle-check"></i> บันทึกชำระเงิน
+          </button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    setTimeout(() => {
+      const box = modal.querySelector('div');
+      box.classList.remove('scale-95', 'opacity-0');
+      box.classList.add('scale-100', 'opacity-100');
+    }, 10);
+
+    const input = modal.querySelector('#payment-slip-input');
+    const previewContainer = modal.querySelector('#payment-slip-preview-container');
+    const previewImg = modal.querySelector('#payment-slip-preview');
+    const removeBtn = modal.querySelector('#payment-slip-remove-btn');
+    const dropzone = modal.querySelector('#payment-slip-dropzone');
+    let selectedDataURI = null;
+
+    const handleFile = (file) => {
+      if (!file) return;
+      if (!file.type.startsWith('image/')) {
+        showCustomAlert('กรุณาเลือกเฉพาะไฟล์รูปภาพเท่านั้น', 'ข้อผิดพลาด');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+          const maxDim = 1024;
+          if (width > maxDim || height > maxDim) {
+            if (width > height) {
+              height = Math.round((height * maxDim) / width);
+              width = maxDim;
+            } else {
+              width = Math.round((width * maxDim) / height);
+              height = maxDim;
+            }
+          }
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          selectedDataURI = canvas.toDataURL('image/jpeg', 0.8);
+
+          previewImg.src = selectedDataURI;
+          previewContainer.classList.remove('hidden');
+          dropzone.classList.add('hidden');
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    };
+
+    input.addEventListener('change', (e) => {
+      if (e.target.files.length > 0) {
+        handleFile(e.target.files[0]);
+      }
+    });
+
+    removeBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      selectedDataURI = null;
+      previewImg.src = '';
+      previewContainer.classList.add('hidden');
+      dropzone.classList.remove('hidden');
+      input.value = '';
+    });
+
+    const close = (val) => {
+      const box = modal.querySelector('div');
+      box.classList.remove('scale-100', 'opacity-100');
+      box.classList.add('scale-95', 'opacity-0');
+      setTimeout(() => {
+        modal.remove();
+        resolve(val);
+      }, 200);
+    };
+
+    modal.querySelector('#payment-slip-cancel').addEventListener('click', () => close(null));
+    modal.querySelector('#payment-slip-close').addEventListener('click', () => close(null));
+    
+    modal.querySelector('#payment-slip-submit').addEventListener('click', () => {
+      if (!selectedDataURI) {
+        showCustomAlert('กรุณาอัปโหลดรูปภาพสลิปการโอนเงินก่อนยืนยัน', 'ต้องการสลิป');
+        return;
+      }
+      close({ slipDataURI: selectedDataURI });
+    });
+
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) close(null);
+    });
+  });
 }
 
