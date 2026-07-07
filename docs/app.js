@@ -748,19 +748,19 @@ function renderInventoryTable(products) {
             tr.setAttribute('data-search', `${p.model} ${p.brand} ${p.id} ${p.imei || ''} ${p.color || ''}`.toLowerCase());
             tr.setAttribute('data-status', st);
             tr.innerHTML = `
-        <td class="px-4 py-3 align-middle text-center w-10">${checkboxHtml}</td>
-        <td class="px-4 py-3"><div class="font-medium text-gray-800 flex items-center">${p.model} ${noImageBadge}</div><div class="text-xs text-gray-500">${p.brand} | ${p.id}</div></td>
-        <td class="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">
+        <td class="px-2 py-3 align-middle text-center w-10">${checkboxHtml}</td>
+        <td class="px-2 py-3"><div class="font-medium text-gray-800 flex items-center">${p.model} ${noImageBadge}</div><div class="text-xs text-gray-500">${p.brand} | ${p.id}</div></td>
+        <td class="px-2 py-3 text-xs text-gray-500 whitespace-nowrap">
           <div>${p.dateAdded || '-'}</div>
           <div class="text-[10px] text-blue-500 mt-0.5" title="สาขาและระยะเวลาที่อยู่"><i class="fa-solid fa-location-dot"></i> ${p.location || 'ไม่ระบุ'} (${daysText})</div>
         </td>
-        <td class="px-4 py-3 text-gray-600">${spec}</td>
-        <td class="px-4 py-3 text-xs text-gray-500">${p.imei || '-'}</td>
-        <td class="px-4 py-3 text-right text-gray-600">฿${formatNumber(p.cost)}</td>
-        <td class="px-4 py-3 text-right text-brand-600 font-bold">฿${formatNumber(p.price)}</td>
-        <td class="px-4 py-3 text-right text-indigo-600 font-bold">฿${formatNumber(p.wholesalePrice || 0)}</td>
-        <td class="px-4 py-3 text-center"><select onchange="onStatusChange('${p.id}', this.value)" class="text-xs border rounded px-1 py-0.5 ${statusClass} font-medium cursor-pointer">${statusOptions}</select></td>
-        <td class="px-4 py-3 text-center whitespace-nowrap">
+        <td class="px-2 py-3 text-gray-600">${spec}</td>
+        <td class="px-2 py-3 text-xs text-gray-500">${p.imei || '-'}</td>
+        <td class="px-2 py-3 text-right text-gray-600">฿${formatNumber(p.cost)}</td>
+        <td class="px-2 py-3 text-right text-brand-600 font-bold">฿${formatNumber(p.price)}</td>
+        <td class="px-2 py-3 text-right text-indigo-600 font-bold">฿${formatNumber(p.wholesalePrice || 0)}</td>
+        <td class="px-2 py-3 text-center"><select onchange="onStatusChange('${p.id}', this.value)" class="text-xs border rounded px-1 py-0.5 ${statusClass} font-medium cursor-pointer">${statusOptions}</select></td>
+        <td class="px-2 py-3 text-center whitespace-nowrap">
           <button onclick="editProduct('${p.id}')"   class="text-indigo-600 hover:text-indigo-900 mx-1" title="แก้ไข"><i class="fa-solid fa-pen-to-square"></i></button>
           <button onclick="openSellModal('${p.id}')" class="text-green-600  hover:text-green-900 mx-1"  title="ขาย"><i class="fa-solid fa-cart-shopping"></i></button>
           <button onclick="deleteProduct('${p.id}')" class="text-red-500    hover:text-red-700 mx-1"    title="ลบ"><i class="fa-solid fa-trash"></i></button>
