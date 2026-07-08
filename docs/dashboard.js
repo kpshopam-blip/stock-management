@@ -234,7 +234,7 @@ function renderKpiCards() {
   let remainingValue = 0;
   allProducts.forEach(p => {
     const status = (p.status || '').toLowerCase();
-    if (status !== 'sold' && status !== 'unavailable') {
+    if (status === 'available') {
       const pSource = p.source || 'ไม่ระบุแหล่งที่มา';
       if (selectedSource && pSource !== selectedSource) {
         return; // ข้ามถ้าสินค้าในคลังไม่ตรงกับแหล่งที่มาที่คัดเลือก
@@ -374,7 +374,7 @@ function renderStockTableReport() {
     
     if (status === 'sold') {
       stats[key].sold++;
-    } else if (status !== 'unavailable') {
+    } else if (status === 'available') {
       stats[key].remaining++;
     }
 
@@ -608,7 +608,7 @@ function renderSourceDetails() {
     totalDevices++;
     totalCostAll += parseFloat(p.cost || 0);
 
-    if (status !== 'sold' && status !== 'unavailable') {
+    if (status === 'available') {
       availableDevices++;
       totalCosts += parseFloat(p.cost || 0);
     }
