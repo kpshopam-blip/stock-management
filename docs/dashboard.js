@@ -367,7 +367,7 @@ function renderStockTableReport() {
     const status = (p.status || '').toLowerCase();
     
     if (!stats[key]) {
-      stats[key] = { brand: (p.brand || '').trim(), model: cleanModel, storage: storage, added: 0, sold: 0, remaining: 0 };
+      stats[key] = { brand: (p.brand || '').trim(), model: cleanModel, storage: storage, added: 0, sold: 0, remaining: 0, imeis: [] };
     }
     
     stats[key].added++;
@@ -376,6 +376,13 @@ function renderStockTableReport() {
       stats[key].sold++;
     } else if (status !== 'unavailable') {
       stats[key].remaining++;
+    }
+
+    if (p.imei) {
+      const imeiClean = String(p.imei).trim().toLowerCase();
+      if (!stats[key].imeis.includes(imeiClean)) {
+        stats[key].imeis.push(imeiClean);
+      }
     }
   });
 
@@ -396,11 +403,18 @@ function renderStockTableReport() {
       const storage = normalizeStorage(extractStorageFromSpec(s.spec || '') || s.storage || '');
       const key = `${(s.brand || '').trim().toLowerCase()}|${cleanModel.toLowerCase()}|${storage.toLowerCase()}`;
       if (!stats[key]) {
-        stats[key] = { brand: (s.brand || '').trim(), model: cleanModel, storage: storage, added: 1, sold: 1, remaining: 0 };
+        stats[key] = { brand: (s.brand || '').trim(), model: cleanModel, storage: storage, added: 1, sold: 1, remaining: 0, imeis: [] };
       } else {
         // บวกสะสมยอดขายและยอดรับเข้าเพิ่มขึ้นกรณีที่มี Key อยู่แล้ว
         stats[key].added++;
         stats[key].sold++;
+      }
+
+      if (s.imei) {
+        const imeiClean = String(s.imei).trim().toLowerCase();
+        if (!stats[key].imeis.includes(imeiClean)) {
+          stats[key].imeis.push(imeiClean);
+        }
       }
     });
   }
@@ -411,7 +425,11 @@ function renderStockTableReport() {
     reportList = reportList.filter(item => item.brand.toLowerCase() === filterBrand);
   }
   if (searchInput) {
-    reportList = reportList.filter(item => item.model.toLowerCase().includes(searchInput) || item.brand.toLowerCase().includes(searchInput));
+    reportList = reportList.filter(item => 
+      item.model.toLowerCase().includes(searchInput) || 
+      item.brand.toLowerCase().includes(searchInput) ||
+      (item.imeis && item.imeis.some(imei => imei.includes(searchInput)))
+    );
   }
 
   // 3.4 เรียงตามคอลัมน์ที่เลือก
@@ -803,7 +821,8 @@ function renderWholesaleReport() {
       String(s.customerName || '').toLowerCase().includes(searchText) ||
       String(s.customerPhone || '').toLowerCase().includes(searchText) ||
       String(s.saleId || '').toLowerCase().includes(searchText) ||
-      String(s.model || '').toLowerCase().includes(searchText)
+      String(s.model || '').toLowerCase().includes(searchText) ||
+      String(s.imei || '').toLowerCase().includes(searchText)
     );
   }
 
