@@ -783,9 +783,9 @@ function renderWholesaleReport() {
       && sStorage.toLowerCase() === activeModelFilter.storage.toLowerCase();
   };
 
-  // เมื่อ cross-filter เปิดอยู่ → แสดงทุกประเภทขาย / ไม่มี cross-filter → เฉพาะขายส่ง/เชื่อ
+  // เมื่อ cross-filter เปิดอยู่ หรือมีการพิมพ์ค้นหา → แสดงทุกประเภทขาย / ไม่มีเงื่อนไขเหล่านี้ → เฉพาะขายส่ง/เชื่อ
   let list = salesSummary.salesList.filter(s => {
-    if (activeModelFilter) return true; // แสดงทุกประเภทเมื่อ cross-filter เปิดอยู่
+    if (activeModelFilter || searchText) return true; // แสดงทุกประเภทเมื่อ cross-filter หรือมีคำค้นหาเปิดอยู่
     const isWholesale = s.saleType && (s.saleType.toString().includes('ส่ง') || s.saleType.toString().includes('เชื่อ'));
     return isWholesale;
   });
