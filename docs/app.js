@@ -1406,6 +1406,8 @@ async function loadSettings() {
         updateModelDatalist(settings.brandModels, brandSel ? brandSel.value : '');
 
         window._appSettings = settings;
+        // เรียกใช้งาน Autocomplete บนมือถือ
+        initCustomDatalists();
     } catch (err) {
         console.error('โหลด Settings ไม่สำเร็จ:', err);
     }
@@ -1437,6 +1439,89 @@ function onBrandChange(selectedBrand) {
         updateModelDatalist(window._appSettings.brandModels, selectedBrand);
     }
 }
+
+// ====== สร้างกล่องเลือกตัวเลือก (Custom Autocomplete Dropdown) สำหรับมือถือ ======
+function initCustomDatalists() {
+    const configs = [
+        { inputId: 'p_model', datalistId: 'modelOptions', dropdownId: 'dropdown_p_model', btnId: 'btn_p_model' },
+        { inputId: 'p_model_code', datalistId: 'modelCodeOptions', dropdownId: 'dropdown_p_model_code', btnId: 'btn_p_model_code' },
+        { inputId: 'p_source', datalistId: 'sourceOptions', dropdownId: 'dropdown_p_source', btnId: 'btn_p_source' }
+    ];
+
+    configs.forEach(cfg => {
+        const input = document.getElementById(cfg.inputId);
+        const datalist = document.getElementById(cfg.datalistId);
+        const dropdown = document.getElementById(cfg.dropdownId);
+        const btn = document.getElementById(cfg.btnId);
+
+        if (!input || !datalist || !dropdown) return;
+        
+        // ป้องกันการผูก Event ซ้ำซ้อน
+        if (input.dataset.customDatalistInitialized) return;
+        input.dataset.customDatalistInitialized = 'true';
+
+        // ฟังก์ชันในการวาดรายการดรอปดาวน์
+        function renderList(query = '') {
+            const options = Array.from(datalist.options).map(opt => opt.value);
+            const filtered = options.filter(val => val.toLowerCase().includes(query.toLowerCase()));
+
+            if (filtered.length === 0) {
+                dropdown.classList.add('hidden');
+                return;
+            }
+
+            dropdown.innerHTML = '';
+            filtered.forEach(val => {
+                const item = document.createElement('div');
+                item.className = 'px-3 py-2 cursor-pointer hover:bg-brand-50 hover:text-brand-700 text-sm text-gray-700 transition-colors border-b border-gray-100 last:border-0';
+                item.textContent = val;
+                
+                // ใช้ mousedown เพื่อดึงค่าก่อนที่ช่องกรอกจะเสีย Focus
+                item.addEventListener('mousedown', (e) => {
+                    e.preventDefault();
+                    input.value = val;
+                    input.dispatchEvent(new Event('input', { bubbles: true }));
+                    input.dispatchEvent(new Event('change', { bubbles: true }));
+                    dropdown.classList.add('hidden');
+                });
+                dropdown.appendChild(item);
+            });
+            dropdown.classList.remove('hidden');
+        }
+
+        // แสดงเมื่อ Focus
+        input.addEventListener('focus', () => {
+            renderList(input.value);
+        });
+
+        // แสดงและกรองเมื่อพิมพ์
+        input.addEventListener('input', () => {
+            renderList(input.value);
+        });
+
+        // ซ่อนเมื่อเสีย Focus (คลิกที่อื่น)
+        input.addEventListener('blur', () => {
+            setTimeout(() => {
+                dropdown.classList.add('hidden');
+            }, 200);
+        });
+
+        // เปิด/ปิด เมื่อคลิกปุ่มลูกศร
+        if (btn) {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (dropdown.classList.contains('hidden')) {
+                    input.focus();
+                    renderList(input.value);
+                } else {
+                    dropdown.classList.add('hidden');
+                }
+            });
+        }
+    });
+}
+
 
 function toggleForm(formId) {
     const form = document.getElementById(formId);

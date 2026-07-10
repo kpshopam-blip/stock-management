@@ -375,14 +375,26 @@
             </div>
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">รุ่น (Model) *</label>
-              <input type="text" id="p_model" required placeholder="เช่น iPhone 13 Pro Max (เลือกหรือพิมพ์เองได้)" list="modelOptions"
-                class="w-full p-2 border border-gray-300 rounded focus:ring-brand-500 outline-none">
+              <div class="relative">
+                <input type="text" id="p_model" required placeholder="เช่น iPhone 13 Pro Max (เลือกหรือพิมพ์เองได้)"
+                  class="w-full p-2 pr-8 border border-gray-300 rounded focus:ring-brand-500 outline-none">
+                <button type="button" id="btn_p_model" class="absolute inset-y-0 right-0 px-2.5 flex items-center text-gray-400 hover:text-gray-600 focus:outline-none">
+                  <i class="fa-solid fa-chevron-down text-xs"></i>
+                </button>
+                <div id="dropdown_p_model" class="absolute left-0 right-0 z-50 bg-white border border-gray-300 rounded-md shadow-lg hidden max-h-60 overflow-y-auto mt-1"></div>
+              </div>
               <datalist id="modelOptions"></datalist>
             </div>
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">โมเดล (Model Code)</label>
-              <input type="text" id="p_model_code" placeholder="เช่น TH/A, ZP/A (ระบุหรือพิมพ์เอง)" list="modelCodeOptions"
-                class="w-full p-2 border border-gray-300 rounded focus:ring-brand-500 outline-none">
+              <div class="relative">
+                <input type="text" id="p_model_code" placeholder="เช่น TH/A, ZP/A (ระบุหรือพิมพ์เอง)"
+                  class="w-full p-2 pr-8 border border-gray-300 rounded focus:ring-brand-500 outline-none">
+                <button type="button" id="btn_p_model_code" class="absolute inset-y-0 right-0 px-2.5 flex items-center text-gray-400 hover:text-gray-600 focus:outline-none">
+                  <i class="fa-solid fa-chevron-down text-xs"></i>
+                </button>
+                <div id="dropdown_p_model_code" class="absolute left-0 right-0 z-50 bg-white border border-gray-300 rounded-md shadow-lg hidden max-h-60 overflow-y-auto mt-1"></div>
+              </div>
               <datalist id="modelCodeOptions">
                 <option value="TH/A">
                 <option value="ZP/A">
@@ -391,6 +403,7 @@
                 <option value="VN/A">
                 <option value="J/A">
                 <option value="KH/A">
+                <option value="CH/A">
               </datalist>
             </div>
             <div>
@@ -412,8 +425,14 @@
             </div>
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">ประเภทเครื่อง/แหล่งที่มา</label>
-              <input type="text" id="p_source" placeholder="เช่น รับซื้อหน้าร้าน (เลือกหรือพิมพ์เองได้)" list="sourceOptions"
-                class="w-full p-2 border border-gray-300 rounded focus:ring-brand-500 outline-none">
+              <div class="relative">
+                <input type="text" id="p_source" placeholder="เช่น รับซื้อหน้าร้าน (เลือกหรือพิมพ์เองได้)"
+                  class="w-full p-2 pr-8 border border-gray-300 rounded focus:ring-brand-500 outline-none">
+                <button type="button" id="btn_p_source" class="absolute inset-y-0 right-0 px-2.5 flex items-center text-gray-400 hover:text-gray-600 focus:outline-none">
+                  <i class="fa-solid fa-chevron-down text-xs"></i>
+                </button>
+                <div id="dropdown_p_source" class="absolute left-0 right-0 z-50 bg-white border border-gray-300 rounded-md shadow-lg hidden max-h-60 overflow-y-auto mt-1"></div>
+              </div>
               <datalist id="sourceOptions"></datalist>
             </div>
             <div>
