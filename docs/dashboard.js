@@ -713,6 +713,9 @@ function renderSourceDetails() {
       <td class="px-2.5 py-2.5">
         <div class="font-bold text-gray-800 dark:text-white">${p.brand} ${p.model}</div>
         <div class="text-[9px] text-gray-400 font-mono">IMEI: ${p.imei || '-'} ${p.color ? '| ' + p.color : ''}</div>
+        <div class="text-[9px] text-indigo-500 dark:text-indigo-400 font-medium mt-0.5 flex items-center gap-1">
+          <i class="fa-solid fa-location-dot"></i> สาขา: ${p.location || 'ไม่ระบุ'}
+        </div>
       </td>
       <td class="px-2 py-2.5 text-right whitespace-nowrap">${priceDetailsHtml}</td>
       <td class="px-2.5 py-2.5 text-center">${stBadge}</td>
