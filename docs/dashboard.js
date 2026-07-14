@@ -70,7 +70,15 @@ function toggleTheme() {
 // ====== ฟังก์ชันจัดการการกรองวันที่ ======
 function parseSaleDate(dateStr) {
   if (!dateStr) return null;
-  const clean = dateStr.replace(/,/g, '').split(' ')[0];
+  const s = dateStr.toString().trim();
+  
+  // หากเป็นรูปแบบ ISO 8601 (มีอักษร T และสามารถแปลงด้วย Date.parse ได้)
+  if (s.includes('T') && !isNaN(Date.parse(s))) {
+    const d = new Date(s);
+    if (!isNaN(d.getTime())) return d;
+  }
+  
+  const clean = s.replace(/,/g, '').split(' ')[0];
   const parts = clean.split('/');
   if (parts.length === 3) {
     return new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
@@ -80,7 +88,15 @@ function parseSaleDate(dateStr) {
 
 function parseDateAdded(dateStr) {
   if (!dateStr) return null;
-  const clean = dateStr.replace(/,/g, '').split(' ')[0];
+  const s = dateStr.toString().trim();
+  
+  // หากเป็นรูปแบบ ISO 8601 (มีอักษร T และสามารถแปลงด้วย Date.parse ได้)
+  if (s.includes('T') && !isNaN(Date.parse(s))) {
+    const d = new Date(s);
+    if (!isNaN(d.getTime())) return d;
+  }
+  
+  const clean = s.replace(/,/g, '').split(' ')[0];
   const parts = clean.split('/');
   if (parts.length === 3) {
     return new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));

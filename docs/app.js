@@ -221,16 +221,52 @@ async function fetchProducts() {
     }
 }
 
+function formatDateTimeDisplay(dateStr) {
+    if (!dateStr) return '-';
+    const s = dateStr.toString().trim();
+    
+    // หากเป็นรูปแบบ dd/MM/yyyy HH:mm หรือ dd/MM/yyyy HH:mm:ss อยู่แล้ว ให้ส่งคืนเลย
+    if (/^\d{1,2}\/\d{1,2}\/\d{4}\s+\d{1,2}:\d{1,2}(:\d{1,2})?$/.test(s)) {
+        return s;
+    }
+    
+    // หากเป็น ISO format หรือสามารถแปลงด้วย Date ได้
+    const d = new Date(s);
+    if (!isNaN(d.getTime())) {
+        const pad = (num) => String(num).padStart(2, '0');
+        const day = pad(d.getDate());
+        const month = pad(d.getMonth() + 1);
+        const year = d.getFullYear();
+        const hours = pad(d.getHours());
+        const minutes = pad(d.getMinutes());
+        return `${day}/${month}/${year} ${hours}:${minutes}`;
+    }
+    
+    return s;
+}
+
 function calculateDaysAtBranch(dateString) {
     if (!dateString) return 0;
-    const cleanedDate = dateString.replace(/,/g, '');
-    const parts = cleanedDate.split(' ')[0].split('/');
-    if (parts.length < 3) return 0;
-    const dStr = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}T00:00:00`;
-    const targetDate = new Date(dStr);
+    
+    let targetDate;
+    const cleanStr = dateString.toString().trim();
+    
+    // หากเป็นรูปแบบ ISO 8601 (มีอักษร T และสามารถแปลงด้วย Date.parse ได้)
+    if (cleanStr.includes('T') && !isNaN(Date.parse(cleanStr))) {
+        targetDate = new Date(cleanStr);
+    } else {
+        const cleanedDate = cleanStr.replace(/,/g, '');
+        const parts = cleanedDate.split(' ')[0].split('/');
+        if (parts.length < 3) return 0;
+        const dStr = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}T00:00:00`;
+        targetDate = new Date(dStr);
+    }
+    
     if (isNaN(targetDate.getTime())) return 0;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
+    targetDate.setHours(0, 0, 0, 0);
+    
     const diffTime = Math.abs(today - targetDate);
     const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
     return diffDays;
@@ -506,7 +542,7 @@ function viewProduct(id) {
           <div class="text-gray-500">แหล่งที่มา:</div><div class="font-medium">${product.source || '-'}</div>
           <div class="text-gray-500">เลข IMEI:</div><div class="font-medium">${product.imei || '-'}</div>
           <div class="text-gray-500">รับเข้าโดย:</div><div class="font-medium">${product.receiver || '-'}</div>
-          <div class="text-gray-500">วันที่รับเข้า:</div><div class="font-medium">${product.dateAdded || '-'}</div>
+          <div class="text-gray-500">วันที่รับเข้า:</div><div class="font-medium">${formatDateTimeDisplay(product.dateAdded)}</div>
           <div class="text-gray-500">เวลาหน้าสาขา:</div><div class="font-medium text-blue-600 flex items-center gap-1"><i class="fa-solid fa-clock"></i> ${calculateDaysAtBranch(product.branchEntryDate || product.dateAdded)} วัน</div>
         </div>
         ${removalHtml}
@@ -751,7 +787,7 @@ function renderInventoryTable(products) {
         <td class="px-2 py-3 align-middle text-center w-10">${checkboxHtml}</td>
         <td class="px-2 py-3"><div class="font-medium text-gray-800 flex items-center">${p.model} ${noImageBadge}</div><div class="text-xs text-gray-500">${p.brand} | ${p.id}</div></td>
         <td class="px-2 py-3 text-xs text-gray-500 whitespace-nowrap">
-          <div>${p.dateAdded || '-'}</div>
+          <div>${formatDateTimeDisplay(p.dateAdded)}</div>
           <div class="text-[10px] text-blue-500 mt-0.5" title="สาขาและระยะเวลาที่อยู่"><i class="fa-solid fa-location-dot"></i> ${p.location || 'ไม่ระบุ'} (${daysText})</div>
         </td>
         <td class="px-2 py-3 text-gray-600">${spec}</td>
