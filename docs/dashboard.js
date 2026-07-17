@@ -708,12 +708,16 @@ function renderSourceDetails() {
     const costVal = parseFloat(p.cost || 0);
     const retailVal = parseFloat(p.price || 0);
     const wholesaleVal = parseFloat(p.wholesalePrice || 0);
+    const installmentVal = parseFloat(p.installmentPrice || 0);
 
     let priceDetailsHtml = `<div class="text-[10px] text-gray-500 dark:text-gray-400">ทุน: <span class="font-bold text-gray-700 dark:text-gray-200">฿${formatNumber(costVal)}</span></div>`;
     priceDetailsHtml += `<div class="text-[10px] text-gray-500 dark:text-gray-400">ปลีก: <span class="font-bold text-blue-600 dark:text-blue-400">฿${formatNumber(retailVal)}</span></div>`;
     
     if (wholesaleVal > 0) {
       priceDetailsHtml += `<div class="text-[10px] text-gray-500 dark:text-gray-400">ส่ง: <span class="font-bold text-indigo-600 dark:text-indigo-400">฿${formatNumber(wholesaleVal)}</span></div>`;
+    }
+    if (installmentVal > 0) {
+      priceDetailsHtml += `<div class="text-[10px] text-gray-500 dark:text-gray-400">ผ่อน: <span class="font-bold text-emerald-600 dark:text-emerald-400">฿${formatNumber(installmentVal)}</span></div>`;
     }
 
     // หากขายไปแล้ว ให้ค้นหาราคาขายจริงจากประวัติการขาย

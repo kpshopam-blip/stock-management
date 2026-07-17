@@ -528,6 +528,7 @@ function viewProduct(id) {
         <div class="text-3xl font-bold text-brand-600 border-b pb-4 flex justify-between items-baseline flex-wrap gap-2">
           <span>฿${formatNumber(product.price)}</span>
           <span class="text-sm font-medium text-indigo-600 bg-indigo-50 border border-indigo-100 px-2 py-1 rounded">ขายส่ง: ฿${formatNumber(product.wholesalePrice || 0)}</span>
+          <span class="text-sm font-medium text-emerald-600 bg-emerald-50 border border-emerald-100 px-2 py-1 rounded">จัดผ่อน: ฿${formatNumber(product.installmentPrice || 0)}</span>
         </div>
         ${isManager ? `<div class="text-sm text-gray-500 mb-2 flex items-center gap-2">ราคาทุน: <span id="costValueHidden" class="font-medium">•••••</span><span id="costValueVisible" class="font-medium hidden">฿${formatNumber(product.cost || 0)}</span><button type="button" onclick="toggleCostVisibility()" class="text-gray-400 hover:text-brand-600 transition-colors focus:outline-none" title="แสดง/ซ่อนราคาทุน"><i id="costEyeIcon" class="fa-solid fa-eye-slash text-sm"></i></button></div>` : ''}
         <div class="grid grid-cols-2 gap-y-3 gap-x-4 text-sm">
@@ -795,6 +796,7 @@ function renderInventoryTable(products) {
         <td class="px-2 py-3 text-right text-gray-600">฿${formatNumber(p.cost)}</td>
         <td class="px-2 py-3 text-right text-brand-600 font-bold">฿${formatNumber(p.price)}</td>
         <td class="px-2 py-3 text-right text-indigo-600 font-bold">฿${formatNumber(p.wholesalePrice || 0)}</td>
+        <td class="px-2 py-3 text-right text-emerald-600 font-bold">฿${formatNumber(p.installmentPrice || 0)}</td>
         <td class="px-2 py-3 text-center"><select onchange="onStatusChange('${p.id}', this.value)" class="text-xs border rounded px-1 py-0.5 ${statusClass} font-medium cursor-pointer">${statusOptions}</select></td>
         <td class="px-2 py-3 text-center whitespace-nowrap">
           <button onclick="editProduct('${p.id}')"   class="text-indigo-600 hover:text-indigo-900 mx-1" title="แก้ไข"><i class="fa-solid fa-pen-to-square"></i></button>
@@ -827,6 +829,7 @@ function renderInventoryTable(products) {
           <div class="text-gray-500">ต้นทุน: <span class="text-gray-700">฿${formatNumber(p.cost)}</span></div>
           <div class="text-gray-500">ราคาขายปกติ: <span class="text-brand-600 font-bold">฿${formatNumber(p.price)}</span></div>
           <div class="text-gray-500">ราคาขายส่ง: <span class="text-indigo-600 font-bold">฿${formatNumber(p.wholesalePrice || 0)}</span></div>
+          <div class="text-gray-500">ราคาจัดผ่อน: <span class="text-emerald-600 font-bold">฿${formatNumber(p.installmentPrice || 0)}</span></div>
           <div class="text-gray-500 col-span-2">IMEI: <span class="text-gray-700 font-medium">${p.imei || '-'}</span></div>
         </div>
         <div class="flex items-center justify-between border-t pt-2 gap-2 pl-6">
@@ -1739,6 +1742,7 @@ async function submitProduct(event) {
         cost: document.getElementById('p_cost').value,
         price: document.getElementById('p_price').value,
         wholesalePrice: document.getElementById('p_wholesalePrice').value || 0,
+        installmentPrice: document.getElementById('p_installmentPrice').value || 0,
         imei: imeiVal,
         condition: document.getElementById('p_condition').value,
         defect: document.getElementById('p_defect').value,
@@ -1821,6 +1825,7 @@ async function editProduct(id) {
     document.getElementById('p_cost').value = p.cost;
     document.getElementById('p_price').value = p.price;
     document.getElementById('p_wholesalePrice').value = p.wholesalePrice || 0;
+    document.getElementById('p_installmentPrice').value = p.installmentPrice || 0;
     document.getElementById('p_imei').value = p.imei || '';
     document.getElementById('p_condition').value = p.condition || '';
     document.getElementById('p_defect').value = p.defect || '';
@@ -2025,7 +2030,7 @@ function openSellModal(productId) {
     document.getElementById('sellProductInfo').innerHTML = `
                 <div class="font-bold text-gray-800">${p.brand} ${p.model}</div>
     <div class="text-xs text-gray-500">สเปค: ${p.ram || '-'}/${p.storage || '-'} ${p.color || ''} | IMEI: ${p.imei || '-'}</div>
-    <div class="text-xs text-gray-500 mt-1">${costHtml}ราคาปลีก: ฿${formatNumber(p.price)} | ขายส่ง: ฿${formatNumber(p.wholesalePrice || 0)}</div>`;
+    <div class="text-xs text-gray-500 mt-1">${costHtml}ราคาปลีก: ฿${formatNumber(p.price)} | ขายส่ง: ฿${formatNumber(p.wholesalePrice || 0)} | จัดผ่อน: ฿${formatNumber(p.installmentPrice || 0)}</div>`;
 
     const typeSel = document.getElementById('sell_type');
     typeSel.innerHTML = '<option value="">เลือกรูปแบบ</option>';
@@ -2045,6 +2050,12 @@ function openSellModal(productId) {
     if (btnUseWholesale) {
         btnUseWholesale.onclick = () => {
             document.getElementById('sell_price').value = p.wholesalePrice || 0;
+        };
+    }
+    const btnUseInstallment = document.getElementById('btnUseInstallmentPrice');
+    if (btnUseInstallment) {
+        btnUseInstallment.onclick = () => {
+            document.getElementById('sell_price').value = p.installmentPrice || 0;
         };
     }
 
@@ -2677,7 +2688,7 @@ function renderCart() {
         if (!p) return;
         
         const priceType = cartPrices[id] || 'retail';
-        const currentPrice = priceType === 'wholesale' ? (parseFloat(p.wholesalePrice) || 0) : (parseFloat(p.price) || 0);
+        const currentPrice = priceType === 'wholesale' ? (parseFloat(p.wholesalePrice) || 0) : (priceType === 'installment' ? (parseFloat(p.installmentPrice) || 0) : (parseFloat(p.price) || 0));
         totalPrice += currentPrice;
         
         const img = p.images && p.images.length > 0 && p.images[0].trim() !== '' ? p.images[0] : NO_IMAGE;
@@ -2692,6 +2703,7 @@ function renderCart() {
                     <select onchange="updateCartItemPriceType('${p.id}', this.value)" class="text-[10px] border border-gray-200 rounded px-1 py-0.5 bg-white font-semibold cursor-pointer">
                         <option value="retail" ${priceType === 'retail' ? 'selected' : ''}>ราคาปลีก: ฿${formatNumber(p.price)}</option>
                         <option value="wholesale" ${priceType === 'wholesale' ? 'selected' : ''}>ราคาขายส่ง: ฿${formatNumber(p.wholesalePrice || 0)}</option>
+                        <option value="installment" ${priceType === 'installment' ? 'selected' : ''}>ราคาจัดผ่อน: ฿${formatNumber(p.installmentPrice || 0)}</option>
                     </select>
                     <span class="text-[9px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded truncate max-w-[110px] font-mono">IMEI: ${p.imei || '-'}</span>
                 </div>
@@ -2754,7 +2766,7 @@ function checkoutCart() {
         if (!p) return;
         
         const priceType = cartPrices[pId] || 'retail';
-        const defaultPrice = priceType === 'wholesale' ? (p.wholesalePrice || 0) : p.price;
+        const defaultPrice = priceType === 'wholesale' ? (p.wholesalePrice || 0) : (priceType === 'installment' ? (p.installmentPrice || 0) : p.price);
         
         const costHtml = isManager ? `ต้นทุน: ฿${formatNumber(p.cost)} | ` : '';
         infoHtml += `
@@ -2762,7 +2774,7 @@ function checkoutCart() {
           <div class="font-bold text-gray-800 text-xs">${p.brand} ${p.model}</div>
           <div class="text-[10px] text-gray-500 flex justify-between">
             <span>IMEI: ${p.imei || '-'}</span>
-            <span>${costHtml}ราคาตั้ง: ฿${formatNumber(p.price)} | ส่ง: ฿${formatNumber(p.wholesalePrice || 0)}</span>
+            <span>${costHtml}ราคาตั้ง: ฿${formatNumber(p.price)} | ส่ง: ฿${formatNumber(p.wholesalePrice || 0)} | ผ่อน: ฿${formatNumber(p.installmentPrice || 0)}</span>
           </div>
           <div class="flex items-center gap-2 mt-1">
             <span class="text-[11px] font-semibold text-gray-600 shrink-0">ราคาขายจริง:</span>
@@ -2770,6 +2782,7 @@ function checkoutCart() {
             <div class="flex gap-1 shrink-0">
               <button type="button" onclick="setBulkPrice('${p.id}', ${p.price})" class="px-1.5 py-0.5 bg-rose-50 text-rose-600 border border-rose-200 rounded text-[9px] hover:bg-rose-100 transition">ปลีก</button>
               <button type="button" onclick="setBulkPrice('${p.id}', ${p.wholesalePrice || 0})" class="px-1.5 py-0.5 bg-indigo-50 text-indigo-600 border border-indigo-200 rounded text-[9px] hover:bg-indigo-100 transition">ส่ง</button>
+              <button type="button" onclick="setBulkPrice('${p.id}', ${p.installmentPrice || 0})" class="px-1.5 py-0.5 bg-emerald-50 text-emerald-600 border border-emerald-200 rounded text-[9px] hover:bg-emerald-100 transition">ผ่อน</button>
             </div>
           </div>
         </div>`;
