@@ -331,18 +331,21 @@ function renderProductGrid(products) {
         const daysText = daysAtBranch === 0 ? 'เข้าใหม่วันนี้' : (daysAtBranch + ' วัน');
 
         grid.innerHTML += `
-      <div class="bg-white rounded border overflow-hidden product-card flex flex-col cursor-pointer" onclick="viewProduct('${p.id}')">
+      <div class="bg-white rounded border overflow-hidden product-card flex flex-col cursor-pointer w-full max-w-full" onclick="viewProduct('${p.id}')">
         <div class="relative pt-[100%] bg-gray-100">
           <img src="${coverImage}" class="absolute inset-0 w-full h-full object-cover" alt="${p.model}" loading="lazy" onerror="this.onerror=null;this.src=NO_IMAGE;">
           ${tagHtml}
         </div>
-        <div class="p-3 flex flex-col flex-grow">
-          <div class="flex justify-between items-start mb-1">
-            <div class="text-xs text-gray-500">${p.brand} ${specSnippet}</div>
-            <div class="text-[10px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded border border-blue-100 flex items-center gap-1" title="สาขาและระยะเวลาที่อยู่"><i class="fa-solid fa-location-dot"></i> ${p.location || 'ไม่ระบุ'} (${daysText})</div>
+        <div class="p-2.5 sm:p-3 flex flex-col flex-grow min-w-0">
+          <div class="flex flex-col sm:flex-row justify-between items-start gap-1 mb-1 min-w-0">
+            <div class="text-xs text-gray-500 truncate max-w-full">${p.brand} ${specSnippet}</div>
+            <div class="text-[10px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded border border-blue-100 flex items-center gap-1 shrink-0 max-w-full truncate" title="สาขาและระยะเวลาที่อยู่">
+              <i class="fa-solid fa-location-dot shrink-0"></i>
+              <span class="truncate">${p.location || 'ไม่ระบุ'} (${daysText})</span>
+            </div>
           </div>
-          <h3 class="font-medium text-sm text-gray-800 leading-tight mb-2 line-clamp-2">${p.model} <span class="text-xs text-gray-500">(${p.color || 'ไม่ระบุสี'})</span></h3>
-          <div class="mt-auto"><span class="text-brand-600 font-bold">฿${formatNumber(p.price)}</span></div>
+          <h3 class="font-medium text-xs sm:text-sm text-gray-800 leading-tight mb-2 line-clamp-2 min-w-0">${p.model} <span class="text-xs text-gray-500">(${p.color || 'ไม่ระบุสี'})</span></h3>
+          <div class="mt-auto"><span class="text-brand-600 font-bold text-sm sm:text-base">฿${formatNumber(p.price)}</span></div>
         </div>
       </div>`;
     });

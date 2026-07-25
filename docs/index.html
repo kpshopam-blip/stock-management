@@ -31,6 +31,19 @@
   </script>
 
   <style>
+    html, body {
+      width: 100%;
+      max-width: 100vw;
+      overflow-x: hidden !important;
+      position: relative;
+    }
+
+    #appContainer {
+      width: 100%;
+      max-width: 100%;
+      overflow-x: hidden;
+    }
+
     ::-webkit-scrollbar {
       width: 6px;
       height: 6px;
@@ -94,7 +107,7 @@
   </style>
 </head>
 
-<body class="bg-gray-100 font-sans antialiased text-gray-800 flex flex-col min-h-screen overflow-x-hidden">
+<body class="bg-gray-100 font-sans antialiased text-gray-800 flex flex-col min-h-screen max-w-full overflow-x-hidden">
 
   <!-- Loading Overlay -->
   <div id="loadingOverlay"
@@ -186,27 +199,29 @@
               <i class="fa-solid fa-magnifying-glass"></i>
             </button>
           </div>
-          <div class="flex items-center gap-2 sm:gap-4">
-            <div class="text-xs sm:text-sm opacity-90"><i class="fa-regular fa-user mr-1"></i><span id="storeUserName"
-                class="font-medium">User</span></div>
+          <div class="flex items-center gap-1.5 sm:gap-4 shrink-0">
+            <div class="text-xs sm:text-sm opacity-90 flex items-center gap-1 max-w-[90px] xs:max-w-[120px] sm:max-w-none">
+              <i class="fa-regular fa-user shrink-0"></i>
+              <span id="storeUserName" class="font-medium truncate">User</span>
+            </div>
             <!-- ปุ่มตะกร้าสินค้า -->
             <button id="btnOpenCart" onclick="toggleCartDrawer(true)"
-              class="relative hover:bg-white/20 px-3 py-1.5 rounded transition text-sm flex items-center gap-2"
+              class="relative hover:bg-white/20 px-2 sm:px-3 py-1.5 rounded transition text-sm flex items-center gap-1.5 shrink-0"
               title="ตะกร้าสินค้า">
               <i class="fa-solid fa-cart-shopping"></i>
               <span class="hidden sm:inline">ตะกร้า</span>
               <span id="cartBadge" class="absolute -top-1 -right-1 bg-red-600 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center border border-white hidden">0</span>
             </button>
             <button id="btnOpenInventory" onclick="loadInventory()"
-              class="hidden hover:bg-white/20 px-3 py-1.5 rounded transition text-sm flex items-center gap-2">
+              class="hidden hover:bg-white/20 px-2 sm:px-3 py-1.5 rounded transition text-sm flex items-center gap-1.5 shrink-0">
               <i class="fa-solid fa-boxes-stacked"></i><span class="hidden sm:inline">จัดการสต็อก</span>
             </button>
             <button id="btnOpenDashboard" onclick="loadDashboard()"
-              class="hidden hover:bg-white/20 px-3 py-1.5 rounded transition text-sm flex items-center gap-2">
+              class="hidden hover:bg-white/20 px-2 sm:px-3 py-1.5 rounded transition text-sm flex items-center gap-1.5 shrink-0">
               <i class="fa-solid fa-chart-line"></i><span class="hidden sm:inline">Dashboard</span>
             </button>
             <button onclick="logout()"
-              class="hover:bg-white/20 px-3 py-1.5 rounded transition text-sm flex items-center gap-2"
+              class="hover:bg-white/20 px-2 sm:px-3 py-1.5 rounded transition text-sm flex items-center gap-1.5 shrink-0"
               title="ออกจากระบบ">
               <i class="fa-solid fa-right-from-bracket"></i><span class="hidden sm:inline">ออก</span>
             </button>
@@ -214,10 +229,10 @@
         </div>
       </div>
       <div class="md:hidden px-4 pb-3 flex text-gray-800 gap-1">
-        <div class="relative flex-grow flex text-gray-800">
+        <div class="relative flex-grow flex text-gray-800 min-w-0">
           <input type="text" id="storeSearchMobile" placeholder="ค้นหาสินค้า, IMEI..."
             onkeydown="if(event.key === 'Enter') searchProducts('storeSearchMobile')"
-            class="w-full py-2 pl-3 pr-10 rounded-l-sm focus:outline-none text-sm shadow-inner">
+            class="w-full py-2 pl-3 pr-10 rounded-l-sm focus:outline-none text-sm shadow-inner min-w-0">
           <button type="button" onclick="startScanner(null, 'storeSearchMobile')"
             class="absolute top-0 right-0 h-full w-10 text-brand-600 hover:text-brand-800 transition flex justify-center items-center" title="สแกนบาร์โค้ด / IMEI">
             <i class="fa-solid fa-barcode"></i>
@@ -229,41 +244,41 @@
         </button>
       </div>
     </nav>
-    <div class="bg-white py-4 border-b">
+    <div class="bg-white py-3 sm:py-4 border-b">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="rounded-lg bg-indigo-50 border border-indigo-100 p-4 flex items-center justify-between">
-          <div class="flex items-center gap-3">
-            <i class="fa-solid fa-bolt text-brand-500 text-2xl"></i>
-            <div>
-              <h3 class="font-bold text-gray-800">สินค้ามือสองคุณภาพดี</h3>
-              <p class="text-xs text-gray-500">รับประกันโดยร้าน KP Shop ตรวจเช็คทุกเครื่อง</p>
+        <div class="rounded-lg bg-indigo-50 border border-indigo-100 p-3 sm:p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+          <div class="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            <i class="fa-solid fa-bolt text-brand-500 text-xl sm:text-2xl shrink-0"></i>
+            <div class="min-w-0">
+              <h3 class="font-bold text-gray-800 text-sm sm:text-base truncate">สินค้ามือสองคุณภาพดี</h3>
+              <p class="text-xs text-gray-500 truncate">รับประกันโดยร้าน KP Shop ตรวจเช็คทุกเครื่อง</p>
             </div>
           </div>
-          <span class="bg-brand-100 text-brand-600 text-xs font-bold px-2 py-1 rounded">มีสินค้า <span
+          <span class="bg-brand-100 text-brand-600 text-xs font-bold px-2 py-1 rounded shrink-0 self-start sm:self-auto">มีสินค้า <span
               id="totalProductCount">0</span> รายการ</span>
         </div>
       </div>
     </div>
-    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 fade-in pb-20">
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 fade-in pb-20 max-w-full overflow-x-hidden">
       <div
-        class="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-4 border-b-2 border-brand-500 pb-1 gap-2">
-        <div>
+        class="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-4 border-b-2 border-brand-500 pb-2 gap-3 w-full max-w-full">
+        <div class="w-full sm:w-auto">
           <h2 class="text-lg font-bold text-gray-800" id="storeTitle">สินค้าทั้งหมด</h2>
-          <div id="storeTabs" class="flex gap-4 mt-2 hidden">
+          <div id="storeTabs" class="flex gap-2 sm:gap-4 mt-2 hidden overflow-x-auto pb-1 max-w-full">
             <button onclick="setStockTab('Products')"
-              class="font-bold text-brand-600 border-b-2 border-brand-600 px-1 pb-1 text-sm transition"
+              class="font-bold text-brand-600 border-b-2 border-brand-600 px-1 pb-1 text-sm transition shrink-0"
               id="tab_Products">พร้อมขาย</button>
             <button onclick="setStockTab('Employee')"
-              class="text-gray-500 hover:text-brand-500 border-b-2 border-transparent px-1 pb-1 text-sm transition hidden"
+              class="text-gray-500 hover:text-brand-500 border-b-2 border-transparent px-1 pb-1 text-sm transition shrink-0 hidden"
               id="tab_Employee">เครื่องพนักงาน</button>
             <button onclick="setStockTab('Spare')"
-              class="text-gray-500 hover:text-brand-500 border-b-2 border-transparent px-1 pb-1 text-sm transition hidden"
+              class="text-gray-500 hover:text-brand-500 border-b-2 border-transparent px-1 pb-1 text-sm transition shrink-0 hidden"
               id="tab_Spare">เครื่องอะไหล่</button>
           </div>
         </div>
-        <div class="flex gap-2">
+        <div class="flex flex-wrap sm:flex-nowrap gap-1.5 sm:gap-2 w-full sm:w-auto min-w-0">
           <select id="filterBrand" onchange="filterProducts()"
-            class="text-sm border-gray-300 rounded py-1 pl-2 pr-6 focus:ring-brand-500 outline-none text-gray-600">
+            class="flex-1 sm:flex-initial min-w-0 text-xs sm:text-sm border-gray-300 rounded py-1.5 px-2 focus:ring-brand-500 outline-none text-gray-600 bg-white">
             <option value="">ทุกยี่ห้อ</option>
             <option value="Apple">Apple / iPhone</option>
             <option value="Samsung">Samsung</option>
@@ -272,11 +287,11 @@
             <option value="Xiaomi">Xiaomi</option>
           </select>
           <select id="filterLocation" onchange="filterProducts()"
-            class="text-sm border-gray-300 rounded py-1 pl-2 pr-6 focus:ring-brand-500 outline-none text-gray-600">
+            class="flex-1 sm:flex-initial min-w-0 text-xs sm:text-sm border-gray-300 rounded py-1.5 px-2 focus:ring-brand-500 outline-none text-gray-600 bg-white truncate">
             <option value="">ทุกสาขา / ทุกที่อยู่</option>
           </select>
           <select id="filterStatus" onchange="filterProducts()"
-            class="text-sm border-gray-300 rounded py-1 pl-2 pr-6 focus:ring-brand-500 outline-none text-gray-600 hidden">
+            class="w-full sm:w-auto min-w-0 text-xs sm:text-sm border-gray-300 rounded py-1.5 px-2 focus:ring-brand-500 outline-none text-gray-600 bg-white hidden">
             <option value="available" selected>🟢 พร้อมขาย</option>
             <option value="unavailable_others">🔴 ไม่พร้อมขาย (ส่งซ่อม/จอง)</option>
             <option value="sold">⚫ ขายแล้ว</option>
