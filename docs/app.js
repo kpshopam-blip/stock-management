@@ -804,6 +804,7 @@ function renderInventoryTable(products) {
         <td class="px-2 py-3 text-center whitespace-nowrap">
           <button onclick="editProduct('${p.id}')"   class="text-indigo-600 hover:text-indigo-900 mx-1" title="แก้ไข"><i class="fa-solid fa-pen-to-square"></i></button>
           <button onclick="openSellModal('${p.id}')" class="text-green-600  hover:text-green-900 mx-1"  title="ขาย"><i class="fa-solid fa-cart-shopping"></i></button>
+          <button onclick="openClaimModal('${p.id}')" class="text-amber-600 hover:text-amber-800 mx-1" title="รับคืน/เคลม"><i class="fa-solid fa-arrows-rotate"></i></button>
           <button onclick="deleteProduct('${p.id}')" class="text-red-500    hover:text-red-700 mx-1"    title="ลบ"><i class="fa-solid fa-trash"></i></button>
         </td>`;
             tbody.appendChild(tr);
@@ -834,12 +835,14 @@ function renderInventoryTable(products) {
           <div class="text-gray-500">ราคาขายส่ง: <span class="text-indigo-600 font-bold">฿${formatNumber(p.wholesalePrice || 0)}</span></div>
           <div class="text-gray-500">ราคาจัดผ่อน: <span class="text-emerald-600 font-bold">฿${formatNumber(p.installmentPrice || 0)}</span></div>
           <div class="text-gray-500 col-span-2">IMEI: <span class="text-gray-700 font-medium">${p.imei || '-'}</span></div>
+          ${p.notes ? `<div class="text-amber-700 col-span-2 text-[11px] bg-amber-50 p-1 rounded mt-1">📝 หมายเหตุ: ${p.notes}</div>` : ''}
         </div>
         <div class="flex items-center justify-between border-t pt-2 gap-2 pl-6">
           <select onchange="onStatusChange('${p.id}', this.value)" class="text-xs border rounded px-1 py-0.5 ${statusClass} font-medium cursor-pointer">${statusOptions}</select>
           <div class="flex gap-2">
             <button onclick="editProduct('${p.id}')"   class="text-indigo-600 hover:text-indigo-900 text-xs font-medium flex items-center gap-1"><i class="fa-solid fa-pen-to-square"></i> แก้ไข</button>
             <button onclick="openSellModal('${p.id}')" class="text-green-600  hover:text-green-900 text-xs font-medium flex items-center gap-1"><i class="fa-solid fa-cart-shopping"></i> ขาย</button>
+            <button onclick="openClaimModal('${p.id}')" class="text-amber-600 hover:text-amber-800 text-xs font-medium flex items-center gap-1"><i class="fa-solid fa-arrows-rotate"></i> เคลม/คืน</button>
             <button onclick="deleteProduct('${p.id}')" class="text-red-500    hover:text-red-700 text-xs font-medium flex items-center gap-1"><i class="fa-solid fa-trash"></i> ลบ</button>
           </div>
         </div>`;
@@ -2170,6 +2173,7 @@ async function confirmSell() {
     }
 
     const isCredit = finalSaleType.includes('เชื่อ');
+    const sellNotes = document.getElementById('sell_notes') ? document.getElementById('sell_notes').value.trim() : '';
 
     showLoading(true);
     try {
@@ -2182,6 +2186,7 @@ async function confirmSell() {
                 dueDate: isCredit && dueDate ? formatDateToDMY(dueDate) : '',
                 salesperson: currentUser ? (currentUser.saleName || currentUser.name) : '',
                 recordedBy: currentUser ? currentUser.name : '',
+                notes: sellNotes,
                 receiptImage: sellReceiptDataURI ? { filename: 'receipt_bulk_' + Date.now() + '.jpg', dataURI: sellReceiptDataURI } : null
             };
             const res = await API_sellBulkProducts(saleData);
@@ -2206,6 +2211,7 @@ async function confirmSell() {
                 dueDate: isCredit && dueDate ? formatDateToDMY(dueDate) : '',
                 salesperson: currentUser ? (currentUser.saleName || currentUser.name) : '',
                 recordedBy: currentUser ? currentUser.name : '',
+                notes: sellNotes,
                 receiptImage: sellReceiptDataURI ? { filename: 'receipt_' + Date.now() + '.jpg', dataURI: sellReceiptDataURI } : null
             };
             const res = await API_sellProduct(saleData);
@@ -2225,6 +2231,122 @@ async function confirmSell() {
     } catch (err) {
         showLoading(false);
         showToast('บันทึกการขายไม่สำเร็จ: ' + err, 'error');
+    }
+}
+
+// ====== ระบบรับคืน / เคลม / เปลี่ยนเครื่อง ======
+let currentClaimProduct = null;
+
+function openClaimModal(productId) {
+    const prod = productsData.find(p => p.id === productId);
+    if (!prod) {
+        showToast('ไม่พบข้อมูลสินค้ารหัส ' + productId, 'error');
+        return;
+    }
+
+    currentClaimProduct = prod;
+    document.getElementById('claim_productId').value = productId;
+    
+    const infoDiv = document.getElementById('claimProductInfo');
+    infoDiv.innerHTML = `
+        <div class="font-bold text-gray-800 text-base">${prod.brand} ${prod.model}</div>
+        <div class="text-xs text-gray-600 mt-1">รหัสสินค้า: <span class="font-mono bg-gray-200 px-1 rounded">${prod.id}</span> | IMEI: ${prod.imei || '-'}</div>
+        <div class="text-xs text-amber-700 mt-1 font-medium">สถานะปัจจุบัน: ${prod.status} | คลัง: ${prod.stockType || 'Products'}</div>
+    `;
+
+    document.getElementById('claim_reason').value = '';
+    document.getElementById('claim_notes').value = '';
+    document.getElementById('claim_type').value = 'exchange';
+
+    // ดึงเครื่องพร้อมขาย (Available) ในคลังใส่ Select dropdown
+    const availableProds = productsData.filter(p => p.id !== productId && (p.status || 'Available').toLowerCase() === 'available');
+    const selectRep = document.getElementById('claim_replacement_productId');
+    selectRep.innerHTML = '<option value="">-- เลือกเครื่องในสต็อกพร้อมขาย --</option>';
+    availableProds.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.id;
+        opt.textContent = `${p.brand} ${p.model} (${p.id}) - ฿${(p.price || 0).toLocaleString()}`;
+        opt.dataset.price = p.price || 0;
+        selectRep.appendChild(opt);
+    });
+
+    document.getElementById('claim_replacement_soldPrice').value = '';
+    toggleClaimTypeOptions();
+
+    document.getElementById('claimModal').classList.remove('hidden');
+}
+
+function closeClaimModal() {
+    document.getElementById('claimModal').classList.add('hidden');
+}
+
+function toggleClaimTypeOptions() {
+    const type = document.getElementById('claim_type').value;
+    const container = document.getElementById('claim_replacement_container');
+    if (type === 'exchange') {
+        container.classList.remove('hidden');
+    } else {
+        container.classList.add('hidden');
+    }
+}
+
+function updateReplacementPriceHint() {
+    const select = document.getElementById('claim_replacement_productId');
+    const selectedOpt = select.options[select.selectedIndex];
+    if (selectedOpt && selectedOpt.dataset.price) {
+        document.getElementById('claim_replacement_soldPrice').value = selectedOpt.dataset.price;
+    }
+}
+
+async function confirmClaim() {
+    const productId = document.getElementById('claim_productId').value;
+    const claimType = document.getElementById('claim_type').value;
+    const reason = document.getElementById('claim_reason').value.trim();
+    const notes = document.getElementById('claim_notes').value.trim();
+    const replacementProductId = document.getElementById('claim_replacement_productId').value;
+    const replacementSoldPrice = document.getElementById('claim_replacement_soldPrice').value;
+
+    if (!reason) {
+        showToast('กรุณาระบุสาเหตุการคืน/เคลม', 'warning');
+        return;
+    }
+
+    if (claimType === 'exchange' && !replacementProductId) {
+        showToast('กรุณาเลือกเครื่องใหม่ที่จะเปลี่ยนให้ลูกค้า', 'warning');
+        return;
+    }
+
+    const btn = document.getElementById('btnConfirmClaim');
+    if (btn) btn.disabled = true;
+
+    showLoading(true);
+    try {
+        const claimData = {
+            productId,
+            claimType,
+            reason,
+            notes,
+            replacementProductId: claimType === 'exchange' ? replacementProductId : null,
+            replacementSoldPrice: claimType === 'exchange' && replacementSoldPrice ? parseFloat(replacementSoldPrice) : null,
+            recordedBy: currentUser ? currentUser.name : 'System'
+        };
+
+        const res = await API_returnProduct(claimData);
+        showLoading(false);
+        if (btn) btn.disabled = false;
+
+        if (res.success) {
+            showToast(res.message || 'บันทึกรายการเคลมเรียบร้อยแล้ว', 'success');
+            closeClaimModal();
+            fetchProducts();
+            if (typeof fetchInventoryData === 'function') fetchInventoryData();
+        } else {
+            showToast(res.message || 'เกิดข้อผิดพลาดในการบันทึก', 'error');
+        }
+    } catch (err) {
+        showLoading(false);
+        if (btn) btn.disabled = false;
+        showToast('ทำรายการไม่สำเร็จ: ' + err.message, 'error');
     }
 }
 

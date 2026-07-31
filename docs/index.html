@@ -809,6 +809,10 @@
             <img id="receiptPreviewImg" class="w-24 h-24 object-cover rounded border shadow">
           </div>
         </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1"><i class="fa-solid fa-note-sticky text-amber-500 mr-1"></i> หมายเหตุการขาย (ระบุของแถม/การรับประกัน/ตำหนิ)</label>
+          <textarea id="sell_notes" rows="2" placeholder="เช่น แถมฟิล์ม+เคส, ประกันร้าน 30 วัน, มีรอยมุมซ้าย" class="w-full p-2 border border-gray-300 rounded focus:ring-brand-500 outline-none text-sm"></textarea>
+        </div>
       </div>
       <div class="px-4 py-3 border-t bg-gray-50 flex justify-end gap-2">
         <button onclick="closeSellModal()"
@@ -816,6 +820,63 @@
         <button onclick="confirmSell()"
           class="px-5 py-2 bg-brand-600 text-white font-medium rounded hover:bg-brand-700 transition shadow text-sm flex items-center gap-2"><i
             class="fa-solid fa-check"></i> ยืนยันขาย</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal รับคืน / เคลม / เปลี่ยนเครื่อง (Claim Modal) -->
+  <div id="claimModal"
+    class="fixed inset-0 bg-black/60 z-[90] hidden flex items-center justify-center p-2 sm:p-4 backdrop-blur-sm">
+    <div class="bg-white w-full max-w-md rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[95vh]">
+      <div class="px-4 py-3 border-b bg-amber-50 flex justify-between items-center">
+        <h3 class="font-bold text-amber-800 text-lg"><i class="fa-solid fa-arrows-rotate mr-1"></i> รับคืน / เปลี่ยนเครื่อง / แจ้งเคลม</h3>
+        <button onclick="closeClaimModal()"
+          class="w-8 h-8 rounded-full bg-gray-200 text-gray-600 hover:bg-red-100 hover:text-red-500 flex justify-center items-center transition"><i
+            class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="p-4 overflow-y-auto flex-grow space-y-3">
+        <div id="claimProductInfo" class="bg-amber-50/50 border border-amber-100 p-3 rounded-lg text-sm"></div>
+        <input type="hidden" id="claim_productId">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">ประเภทการทำรายการ *</label>
+          <select id="claim_type" required onchange="toggleClaimTypeOptions()"
+            class="w-full p-2 border border-gray-300 rounded focus:ring-brand-500 outline-none font-semibold text-gray-800">
+            <option value="exchange">🔄 เปลี่ยนเครื่องใหม่ให้ลูกค้า</option>
+            <option value="refund">💸 รับคืนสินค้า (คืนเงินลูกค้า)</option>
+            <option value="repair">🛠️ ส่งซ่อม / เช็คอาการช่าง</option>
+          </select>
+        </div>
+        
+        <!-- ช่องเลือกเครื่องใหม่สำหรับกรณีเปลี่ยนเครื่อง -->
+        <div id="claim_replacement_container" class="space-y-2">
+          <label class="block text-sm font-medium text-gray-700">เลือกเครื่องใหม่ที่เปลี่ยนให้ลูกค้า *</label>
+          <select id="claim_replacement_productId" onchange="updateReplacementPriceHint()" class="w-full p-2 border border-gray-300 rounded focus:ring-brand-500 outline-none text-sm">
+            <option value="">-- เลือกเครื่องในสต็อกพร้อมขาย --</option>
+          </select>
+          <div class="flex items-center gap-2 mt-1">
+            <label class="text-xs font-medium text-gray-600">ราคาขายเครื่องใหม่ (บาท):</label>
+            <input type="number" id="claim_replacement_soldPrice" placeholder="ราคาขาย" class="w-32 p-1.5 border border-gray-300 rounded text-sm font-bold text-emerald-600">
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">สาเหตุการคืน/เคลม *</label>
+          <input type="text" id="claim_reason" required placeholder="เช่น จอขึ้นเส้น, แบตเสื่อมเร็ว, ลูกค้าไม่ถูกใจ"
+            class="w-full p-2 border border-gray-300 rounded focus:ring-brand-500 outline-none text-sm">
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">หมายเหตุเพิ่มเติม</label>
+          <textarea id="claim_notes" rows="2" placeholder="รายละเอียดอื่นๆ เช่น คืนเงินสด 5000 บ., เปลี่ยนเป็นรหัส PXXXXX"
+            class="w-full p-2 border border-gray-300 rounded focus:ring-brand-500 outline-none text-sm"></textarea>
+        </div>
+      </div>
+      <div class="px-4 py-3 border-t bg-gray-50 flex justify-end gap-2">
+        <button onclick="closeClaimModal()"
+          class="px-4 py-2 border border-gray-300 rounded text-gray-600 hover:bg-gray-100 transition text-sm">ยกเลิก</button>
+        <button onclick="confirmClaim()" id="btnConfirmClaim"
+          class="px-5 py-2 bg-amber-600 text-white font-medium rounded hover:bg-amber-700 transition shadow text-sm flex items-center gap-2"><i
+            class="fa-solid fa-check"></i> บันทึกรายการ</button>
       </div>
     </div>
   </div>
