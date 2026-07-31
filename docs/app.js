@@ -2238,7 +2238,8 @@ async function confirmSell() {
 let currentClaimProduct = null;
 
 function openClaimModal(productId) {
-    const prod = productsData.find(p => p.id === productId);
+    const prodList = (typeof allProducts !== 'undefined' && Array.isArray(allProducts)) ? allProducts : [];
+    const prod = prodList.find(p => p.id === productId);
     if (!prod) {
         showToast('ไม่พบข้อมูลสินค้ารหัส ' + productId, 'error');
         return;
@@ -2259,7 +2260,7 @@ function openClaimModal(productId) {
     document.getElementById('claim_type').value = 'exchange';
 
     // ดึงเครื่องพร้อมขาย (Available) ในคลังใส่ Select dropdown
-    const availableProds = productsData.filter(p => p.id !== productId && (p.status || 'Available').toLowerCase() === 'available');
+    const availableProds = prodList.filter(p => p.id !== productId && (p.status || 'Available').toLowerCase() === 'available');
     const selectRep = document.getElementById('claim_replacement_productId');
     selectRep.innerHTML = '<option value="">-- เลือกเครื่องในสต็อกพร้อมขาย --</option>';
     availableProds.forEach(p => {
