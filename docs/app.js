@@ -2120,7 +2120,11 @@ function previewReceiptImage(input) {
     reader.readAsDataURL(file);
 }
 
+let isSubmittingSell = false;
+
 async function confirmSell() {
+    if (isSubmittingSell) return;
+
     const isBulk = document.getElementById('sell_productId').value === 'BULK';
     const saleType = document.getElementById('sell_type').value;
     const customerName = document.getElementById('sell_customerName').value;
@@ -2175,7 +2179,14 @@ async function confirmSell() {
     const isCredit = finalSaleType.includes('เชื่อ');
     const sellNotes = document.getElementById('sell_notes') ? document.getElementById('sell_notes').value.trim() : '';
 
+    isSubmittingSell = true;
+    const confirmBtn = document.getElementById('confirmSellBtn');
+    if (confirmBtn) {
+        confirmBtn.disabled = true;
+        confirmBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> กำลังบันทึก...';
+    }
     showLoading(true);
+
     try {
         if (isBulk) {
             const saleData = {
@@ -2190,7 +2201,6 @@ async function confirmSell() {
                 receiptImage: sellReceiptDataURI ? { filename: 'receipt_bulk_' + Date.now() + '.jpg', dataURI: sellReceiptDataURI } : null
             };
             const res = await API_sellBulkProducts(saleData);
-            showLoading(false);
             if (res.success) {
                 cart = [];
                 saveCartToLocalStorage();
@@ -2215,7 +2225,6 @@ async function confirmSell() {
                 receiptImage: sellReceiptDataURI ? { filename: 'receipt_' + Date.now() + '.jpg', dataURI: sellReceiptDataURI } : null
             };
             const res = await API_sellProduct(saleData);
-            showLoading(false);
             if (res.success) {
                 cart = cart.filter(id => id !== productId);
                 saveCartToLocalStorage();
@@ -2229,8 +2238,14 @@ async function confirmSell() {
             }
         }
     } catch (err) {
-        showLoading(false);
         showToast('บันทึกการขายไม่สำเร็จ: ' + err, 'error');
+    } finally {
+        isSubmittingSell = false;
+        showLoading(false);
+        if (confirmBtn) {
+            confirmBtn.disabled = false;
+            confirmBtn.innerHTML = '<i class="fa-solid fa-check"></i> ยืนยันขาย';
+        }
     }
 }
 
