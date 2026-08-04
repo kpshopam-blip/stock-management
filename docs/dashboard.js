@@ -1552,18 +1552,18 @@ function showCustomConfirm(message, title = 'ยืนยันการทำ�
 
     const modal = document.createElement('div');
     modal.id = 'custom-confirm-modal';
-    modal.className = 'fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm transition-all duration-300';
+    modal.className = 'fixed inset-0 z-[9999] flex items-center justify-center p-4 pb-16 sm:pb-4 bg-black/60 backdrop-blur-sm transition-all duration-300';
     modal.innerHTML = `
-      <div class="bg-white dark:bg-darkbg-800 rounded-2xl shadow-2xl border border-gray-150 dark:border-darkbg-700 w-full max-w-sm overflow-hidden transform scale-95 opacity-0 transition-all duration-300 flex flex-col">
-        <div class="px-5 py-4 border-b border-gray-100 dark:border-darkbg-700 bg-gray-50 dark:bg-darkbg-900/30 flex items-center justify-between">
+      <div class="bg-white dark:bg-darkbg-800 rounded-2xl shadow-2xl border border-gray-150 dark:border-darkbg-700 w-full max-w-sm overflow-hidden transform scale-95 opacity-0 transition-all duration-300 flex flex-col max-h-[82dvh] sm:max-h-[90vh]">
+        <div class="px-5 py-4 border-b border-gray-100 dark:border-darkbg-700 bg-gray-50 dark:bg-darkbg-900/30 flex items-center justify-between shrink-0">
           <h3 class="text-sm font-extrabold text-gray-900 dark:text-white flex items-center gap-2">
             <i class="fa-solid fa-circle-question text-indigo-500 text-base"></i> ${title}
           </h3>
         </div>
-        <div class="px-6 py-6 text-xs text-gray-600 dark:text-gray-300 whitespace-pre-line leading-relaxed">
+        <div class="px-6 py-6 text-xs text-gray-600 dark:text-gray-300 whitespace-pre-line leading-relaxed overflow-y-auto flex-grow">
           ${message}
         </div>
-        <div class="px-5 py-3.5 border-t border-gray-100 dark:border-darkbg-700 bg-gray-50 dark:bg-darkbg-900/30 flex justify-end gap-2">
+        <div class="px-5 py-3.5 pb-5 sm:pb-3.5 border-t border-gray-100 dark:border-darkbg-700 bg-gray-50 dark:bg-darkbg-900/30 flex justify-end gap-2 shrink-0">
           <button id="custom-confirm-cancel" class="px-4 py-2 border border-gray-250 dark:border-darkbg-600 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-darkbg-700 rounded-xl font-bold text-xs transition-all">
             ยกเลิก
           </button>

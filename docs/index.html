@@ -720,9 +720,9 @@
 
   <!-- Modal ขายสินค้า (POS) -->
   <div id="sellModal"
-    class="fixed inset-0 bg-black/60 z-[90] hidden flex items-center justify-center p-2 sm:p-4 backdrop-blur-sm">
-    <div class="bg-white w-full max-w-md rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[95vh]">
-      <div class="px-4 py-3 border-b bg-brand-50 flex justify-between items-center">
+    class="fixed inset-0 bg-black/60 z-[90] hidden flex items-center justify-center p-2 sm:p-4 pb-16 sm:pb-4 backdrop-blur-sm">
+    <div class="bg-white w-full max-w-md rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[82dvh] sm:max-h-[90vh]">
+      <div class="px-4 py-3 border-b bg-brand-50 flex justify-between items-center shrink-0">
         <h3 class="font-bold text-brand-700 text-lg"><i class="fa-solid fa-cash-register mr-1"></i> ขายสินค้า</h3>
         <button onclick="closeSellModal()"
           class="w-8 h-8 rounded-full bg-gray-200 text-gray-600 hover:bg-red-100 hover:text-red-500 flex justify-center items-center transition"><i
@@ -814,7 +814,7 @@
           <textarea id="sell_notes" rows="2" placeholder="เช่น แถมฟิล์ม+เคส, ประกันร้าน 30 วัน, มีรอยมุมซ้าย" class="w-full p-2 border border-gray-300 rounded focus:ring-brand-500 outline-none text-sm"></textarea>
         </div>
       </div>
-      <div class="px-4 py-3 border-t bg-gray-50 flex justify-end gap-2">
+      <div class="px-4 py-3 pb-5 sm:pb-3 border-t bg-gray-50 flex justify-end gap-2 shrink-0">
         <button onclick="closeSellModal()"
           class="px-4 py-2 border border-gray-300 rounded text-gray-600 hover:bg-gray-100 transition text-sm">ยกเลิก</button>
         <button id="confirmSellBtn" onclick="confirmSell()"
@@ -826,9 +826,9 @@
 
   <!-- Modal รับคืน / เคลม / เปลี่ยนเครื่อง (Claim Modal) -->
   <div id="claimModal"
-    class="fixed inset-0 bg-black/60 z-[90] hidden flex items-center justify-center p-2 sm:p-4 backdrop-blur-sm">
-    <div class="bg-white w-full max-w-md rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[95vh]">
-      <div class="px-4 py-3 border-b bg-amber-50 flex justify-between items-center">
+    class="fixed inset-0 bg-black/60 z-[90] hidden flex items-center justify-center p-2 sm:p-4 pb-16 sm:pb-4 backdrop-blur-sm">
+    <div class="bg-white w-full max-w-md rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[82dvh] sm:max-h-[90vh]">
+      <div class="px-4 py-3 border-b bg-amber-50 flex justify-between items-center shrink-0">
         <h3 class="font-bold text-amber-800 text-lg"><i class="fa-solid fa-arrows-rotate mr-1"></i> รับคืน / เปลี่ยนเครื่อง / แจ้งเคลม</h3>
         <button onclick="closeClaimModal()"
           class="w-8 h-8 rounded-full bg-gray-200 text-gray-600 hover:bg-red-100 hover:text-red-500 flex justify-center items-center transition"><i
@@ -871,7 +871,7 @@
             class="w-full p-2 border border-gray-300 rounded focus:ring-brand-500 outline-none text-sm"></textarea>
         </div>
       </div>
-      <div class="px-4 py-3 border-t bg-gray-50 flex justify-end gap-2">
+      <div class="px-4 py-3 pb-5 sm:pb-3 border-t bg-gray-50 flex justify-end gap-2 shrink-0">
         <button onclick="closeClaimModal()"
           class="px-4 py-2 border border-gray-300 rounded text-gray-600 hover:bg-gray-100 transition text-sm">ยกเลิก</button>
         <button onclick="confirmClaim()" id="btnConfirmClaim"
@@ -883,16 +883,16 @@
 
   <!-- Modal ใบเสร็จดิจิทัล -->
   <div id="receiptModal"
-    class="fixed inset-0 bg-black/60 z-[95] hidden flex items-center justify-center p-2 sm:p-4 backdrop-blur-sm">
-    <div class="bg-white w-full max-w-sm rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[95vh]">
-      <div class="px-4 py-3 border-b bg-green-50 flex justify-between items-center">
+    class="fixed inset-0 bg-black/60 z-[95] hidden flex items-center justify-center p-2 sm:p-4 pb-16 sm:pb-4 backdrop-blur-sm">
+    <div class="bg-white w-full max-w-sm rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[82dvh] sm:max-h-[90vh]">
+      <div class="px-4 py-3 border-b bg-green-50 flex justify-between items-center shrink-0">
         <h3 class="font-bold text-green-700 text-lg"><i class="fa-solid fa-receipt mr-1"></i> ใบเสร็จการขาย</h3>
         <button onclick="document.getElementById('receiptModal').classList.add('hidden')"
           class="w-8 h-8 rounded-full bg-gray-200 text-gray-600 hover:bg-red-100 hover:text-red-500 flex justify-center items-center transition"><i
             class="fa-solid fa-xmark"></i></button>
       </div>
       <div id="receiptBody" class="p-4 overflow-y-auto flex-grow text-sm bg-white"></div>
-      <div class="px-4 py-3 border-t bg-gray-50 flex flex-col items-center">
+      <div class="px-4 py-3 pb-5 sm:pb-3 border-t bg-gray-50 flex flex-col items-center shrink-0">
         <p class="text-xs text-brand-600 font-bold mb-2"><i class="fa-solid fa-mobile-screen"></i>
           กรุณาแคปหน้าจอนี้ไว้เป็นหลักฐานการขาย</p>
         <button onclick="document.getElementById('receiptModal').classList.add('hidden')"
