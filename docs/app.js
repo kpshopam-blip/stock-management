@@ -2161,13 +2161,37 @@ async function confirmSell() {
             salePrices[pId] = price;
             totalBulkPrice += price;
         }
-        if (!await showCustomConfirm('ยืนยันการขายสินค้าทั้งหมด ' + checkoutProductIds.length + ' เครื่อง รวมเป็นเงิน ฿' + formatNumber(totalBulkPrice) + ' ใช่หรือไม่?', 'ยืนยันการขาย (เหมา)')) return;
     } else {
         const soldPrice = parseFloat(document.getElementById('sell_price').value) || 0;
         if (!soldPrice) { showToast('กรุณากรอกราคาขายจริง', 'warning'); return; }
         const productId = checkoutProductIds[0];
         salePrices[productId] = soldPrice;
-        if (!await showCustomConfirm('ยืนยันการขายสินค้าในราคา ฿' + formatNumber(soldPrice) + ' ใช่หรือไม่?', 'ยืนยันการขาย')) return;
+    }
+
+    // ล็อคปุ่มทันทีก่อนแสดง Pop-up เพื่อป้องกันการกดเบิ้ล
+    isSubmittingSell = true;
+    const confirmBtn = document.getElementById('confirmSellBtn');
+    if (confirmBtn) {
+        confirmBtn.disabled = true;
+        confirmBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> กำลังตรวจสอบ...';
+    }
+
+    let confirmed = false;
+    if (isBulk) {
+        confirmed = await showCustomConfirm('ยืนยันการขายสินค้าทั้งหมด ' + checkoutProductIds.length + ' เครื่อง รวมเป็นเงิน ฿' + formatNumber(totalBulkPrice) + ' ใช่หรือไม่?', 'ยืนยันการขาย (เหมา)');
+    } else {
+        const productId = checkoutProductIds[0];
+        const soldPrice = salePrices[productId];
+        confirmed = await showCustomConfirm('ยืนยันการขายสินค้าในราคา ฿' + formatNumber(soldPrice) + ' ใช่หรือไม่?', 'ยืนยันการขาย');
+    }
+
+    if (!confirmed) {
+        isSubmittingSell = false;
+        if (confirmBtn) {
+            confirmBtn.disabled = false;
+            confirmBtn.innerHTML = '<i class="fa-solid fa-check"></i> ยืนยันขาย';
+        }
+        return;
     }
 
     // กำหนดประเภทการขายที่ถูกบันทึกลงฐานข้อมูล โดยส่งวงเล็บประเภทชำระเงินไปด้วยสำหรับพาร์ทเนอร์
@@ -2179,10 +2203,7 @@ async function confirmSell() {
     const isCredit = finalSaleType.includes('เชื่อ');
     const sellNotes = document.getElementById('sell_notes') ? document.getElementById('sell_notes').value.trim() : '';
 
-    isSubmittingSell = true;
-    const confirmBtn = document.getElementById('confirmSellBtn');
     if (confirmBtn) {
-        confirmBtn.disabled = true;
         confirmBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> กำลังบันทึก...';
     }
     showLoading(true);
@@ -2206,7 +2227,7 @@ async function confirmSell() {
                 saveCartToLocalStorage();
                 renderCart();
                 closeSellModal();
-                showReceipt(res.receipt); // แสดงใบเสร็จดิจิตอลทันที (มีรายการครบทุกชิ้น)
+                if (res.receipt) showReceipt(res.receipt);
                 fetchProducts();
                 if (typeof fetchInventoryData === 'function') fetchInventoryData();
             } else {
@@ -2230,7 +2251,7 @@ async function confirmSell() {
                 saveCartToLocalStorage();
                 renderCart();
                 closeSellModal();
-                showReceipt(res.receipt);
+                if (res.receipt) showReceipt(res.receipt);
                 fetchProducts();
                 if (typeof fetchInventoryData === 'function') fetchInventoryData();
             } else {
