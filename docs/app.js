@@ -2618,20 +2618,50 @@ function loadCartFromLocalStorage() {
 function syncCartWithProducts() {
     if (!currentUser || !allProducts || allProducts.length === 0) return;
     const now = Date.now();
-    cart = cart.filter(id => {
+    const validCart = [];
+    const removedMessages = [];
+
+    cart.forEach(id => {
         const p = allProducts.find(prod => prod.id === id);
-        if (!p) return false;
+        if (!p) {
+            return; // ไม่พบสินค้านี้ในคลังแล้ว
+        }
         const statusLower = (p.status || 'Available').toLowerCase();
-        // ตรวจสอบว่ายังพร้อมขายอยู่ และผู้จองเป็นเราและเวลาจองยังไม่หมดอายุ
-        const isLockedByMe = statusLower === 'available' && p.lockedBy && p.lockedBy === currentUser.name && p.lockExpires > now;
-        return isLockedByMe;
+        if (statusLower !== 'available') {
+            removedMessages.push(`"${p.brand || ''} ${p.rawModel || p.model || id}" (ขายออกไปแล้ว/ไม่พร้อมขาย)`);
+            return;
+        }
+
+        // เช็คว่ามีคนอื่นจองอยู่แบบยังไม่หมดอายุหรือไม่
+        const isLockedByOthers = p.lockedBy && p.lockedBy !== currentUser.name && p.lockExpires > now;
+        if (isLockedByOthers) {
+            removedMessages.push(`"${p.brand || ''} ${p.rawModel || p.model || id}" (ถูกจองโดยคุณ ${p.lockedBy})`);
+            return;
+        }
+
+        // สินค้ายังคงอยู่และพร้อมขาย ให้เก็บในตะกร้าต่อ
+        validCart.push(id);
+
+        // หากสิทธิ์การจองในระบบหมดอายุแล้ว หรือยังไม่ได้ลงทะเบียนผู้จอง -> ทำการต่ออายุจองให้อัตโนมัติสำหรับพนักงานคนนี้
+        if (!p.lockedBy || p.lockedBy !== currentUser.name || p.lockExpires <= now) {
+            p.lockedBy = currentUser.name;
+            p.lockExpires = now + 10 * 60 * 1000; // จอง 10 นาที
+            API_lockProduct(id).catch(e => console.error('Auto renew lock error:', e));
+        }
     });
+
+    cart = validCart;
+
     for (const id in cartPrices) {
         if (!cart.includes(id)) {
             delete cartPrices[id];
         }
     }
     saveCartToLocalStorage();
+
+    if (removedMessages.length > 0) {
+        showToast(`นำสินค้าออกจากตะกร้าอัตโนมัติ: ${removedMessages.join(', ')}`, 'warning', 6000);
+    }
 }
 
 // ====================================================================
