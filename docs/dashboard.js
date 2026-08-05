@@ -1295,6 +1295,8 @@ async function syncFirebaseFromDashboard() {
     const response = await apiPost('syncAllProducts', {});
     showLoading(false);
     if (response.success) {
+      if (typeof SETTINGS_CACHE_KEY !== 'undefined') localStorage.removeItem(SETTINGS_CACHE_KEY);
+      if (typeof loadSettings === 'function') loadSettings();
       await showCustomAlert('ซิงค์ข้อมูลสำเร็จ! จำนวน ' + (response.count || 0) + ' รายการ', 'สำเร็จ');
       await refreshDashboard();
     } else {

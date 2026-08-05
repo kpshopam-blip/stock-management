@@ -1137,6 +1137,8 @@ async function forceSyncFirebase() {
         const response = await apiPost('syncAllProducts', {});
         showLoading(false);
         if (response.success) {
+            if (typeof SETTINGS_CACHE_KEY !== 'undefined') localStorage.removeItem(SETTINGS_CACHE_KEY);
+            if (typeof loadSettings === 'function') loadSettings();
             showToast('ซิงค์ข้อมูลสำเร็จ! จำนวน ' + response.count + ' รายการ', 'success');
             // ทำการดาวน์โหลดข้อมูลใหม่เพื่อแสดงผลล่าสุด
             if (typeof loadStore === 'function') {

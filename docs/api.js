@@ -309,10 +309,58 @@ async function API_getProducts() {
     }
 }
 
-// ดึง Settings
+// ดึง Settings (พร้อม Caching & Firebase Realtime DB เพื่อความเร็วสูงสุด)
+const SETTINGS_CACHE_KEY = 'kpshop_settings_cache';
+
+function getCachedSettings() {
+    try {
+        const cached = localStorage.getItem(SETTINGS_CACHE_KEY);
+        return cached ? JSON.parse(cached) : null;
+    } catch (e) {
+        return null;
+    }
+}
+
+function saveCachedSettings(data) {
+    if (!data) return;
+    try {
+        localStorage.setItem(SETTINGS_CACHE_KEY, JSON.stringify(data));
+    } catch (e) {}
+}
+
 async function API_getSettings() {
+    const cached = getCachedSettings();
+
+    // 1. ลองดึงจาก Firebase Realtime Database ก่อน (เร็วมาก 10-50ms)
+    try {
+        const baseUrl = (CONFIG.FIREBASE_DB_URL || '').replace(/\/$/, '');
+        if (baseUrl) {
+            const fbRes = await fetch(`${baseUrl}/settings.json`);
+            if (fbRes.ok) {
+                const fbData = await fbRes.json();
+                if (fbData && (fbData.brands || fbData.brandModels)) {
+                    saveCachedSettings(fbData);
+                    return fbData;
+                }
+            }
+        }
+    } catch (fbErr) {
+        console.warn('ดึง Settings จาก Firebase ล้มเหลว สลับไปใช้ Cache / GAS API:', fbErr);
+    }
+
+    // 2. ถ้ามี Cache ในเครื่อง คืนค่า Cache ออกไปทันที
+    if (cached) {
+        // แอบยิงดึงข้อมูลล่าสุดจาก GAS เบื้องหลังเพื่ออัปเดต Cache ล่าสุด
+        apiGet('getSettings').then(res => {
+            if (res && res.success && res.data) saveCachedSettings(res.data);
+        }).catch(() => {});
+        return cached;
+    }
+
+    // 3. ถ้าไม่มีทั้ง Firebase และ Cache ค่อยยิงดึงจาก GAS API
     const res = await apiGet('getSettings');
     if (!res.success) throw new Error(res.error || 'getSettings failed');
+    saveCachedSettings(res.data);
     return res.data;
 }
 
