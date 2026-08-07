@@ -1161,10 +1161,12 @@ function renderDashboard(d) {
     let todayProfit = d.today.profit || 0;
 
     // ถ้าไม่ใช่ผู้จัดการ ให้แสดงแค่ยอดขายของตัวเอง และซ่อนองค์ประกอบที่ไม่เกี่ยวข้อง
+    const syncBtn = document.getElementById('btnForceSyncFirebase');
     if (!isManager) {
         document.getElementById('managerSummaryCards').classList.add('hidden');
         document.getElementById('managerChartCard').classList.add('hidden');
         document.getElementById('dashSalespersonFilter').classList.add('hidden');
+        if (syncBtn) syncBtn.classList.add('hidden');
 
         displayList = displayList.filter(s => s.salesperson === currentUser.name);
 
@@ -1176,6 +1178,7 @@ function renderDashboard(d) {
         document.getElementById('managerSummaryCards').classList.remove('hidden');
         document.getElementById('managerChartCard').classList.remove('hidden');
         document.getElementById('dashSalespersonFilter').classList.remove('hidden');
+        if (syncBtn) syncBtn.classList.remove('hidden');
 
         // Render Dashboard Cards for Manager
         document.getElementById('dash_todaySales').textContent = todaySales + ' เครื่อง';
@@ -3024,16 +3027,16 @@ function showCustomAlert(message, title = 'แจ้งเตือน') {
     modal.id = 'custom-alert-modal';
     modal.className = 'fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm transition-all duration-300';
     modal.innerHTML = `
-      <div class="bg-white dark:bg-darkbg-850 rounded-2xl shadow-2xl border border-gray-150 dark:border-darkbg-700 w-full max-w-sm overflow-hidden transform scale-95 opacity-0 transition-all duration-300 flex flex-col">
-        <div class="px-5 py-4 border-b border-gray-100 dark:border-darkbg-700 bg-gray-50 dark:bg-darkbg-900/30 flex items-center justify-between">
-          <h3 class="text-sm font-extrabold text-gray-900 dark:text-white flex items-center gap-2">
+      <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-700 w-full max-w-sm overflow-hidden transform scale-95 opacity-0 transition-all duration-300 flex flex-col">
+        <div class="px-5 py-4 border-b border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/50 flex items-center justify-between">
+          <h3 class="text-sm font-extrabold text-gray-900 dark:text-slate-100 flex items-center gap-2">
             <i class="fa-solid fa-circle-info text-brand-500 text-base"></i> ${title}
           </h3>
         </div>
-        <div class="px-6 py-6 text-xs text-gray-600 dark:text-gray-300 whitespace-pre-line leading-relaxed">
+        <div class="px-6 py-6 text-sm font-medium text-gray-800 dark:text-slate-200 whitespace-pre-line leading-relaxed">
           ${message}
         </div>
-        <div class="px-5 py-3.5 border-t border-gray-100 dark:border-darkbg-700 bg-gray-50 dark:bg-darkbg-900/30 flex justify-end">
+        <div class="px-5 py-3.5 border-t border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/50 flex justify-end">
           <button id="custom-alert-ok" class="px-5 py-2 bg-brand-500 hover:bg-brand-600 text-white rounded-xl font-bold text-xs shadow-md shadow-brand-500/10 active:scale-95 transition-all">
             ตกลง
           </button>
@@ -3075,17 +3078,17 @@ function showCustomConfirm(message, title = 'ยืนยันการทำ�
     modal.id = 'custom-confirm-modal';
     modal.className = 'fixed inset-0 z-[9999] flex items-center justify-center p-4 pb-16 sm:pb-4 bg-black/60 backdrop-blur-sm transition-all duration-300';
     modal.innerHTML = `
-      <div class="bg-white dark:bg-darkbg-850 rounded-2xl shadow-2xl border border-gray-150 dark:border-darkbg-700 w-full max-w-sm overflow-hidden transform scale-95 opacity-0 transition-all duration-300 flex flex-col max-h-[82dvh] sm:max-h-[90vh]">
-        <div class="px-5 py-4 border-b border-gray-100 dark:border-darkbg-700 bg-gray-50 dark:bg-darkbg-900/30 flex items-center justify-between shrink-0">
-          <h3 class="text-sm font-extrabold text-gray-900 dark:text-white flex items-center gap-2">
+      <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-700 w-full max-w-sm overflow-hidden transform scale-95 opacity-0 transition-all duration-300 flex flex-col max-h-[82dvh] sm:max-h-[90vh]">
+        <div class="px-5 py-4 border-b border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/50 flex items-center justify-between shrink-0">
+          <h3 class="text-sm font-extrabold text-gray-900 dark:text-slate-100 flex items-center gap-2">
             <i class="fa-solid fa-circle-question text-brand-500 text-base"></i> ${title}
           </h3>
         </div>
-        <div class="px-6 py-6 text-xs text-gray-600 dark:text-gray-300 whitespace-pre-line leading-relaxed overflow-y-auto flex-grow">
+        <div class="px-6 py-6 text-sm font-medium text-gray-800 dark:text-slate-200 whitespace-pre-line leading-relaxed overflow-y-auto flex-grow">
           ${message}
         </div>
-        <div class="px-5 py-3.5 pb-5 sm:pb-3.5 border-t border-gray-100 dark:border-darkbg-700 bg-gray-50 dark:bg-darkbg-900/30 flex justify-end gap-2 shrink-0">
-          <button id="custom-confirm-cancel" class="px-4 py-2 border border-gray-250 dark:border-darkbg-600 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-darkbg-700 rounded-xl font-bold text-xs transition-all">
+        <div class="px-5 py-3.5 pb-5 sm:pb-3.5 border-t border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/50 flex justify-end gap-2 shrink-0">
+          <button id="custom-confirm-cancel" class="px-4 py-2 border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-xl font-bold text-xs transition-all">
             ยกเลิก
           </button>
           <button id="custom-confirm-ok" class="px-5 py-2 bg-brand-500 hover:bg-brand-600 text-white rounded-xl font-bold text-xs shadow-md shadow-brand-500/10 active:scale-95 transition-all">
