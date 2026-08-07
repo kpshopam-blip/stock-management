@@ -4,16 +4,17 @@
 // ทุกฟังก์ชันจะส่ง API Key + Session Token ไปกับทุก request
 // ====================================================================
 
-// ====== จัดการ Session ใน localStorage ======
+// ====== จัดการ Session ใน sessionStorage (ไม่เก็บข้ามเบราว์เซอร์ เพื่อตัดปัญหา Token ตกค้าง) ======
 const SESSION_KEY = 'kpshop_session';
 
 function saveSession(token, user) {
-    localStorage.setItem(SESSION_KEY, JSON.stringify({ token, user }));
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify({ token, user }));
+    localStorage.removeItem(SESSION_KEY); // ล้างคีย์เก่าที่อาจค้างใน localStorage
 }
 
 function getSession() {
     try {
-        const raw = localStorage.getItem(SESSION_KEY);
+        const raw = sessionStorage.getItem(SESSION_KEY) || localStorage.getItem(SESSION_KEY);
         return raw ? JSON.parse(raw) : null;
     } catch (e) {
         return null;
@@ -21,6 +22,7 @@ function getSession() {
 }
 
 function clearSession() {
+    sessionStorage.removeItem(SESSION_KEY);
     localStorage.removeItem(SESSION_KEY);
 }
 
@@ -223,13 +225,14 @@ async function API_login(username, password) {
     return apiPost('login', { username, password });
 }
 
-// Logout
+// Logout (Instant Clear Session + Background Notice)
 async function API_logout() {
     const session = getSession();
-    if (session && session.token) {
-        try { await apiPost('logout', {}); } catch (e) { /* ไม่เป็นไร */ }
-    }
     clearSession();
+    if (session && session.token) {
+        // ส่งคำขอ logout ไปหลังบ้านแบบฉากหลัง (Fire-and-forget) ไม่บล็อก UI
+        apiPost('logout', {}).catch(e => console.warn('Background logout request:', e));
+    }
 }
 
 // ดึงสินค้าทั้งหมด

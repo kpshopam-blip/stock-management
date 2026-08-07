@@ -180,7 +180,13 @@ async function refreshDashboard() {
   } catch (err) {
     showLoading(false);
     console.error('Refresh dashboard error:', err);
-    await showCustomAlert('เกิดข้อผิดพลาดในการดึงข้อมูลรายงานสต็อกและการขายส่ง: ' + err.message, 'เกิดข้อผิดพลาด');
+    if (err.message && err.message.includes('Session expired')) {
+      await showCustomAlert('เซสชันการใช้งานของคุณหมดอายุแล้ว กรุณาเข้าสู่ระบบใหม่อีกครั้ง', 'หมดเวลาการใช้งาน');
+      clearSession();
+      window.location.href = 'index.html';
+      return;
+    }
+    await showCustomAlert('เกิดข้อผิดพลาดในการดึงข้อมูลรายงาน: ' + err.message + '\n\nโปรดตรวจสอบการเชื่อมต่ออินเทอร์เน็ตหรือลองใหม่อีกครั้ง', 'เกิดข้อผิดพลาด');
   }
 }
 

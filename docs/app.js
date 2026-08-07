@@ -127,12 +127,9 @@ async function handleLogin(event) {
 }
 
 // ====== Logout ======
-async function logout() {
-    showLoading(true);
-    try { await API_logout(); } catch (e) { /* ไม่เป็นไร */ }
-    await clearSession();
+function logout() {
+    API_logout(); // ล้าง Session และส่งคำขอแจ้งหลังบ้านแบบ Background
     currentUser = null;
-    showLoading(false);
     renderPage('tpl-login');
 }
 
