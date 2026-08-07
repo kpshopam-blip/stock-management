@@ -2190,10 +2190,10 @@ function previewReceiptImage(input) {
     const file = input.files[0];
     const reader = new FileReader();
 
-    // ตั้งค่าขนาดบีบอัดใบเสร็จ POS (ลดขนาดลงเพื่อป้องกัน payload เกินข้อจำกัดของ Google Apps Script)
-    const MAX_WIDTH = 800;
-    const MAX_HEIGHT = 800;
-    const QUALITY = 0.5;
+    // ตั้งค่าขนาดบีบอัดสลิป/ใบเสร็จ POS แบบ HD WebP (ความละเอียดคมชัดสูง 1200px / 85%)
+    const MAX_WIDTH = 1200;
+    const MAX_HEIGHT = 1200;
+    const QUALITY = 0.85;
 
     reader.onload = function (e) {
         const img = new Image();
@@ -2213,7 +2213,10 @@ function previewReceiptImage(input) {
             const ctx = canvas.getContext('2d');
             ctx.drawImage(img, 0, 0, width, height);
 
-            const compressedDataURI = canvas.toDataURL('image/jpeg', QUALITY);
+            let compressedDataURI = canvas.toDataURL('image/webp', QUALITY);
+            if (!compressedDataURI || !compressedDataURI.startsWith('data:image/webp')) {
+                compressedDataURI = canvas.toDataURL('image/jpeg', QUALITY);
+            }
 
             sellReceiptDataURI = compressedDataURI;
             document.getElementById('receiptPreviewImg').src = compressedDataURI;
@@ -2315,6 +2318,20 @@ async function confirmSell() {
     showLoading(true);
 
     try {
+    const hasReceipt = Boolean(sellReceiptDataURI);
+    const receiptExt = (sellReceiptDataURI && sellReceiptDataURI.includes('image/webp')) ? '.webp' : '.jpg';
+    
+    if (hasReceipt) {
+        activeBackgroundUploadsCount++;
+        updateUploadBadge();
+        window.onbeforeunload = function () {
+            if (activeBackgroundUploadsCount > 0) {
+                return "ยังมีสลิปการขายหรือรูปภาพกำลังอัปโหลดในฉากหลัง! หากปิดหน้านี้ ข้อมูลอาจจะไม่สมบูรณ์ ต้องการออกจากหน้านี้หรือไม่?";
+            }
+        };
+    }
+
+    try {
         if (isBulk) {
             const saleData = {
                 productIds: checkoutProductIds,
@@ -2325,7 +2342,7 @@ async function confirmSell() {
                 salesperson: currentUser ? (currentUser.saleName || currentUser.name) : '',
                 recordedBy: currentUser ? currentUser.name : '',
                 notes: sellNotes,
-                receiptImage: sellReceiptDataURI ? { filename: 'receipt_bulk_' + Date.now() + '.jpg', dataURI: sellReceiptDataURI } : null
+                receiptImage: sellReceiptDataURI ? { filename: 'receipt_bulk_' + Date.now() + receiptExt, dataURI: sellReceiptDataURI } : null
             };
             const res = await API_sellBulkProducts(saleData);
             if (res.success) {
@@ -2349,7 +2366,7 @@ async function confirmSell() {
                 salesperson: currentUser ? (currentUser.saleName || currentUser.name) : '',
                 recordedBy: currentUser ? currentUser.name : '',
                 notes: sellNotes,
-                receiptImage: sellReceiptDataURI ? { filename: 'receipt_' + Date.now() + '.jpg', dataURI: sellReceiptDataURI } : null
+                receiptImage: sellReceiptDataURI ? { filename: 'receipt_' + Date.now() + receiptExt, dataURI: sellReceiptDataURI } : null
             };
             const res = await API_sellProduct(saleData);
             if (res.success) {
@@ -2364,6 +2381,16 @@ async function confirmSell() {
                 showToast(res.message, 'error');
             }
         }
+    } finally {
+        if (hasReceipt) {
+            activeBackgroundUploadsCount--;
+            if (activeBackgroundUploadsCount <= 0) {
+                activeBackgroundUploadsCount = 0;
+                window.onbeforeunload = null;
+            }
+            updateUploadBadge();
+        }
+    }
     } catch (err) {
         showToast('บันทึกการขายไม่สำเร็จ: ' + err, 'error');
     } finally {

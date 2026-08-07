@@ -1678,7 +1678,7 @@ function openPaymentSlipUploadModal(saleId) {
           const canvas = document.createElement('canvas');
           let width = img.width;
           let height = img.height;
-          const maxDim = 1024;
+          const maxDim = 1200;
           if (width > maxDim || height > maxDim) {
             if (width > height) {
               height = Math.round((height * maxDim) / width);
@@ -1692,7 +1692,12 @@ function openPaymentSlipUploadModal(saleId) {
           canvas.height = height;
           const ctx = canvas.getContext('2d');
           ctx.drawImage(img, 0, 0, width, height);
-          selectedDataURI = canvas.toDataURL('image/jpeg', 0.8);
+
+          let compressedWebP = canvas.toDataURL('image/webp', 0.85);
+          if (!compressedWebP || !compressedWebP.startsWith('data:image/webp')) {
+            compressedWebP = canvas.toDataURL('image/jpeg', 0.85);
+          }
+          selectedDataURI = compressedWebP;
 
           previewImg.src = selectedDataURI;
           previewContainer.classList.remove('hidden');
