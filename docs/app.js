@@ -1778,7 +1778,21 @@ async function submitProduct(event) {
         if (res.success) {
             showToast(res.message, 'success');
             resetProductForm();
-            fetchInventoryData();
+
+            // Optimistic Local Update: แทรกสินค้าใหม่ลงตารางหน้าจอทันที (0ms) ไม่ต้องรอโหลดใหม่
+            if (res.product && !editingProductId) {
+                const fullModel = res.product.modelCode ? `${res.product.model} ${res.product.modelCode}` : res.product.model;
+                const formattedProd = {
+                    ...res.product,
+                    rawModel: res.product.model,
+                    model: fullModel
+                };
+                allProducts.unshift(formattedProd); // แสดงสินค้าชิ้นใหม่ไว้บนสุด
+                renderInventoryTable(allProducts);
+                filterInventory();
+            } else {
+                fetchInventoryData();
+            }
         } else {
             showToast(res.message, 'error', 6000);
         }

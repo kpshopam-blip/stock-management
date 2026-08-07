@@ -446,19 +446,18 @@ async function API_uploadReceiptImage(dataURI, filename) {
 }
 
 // ====================================================================
-// อัปโหลดรูปทีละรูปแบบ recursive (แทน uploadImagesToDrive เดิม)
+// อัปโหลดรูปแบบขนาน (Parallel Uploadด้วย Promise.all) เพื่อความเร็วสูงสุด
 // ====================================================================
 async function uploadImagesToDrive(queue) {
-    const uploadedUrls = [];
-    for (const file of queue) {
-        try {
-            const url = await API_uploadImage(file.dataURI, file.filename);
-            if (url) uploadedUrls.push(url);
-        } catch (e) {
-            console.error('Upload error:', e);
-        }
-    }
-    return uploadedUrls;
+    if (!queue || queue.length === 0) return [];
+    const uploadPromises = queue.map(file => 
+        API_uploadImage(file.dataURI, file.filename).catch(e => {
+            console.error('Upload error for file ' + file.filename + ':', e);
+            return null;
+        })
+    );
+    const results = await Promise.all(uploadPromises);
+    return results.filter(url => Boolean(url));
 }
 
 // ล็อกสินค้าชั่วคราว ผ่าน Firebase ตรงๆ เพื่อความเร็วสูงระดับมิลลิวินาที
