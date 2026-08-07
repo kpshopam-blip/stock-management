@@ -1585,9 +1585,9 @@ function previewImages(input) {
     const totalFiles = input.files.length;
 
     // ตั้งค่าขนาดสูงสุดที่ต้องการให้บีบอัด
-    const MAX_WIDTH = 1200;
-    const MAX_HEIGHT = 1200;
-    const QUALITY = 0.7; // คุณภาพ JPEG (0.0 - 1.0)
+    const MAX_WIDTH = 1000;
+    const MAX_HEIGHT = 1000;
+    const QUALITY = 0.75; // คุณภาพ WebP (0.0 - 1.0)
 
     for (let i = 0; i < input.files.length; i++) {
         const file = input.files[i];
@@ -1619,12 +1619,17 @@ function previewImages(input) {
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(img, 0, 0, width, height);
 
-                // ดึงภาพย่อเป็น DataURI นามสกุล jpeg 
-                const compressedDataURI = canvas.toDataURL('image/jpeg', QUALITY);
+                // ดึงภาพย่อเป็น DataURI นามสกุล webp (fallback เป็น jpeg ถ้าไม่รองรับ)
+                let compressedDataURI = canvas.toDataURL('image/webp', QUALITY);
+                let ext = '.webp';
+                if (!compressedDataURI || !compressedDataURI.startsWith('data:image/webp')) {
+                    compressedDataURI = canvas.toDataURL('image/jpeg', QUALITY);
+                    ext = '.jpg';
+                }
 
                 fileQueue.push({
                     id: 'new_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
-                    filename: Date.now() + '_' + file.name.replace(/\.[^/.]+$/, "") + '.jpg', // เปลี่ยนนามสกุลตาม
+                    filename: Date.now() + '_' + file.name.replace(/\.[^/.]+$/, "") + ext,
                     dataURI: compressedDataURI
                 });
 
@@ -1762,15 +1767,18 @@ async function submitProduct(event) {
     };
 
     try {
-        // อัปโหลดรูปใหม่ก่อน
-        const uploadedUrls = await uploadImagesToDrive(fileQueue);
-        productData.images = existingImages.concat(uploadedUrls);
+        const pendingQueue = [...fileQueue]; // สำเนาคิวรูปภาพสำหรับ Background Upload
 
         let res;
         if (editingProductId) {
+            // กรณีแก้ไขสินค้าเดิม: รออัปโหลดรูปภาพใหม่ให้เรียบร้อย
+            const uploadedUrls = await uploadImagesToDrive(fileQueue);
+            productData.images = existingImages.concat(uploadedUrls);
             productData.id = editingProductId;
             res = await API_updateProduct(productData);
         } else {
+            // กรณีเพิ่มสินค้าใหม่: ส่งบันทึกลงระบบทันทีใน ~0.5-1 วินาที! โดยไม่ต้องรออัปโหลดรูป
+            productData.images = existingImages;
             res = await API_addProduct(productData);
         }
 
@@ -1790,6 +1798,11 @@ async function submitProduct(event) {
                 allProducts.unshift(formattedProd); // แสดงสินค้าชิ้นใหม่ไว้บนสุด
                 renderInventoryTable(allProducts);
                 filterInventory();
+
+                // หากมีรูปภาพแนบ ให้เริ่มระบบ Background Async Upload ทันที!
+                if (pendingQueue.length > 0) {
+                    startBackgroundUpload(res.id, productData.targetSheet, pendingQueue, existingImages);
+                }
             } else {
                 fetchInventoryData();
             }
@@ -1817,6 +1830,83 @@ function resetProductForm() {
     if (warningDiv) { warningDiv.className = 'hidden'; warningDiv.innerHTML = ''; }
     const btnSubmit = document.querySelector('#addProductForm button[type="submit"]');
     if (btnSubmit) btnSubmit.innerHTML = '<i class="fa-solid fa-save"></i> บันทึกเข้าระบบ';
+}
+
+// ====== ระบบจัดการ Background Upload และ UI Progress Badge ======
+let activeBackgroundUploadsCount = 0;
+
+function startBackgroundUpload(productId, targetSheet, queue, existingUrls = []) {
+    if (!queue || queue.length === 0) return;
+    activeBackgroundUploadsCount++;
+    updateUploadBadge();
+
+    // เตือนก่อนผู้ใช้กดปิดแท็บ/เบราว์เซอร์
+    window.onbeforeunload = function () {
+        if (activeBackgroundUploadsCount > 0) {
+            return "ยังมีรูปภาพกำลังอัปโหลดอยู่กลางทาง ต้องการออกจากหน้านี้หรือไม่?";
+        }
+    };
+
+    (async () => {
+        let retryCount = 0;
+        let uploadedUrls = [];
+
+        while (retryCount < 3) {
+            try {
+                uploadedUrls = await uploadImagesToDrive(queue);
+                if (uploadedUrls && uploadedUrls.length > 0) break;
+            } catch (e) {
+                console.warn(`Background upload retry ${retryCount + 1}:`, e);
+            }
+            retryCount++;
+            await new Promise(r => setTimeout(r, 1500));
+        }
+
+        const finalImages = existingUrls.concat(uploadedUrls);
+        if (finalImages.length > 0) {
+            try {
+                // อัปเดตข้อมูลไปยัง Firebase และ GAS
+                await API_updateFirebaseProductImages(productId, finalImages);
+                API_updateProductImageUrls(productId, targetSheet, finalImages).catch(e => console.warn('GAS image update notice:', e));
+
+                // อัปเดตข้อมูลบนหน้าจอ POS ทันที
+                const p = allProducts.find(x => x.id === productId);
+                if (p) {
+                    p.images = finalImages;
+                    renderInventoryTable(allProducts);
+                    filterInventory();
+                }
+            } catch (e) {
+                console.error('Error applying uploaded images to product:', e);
+            }
+        }
+
+        activeBackgroundUploadsCount--;
+        if (activeBackgroundUploadsCount <= 0) {
+            activeBackgroundUploadsCount = 0;
+            window.onbeforeunload = null;
+        }
+        updateUploadBadge();
+    })();
+}
+
+function updateUploadBadge() {
+    let badge = document.getElementById('bg-upload-progress-badge');
+    if (activeBackgroundUploadsCount > 0) {
+        if (!badge) {
+            badge = document.createElement('div');
+            badge.id = 'bg-upload-progress-badge';
+            badge.className = 'fixed bottom-4 right-4 z-[9999] bg-indigo-600 text-white px-4 py-2.5 rounded-full shadow-xl text-xs font-extrabold flex items-center gap-2 animate-pulse';
+            document.body.appendChild(badge);
+        }
+        badge.innerHTML = `<i class="fa-solid fa-cloud-arrow-up fa-spin text-sm"></i> <span>กำลังอัปโหลดรูปภาพเบื้องหลัง... (${activeBackgroundUploadsCount} รายการ)</span>`;
+    } else if (badge) {
+        badge.className = 'fixed bottom-4 right-4 z-[9999] bg-emerald-600 text-white px-4 py-2.5 rounded-full shadow-xl text-xs font-extrabold flex items-center gap-2';
+        badge.innerHTML = `<i class="fa-solid fa-circle-check text-sm"></i> <span>อัปโหลดรูปภาพสำเร็จแล้ว!</span>`;
+        setTimeout(() => {
+            if (badge && activeBackgroundUploadsCount === 0) badge.remove();
+        }, 3000);
+    }
 }
 
 async function editProduct(id) {

@@ -552,3 +552,22 @@ async function API_updatePaymentStatus(saleId, paymentStatus, paymentSlipDataURI
 async function API_returnProduct(claimData) {
     return apiPost('returnProduct', { claimData });
 }
+
+// อัปเดตเฉพาะรายการรูปภาพสินค้าไปยัง GAS
+async function API_updateProductImageUrls(productId, targetSheet, images) {
+    return apiPost('updateProductImages', { productId, targetSheet, images });
+}
+
+// อัปเดตรายการรูปภาพไปยัง Firebase ตรงๆ
+async function API_updateFirebaseProductImages(productId, images) {
+    if (!CONFIG.FIREBASE_DB_URL) return;
+    const url = `${CONFIG.FIREBASE_DB_URL}products/${productId}/images.json`;
+    try {
+        await fetch(url, {
+            method: 'PUT',
+            body: JSON.stringify(images)
+        });
+    } catch (e) {
+        console.warn('Direct Firebase image update failed:', e);
+    }
+}
