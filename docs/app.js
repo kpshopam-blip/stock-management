@@ -922,27 +922,62 @@ function selectAllBulkTransfer(sourceCb) {
 let isCartTransferMode = false;
 let cartTransferProductIds = [];
 
-function openTransferSetupModal() {
+async function populateTransferLocations() {
+    const locSel = document.getElementById('transfer_targetPlatform');
+    if (!locSel) return;
+    
+    locSel.innerHTML = '<option value="">เลือกสาขาปลายทาง</option>';
+    
+    let locations = [];
+    
+    if (window._appSettings && Array.isArray(window._appSettings.locations) && window._appSettings.locations.length > 0) {
+        locations = window._appSettings.locations;
+    } else {
+        try {
+            if (typeof API_getSettings === 'function') {
+                const settings = await API_getSettings();
+                if (settings) {
+                    window._appSettings = settings;
+                    if (Array.isArray(settings.locations) && settings.locations.length > 0) {
+                        locations = settings.locations;
+                    }
+                }
+            }
+        } catch (e) {
+            console.error('Error fetching settings for transfer locations:', e);
+        }
+    }
+    
+    // หากใน settings ยังไม่มีข้อมูล ให้ใช้ค่าเริ่มต้นจาก CONFIG.BRANCH_EMAILS หรือสาขามาตรฐาน
+    if (!locations || locations.length === 0) {
+        if (typeof CONFIG !== 'undefined' && CONFIG.BRANCH_EMAILS) {
+            locations = Object.keys(CONFIG.BRANCH_EMAILS);
+        } else {
+            locations = ['สาขาจอหอ', 'สาขาลากูน่า', 'สาขาโคกสวาย'];
+        }
+    }
+    
+    // เติมสาขาลงใน Dropdown โดยตัดค่าซ้ำ
+    const uniqueLocations = [...new Set(locations)];
+    uniqueLocations.forEach(l => {
+        if (l) {
+            locSel.innerHTML += `<option value="${l}">${l}</option>`;
+        }
+    });
+}
+
+async function openTransferSetupModal() {
     const checkboxes = document.querySelectorAll('.bulk-transfer-cb:checked');
     if (checkboxes.length === 0) return;
     
     isCartTransferMode = false;
     cartTransferProductIds = [];
     
-    // ตั้งค่าสาขาปลายทาง
-    const locSel = document.getElementById('transfer_targetPlatform');
-    if (locSel) {
-        locSel.innerHTML = '<option value="">เลือกสาขาปลายทาง</option>';
-        if (window._appSettings && window._appSettings.locations) {
-            window._appSettings.locations.forEach(l => {
-                locSel.innerHTML += `<option value="${l}">${l}</option>`;
-            });
-        }
-    }
+    await populateTransferLocations();
     document.getElementById('transferSetupModal').classList.remove('hidden');
 }
 
-function checkoutCartTransfer() {
+async function checkoutCartTransfer() {
     if (cart.length === 0) {
         showToast('ไม่มีสินค้าในตะกร้า', 'warning');
         return;
@@ -951,16 +986,7 @@ function checkoutCartTransfer() {
     isCartTransferMode = true;
     cartTransferProductIds = [...cart];
     
-    const locSel = document.getElementById('transfer_targetPlatform');
-    if (locSel) {
-        locSel.innerHTML = '<option value="">เลือกสาขาปลายทาง</option>';
-        if (window._appSettings && window._appSettings.locations) {
-            window._appSettings.locations.forEach(l => {
-                locSel.innerHTML += `<option value="${l}">${l}</option>`;
-            });
-        }
-    }
-    
+    await populateTransferLocations();
     toggleCartDrawer(false);
     document.getElementById('transferSetupModal').classList.remove('hidden');
 }
