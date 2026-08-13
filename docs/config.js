@@ -17,5 +17,13 @@ const CONFIG = {
     API_KEY: 'KPSHOP168',
 
     // URL ของ Firebase Realtime Database
-    FIREBASE_DB_URL: 'https://kpshop-stock-mobile-phone-default-rtdb.asia-southeast1.firebasedatabase.app/'
+    FIREBASE_DB_URL: 'https://kpshop-stock-mobile-phone-default-rtdb.asia-southeast1.firebasedatabase.app/',
+
+    // อีเมลประจำสาขาสำหรับการส่งแจ้งเตือนการขายและการโอนสินค้า
+    BRANCH_EMAILS: {
+        'สาขาจอหอ': 'kpshop.jh@gmail.com',
+        'สาขาลากูน่า': 'kpshoplaguna@gmail.com',
+        'สาขาโคกสวาย': 'kpshop.kw@gmail.com'
+    }
 };
+

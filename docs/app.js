@@ -919,18 +919,49 @@ function selectAllBulkTransfer(sourceCb) {
     toggleBulkSelection();
 }
 
+let isCartTransferMode = false;
+let cartTransferProductIds = [];
+
 function openTransferSetupModal() {
     const checkboxes = document.querySelectorAll('.bulk-transfer-cb:checked');
     if (checkboxes.length === 0) return;
     
+    isCartTransferMode = false;
+    cartTransferProductIds = [];
+    
     // ตั้งค่าสาขาปลายทาง
     const locSel = document.getElementById('transfer_targetPlatform');
-    locSel.innerHTML = '<option value="">เลือกสาขาปลายทาง</option>';
-    if (window._appSettings && window._appSettings.locations) {
-        window._appSettings.locations.forEach(l => {
-            locSel.innerHTML += `<option value="${l}">${l}</option>`;
-        });
+    if (locSel) {
+        locSel.innerHTML = '<option value="">เลือกสาขาปลายทาง</option>';
+        if (window._appSettings && window._appSettings.locations) {
+            window._appSettings.locations.forEach(l => {
+                locSel.innerHTML += `<option value="${l}">${l}</option>`;
+            });
+        }
     }
+    document.getElementById('transferSetupModal').classList.remove('hidden');
+}
+
+function checkoutCartTransfer() {
+    if (cart.length === 0) {
+        showToast('ไม่มีสินค้าในตะกร้า', 'warning');
+        return;
+    }
+    
+    isCartTransferMode = true;
+    cartTransferProductIds = [...cart];
+    
+    const locSel = document.getElementById('transfer_targetPlatform');
+    if (locSel) {
+        locSel.innerHTML = '<option value="">เลือกสาขาปลายทาง</option>';
+        if (window._appSettings && window._appSettings.locations) {
+            window._appSettings.locations.forEach(l => {
+                locSel.innerHTML += `<option value="${l}">${l}</option>`;
+            });
+        }
+    }
+    
+    toggleCartDrawer(false);
     document.getElementById('transferSetupModal').classList.remove('hidden');
 }
 
@@ -939,16 +970,24 @@ function closeTransferSetupModal() {
 }
 
 async function confirmBulkTransfer() {
-    const checkboxes = document.querySelectorAll('.bulk-transfer-cb:checked');
-    if (checkboxes.length === 0) return;
+    let productIds = [];
+    if (isCartTransferMode && cartTransferProductIds.length > 0) {
+        productIds = [...cartTransferProductIds];
+    } else {
+        const checkboxes = document.querySelectorAll('.bulk-transfer-cb:checked');
+        productIds = Array.from(checkboxes).map(cb => cb.value);
+    }
+
+    if (productIds.length === 0) {
+        showToast('ไม่มีสินค้าที่เลือกโอน', 'warning');
+        return;
+    }
     
     const targetLocation = document.getElementById('transfer_targetPlatform').value;
     if (!targetLocation) {
         showToast('กรุณาเลือกสาขาปลายทาง', 'warning');
         return;
     }
-
-    const productIds = Array.from(checkboxes).map(cb => cb.value);
     
     // ยืนยัน
     if (!await showCustomConfirm(`ยืนยันการโอนสินค้าจำนวน ${productIds.length} รายการ ไปยังสาขา "${targetLocation}" หรือไม่?`, 'ยืนยันการโอนข้ามสาขา')) return;
@@ -962,20 +1001,32 @@ async function confirmBulkTransfer() {
         showToast(res.message, res.success ? 'success' : 'error');
         
         if (res.success) {
-            // เตรียมข้อมูลเพื่อแสดงใบโอน
+            // หากโอนสินค้าจากตะกร้า ให้ล้างตะกร้า
+            if (isCartTransferMode) {
+                cart = [];
+                cartPrices = {};
+                saveCartToLocalStorage();
+                renderCart();
+            }
+
+            // เตรียมข้อมูลเพื่อแสดงใบโอนดิจิทัลบนหน้าตามเดิม
             const transferredProducts = allProducts.filter(p => productIds.includes(p.id));
-            showTransferReceiptCard(transferredProducts, targetLocation);
+            showTransferReceiptCard(transferredProducts, targetLocation, res.docId);
             
-            // ยกเลิกการเลือก
+            // ยกเลิกการเลือกในตาราง (ถ้ามี)
             document.querySelectorAll('.bulk-transfer-cb').forEach(cb => cb.checked = false);
             toggleBulkSelection();
             if (document.getElementById('selectAllCb')) document.getElementById('selectAllCb').checked = false;
             
-            fetchInventoryData();
+            fetchProducts();
+            if (typeof fetchInventoryData === 'function') fetchInventoryData();
         }
     } catch (err) {
         showLoading(false);
         showToast('การโอนไม่สำเร็จ: ' + err, 'error');
+    } finally {
+        isCartTransferMode = false;
+        cartTransferProductIds = [];
     }
 }
 
@@ -2973,6 +3024,7 @@ function renderCart() {
     const totalItemsText = document.getElementById('cartTotalItems');
     const totalPriceText = document.getElementById('cartTotalPrice');
     const btnCheckout = document.getElementById('btnCheckoutCart');
+    const btnTransfer = document.getElementById('btnTransferCart');
     
     if (!listContainer) return;
     
@@ -2984,12 +3036,14 @@ function renderCart() {
             badge.classList.remove('hidden');
         }
         if (btnCheckout) btnCheckout.disabled = false;
+        if (btnTransfer) btnTransfer.disabled = false;
     } else {
         if (badge) {
             badge.innerText = '0';
             badge.classList.add('hidden');
         }
         if (btnCheckout) btnCheckout.disabled = true;
+        if (btnTransfer) btnTransfer.disabled = true;
     }
     
     if (totalItemsText) totalItemsText.innerText = count;
