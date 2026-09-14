@@ -3088,18 +3088,7 @@ function confirmOcrResult() {
         }
     }
     
-    // ตรวจสอบว่าผู้ใช้ติ๊กเลือก "แนบรูปนี้เข้าไปในรูปถ่ายสินค้าด้วย" หรือไม่
-    const attachCheckbox = document.getElementById('ocrAttachToProduct');
-    if (attachCheckbox && attachCheckbox.checked && currentOcrImageCompressedUri) {
-        fileQueue.push({
-            id: 'ocr_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
-            filename: Date.now() + '_imei_box_' + currentOcrFileName.replace(/\.[^/.]+$/, "") + '.webp',
-            dataURI: currentOcrImageCompressedUri
-        });
-        renderImagePreviews();
-        showToast('แนบรูปถ่ายเข้าในรายการรูปสินค้าเรียบร้อย', 'info');
-    }
-    
+    // นำค่าไปใส่ในช่องเป้าหมายอย่างเดียว ไม่บันทึกรูปภาพลงในสินค้า
     closeOcrModal();
     showToast(`นำเข้าสำเร็จ: ${extractedVal}`, 'success');
 }
