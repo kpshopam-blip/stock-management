@@ -15,6 +15,8 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <!-- QuaggaJS Barcode Scanner -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
+  <!-- Tesseract.js สำหรับ Image OCR -->
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 
   <!-- Tailwind Config -->
   <script>
@@ -373,6 +375,11 @@
                 <input type="text" id="p_imei" placeholder="กรอกเลข IMEI เครื่อง (บังคับกรอก)"
                   class="flex-grow p-2 border border-gray-300 rounded focus:ring-brand-500 outline-none transition-colors"
                   oninput="onImeiInput(this.value)">
+                <button type="button" onclick="triggerOcrFileInput('p_imei')"
+                  class="px-3 py-2 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded text-sm font-semibold hover:bg-emerald-100 transition flex items-center gap-1.5 whitespace-nowrap shadow-sm"
+                  title="อ่าน IMEI / SN จากรูปภาพ (OCR)">
+                  <i class="fa-solid fa-file-image"></i> อ่านจากรูป
+                </button>
                 <button type="button" onclick="startScanner()"
                   class="px-3 py-2 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded text-sm font-semibold hover:bg-indigo-100 transition flex items-center gap-1 whitespace-nowrap">
                   <i class="fa-solid fa-barcode"></i> สแกน
@@ -503,23 +510,62 @@
                 class="w-full p-2 border border-gray-300 rounded focus:ring-brand-500 outline-none">
             </div>
             <!-- อัปโหลดรูปภาพ -->
-            <div class="lg:col-span-3 border border-dashed border-gray-300 rounded p-4 bg-gray-50 overflow-hidden">
-              <label class="block text-sm font-medium text-gray-700 mb-2"><i
-                  class="fa-solid fa-camera text-brand-500"></i> อัปโหลดรูปภาพ / ถ่ายภาพเครื่องนี้</label>
+            <div class="lg:col-span-3 border border-dashed border-gray-300 rounded-xl p-4 bg-gray-50/70 overflow-hidden">
+              <label class="block text-sm font-semibold text-gray-700 mb-3"><i
+                  class="fa-solid fa-camera text-brand-500"></i> อัปโหลดรูปภาพสินค้า / ถ่ายภาพเครื่องนี้</label>
+              
+              <!-- โซนพิเศษ: หลังกล่อง หรือหน้าจอเกี่ยวกับ (OCR IMEI อัตโนมัติ) ตามแบบตัวอย่าง -->
+              <div class="mb-4 p-3 bg-white border border-emerald-200 rounded-xl shadow-sm">
+                <div class="flex items-center justify-between mb-2">
+                  <div class="text-sm font-semibold text-gray-800 flex items-center gap-1.5">
+                    <i class="fa-solid fa-wand-magic-sparkles text-emerald-600"></i>
+                    <span>หลังกล่อง หรือหน้าจอเกี่ยวกับ</span>
+                    <span class="text-xs font-normal text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">ดึงเลขอัตโนมัติ</span>
+                  </div>
+                  <span class="text-xs text-gray-400">รองรับทั้ง IMEI 1 และ Serial No (iPad)</span>
+                </div>
+
+                <div class="flex flex-wrap items-center gap-3">
+                  <!-- กล่องสไตล์ตัวอย่างสำหรับคลิกเลือกรูป -->
+                  <div onclick="triggerOcrFileInput('p_imei')" 
+                    class="w-28 h-28 border-2 border-dashed border-emerald-300 hover:border-emerald-500 rounded-xl bg-emerald-50/40 hover:bg-emerald-50 transition cursor-pointer flex flex-col items-center justify-center text-center p-2 group shadow-inner">
+                    <i class="fa-solid fa-camera-retro text-2xl text-emerald-500 group-hover:scale-110 transition-transform mb-1.5"></i>
+                    <span class="text-[11px] font-medium text-gray-600">เลือกรูป/ถ่ายรูป</span>
+                  </div>
+
+                  <div class="flex flex-col gap-2">
+                    <button type="button" onclick="triggerOcrFileInput('p_imei')"
+                      class="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-medium rounded-lg text-sm shadow hover:shadow-md transition flex items-center gap-2 w-fit">
+                      <i class="fa-solid fa-expand"></i> OCR IMEI / SN
+                    </button>
+                    <div class="text-[11px] text-gray-500 leading-tight">
+                      • ระบบจะอ่านเฉพาะ <b>IMEI 1</b> เท่านั้น (ข้าม IMEI 2/EID/MEID)<br>
+                      • หากเป็น <b>iPad Wi-Fi</b> ระบบจะอ่าน <b>Serial Number</b> ให้อัตโนมัติ
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- เมนูปุ่มเลือกรูปทั่วไป -->
+              <div class="text-xs font-medium text-gray-500 mb-2">รูปถ่ายตัวเครื่องเพิ่มเติม (หน้า/หลัง/รอบเครื่อง):</div>
               <div class="flex flex-wrap gap-2 mb-3">
                 <label
-                  class="px-3 py-2 bg-brand-50 text-brand-700 border border-brand-200 rounded text-sm font-semibold hover:bg-brand-100 cursor-pointer flex items-center gap-2 transition">
+                  class="px-3 py-2 bg-brand-50 text-brand-700 border border-brand-200 rounded-lg text-sm font-semibold hover:bg-brand-100 cursor-pointer flex items-center gap-2 transition shadow-sm">
                   <i class="fa-regular fa-images"></i> เลือกหลายรูปภาพ (อัลบั้ม)
                   <input type="file" id="p_images_multiple" multiple accept="image/*" onchange="previewImages(this)"
                     class="hidden">
                 </label>
                 <label
-                  class="px-3 py-2 bg-blue-50 text-blue-700 border border-blue-200 rounded text-sm font-semibold hover:bg-blue-100 cursor-pointer flex items-center gap-2 transition">
+                  class="px-3 py-2 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg text-sm font-semibold hover:bg-blue-100 cursor-pointer flex items-center gap-2 transition shadow-sm">
                   <i class="fa-solid fa-camera"></i> ถ่ายรูปทีละภาพ (กล้อง)
                   <input type="file" id="p_images_camera" accept="image/*" capture="environment"
                     onchange="previewImages(this)" class="hidden">
                 </label>
               </div>
+
+              <!-- ช่อง Input ซ่อนสำหรับระบบ OCR -->
+              <input type="file" id="ocr_global_file_input" accept="image/*" class="hidden" onchange="handleOcrImageFile(this)">
+
               <div id="imagePreviewContainer" class="flex flex-wrap gap-2 mt-2"></div>
             </div>
           </div>
@@ -1057,10 +1103,106 @@
     </div>
   </div>
 
+  <!-- Image OCR Modal Overlay -->
+  <div id="ocr-modal-overlay" class="fixed inset-0 z-[10000] bg-black/70 backdrop-blur-sm hidden flex items-center justify-center p-3 sm:p-4">
+    <div class="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden border border-gray-100 flex flex-col max-h-[92vh] animate-in fade-in zoom-in duration-200">
+      
+      <!-- Modal Header -->
+      <div class="px-5 py-4 bg-gradient-to-r from-emerald-600 via-teal-600 to-teal-700 text-white flex items-center justify-between">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center shadow-inner">
+            <i class="fa-solid fa-wand-magic-sparkles text-sm"></i>
+          </div>
+          <div>
+            <h3 class="font-bold text-base sm:text-lg leading-tight">ระบบอ่าน IMEI / Serial No จากรูป</h3>
+            <p class="text-[11px] text-emerald-100 font-light">อ่านเฉพาะ IMEI 1 / หรือ SN สำหรับ iPad</p>
+          </div>
+        </div>
+        <button type="button" onclick="closeOcrModal()" class="w-8 h-8 rounded-full hover:bg-white/20 flex items-center justify-center transition text-white/90 hover:text-white">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <!-- Modal Body -->
+      <div class="p-4 sm:p-5 overflow-y-auto space-y-4 text-gray-700">
+        
+        <!-- Image Preview & Scanner Animation Container -->
+        <div class="relative w-full h-48 sm:h-56 bg-gray-900 rounded-xl overflow-hidden flex items-center justify-center border border-gray-200">
+          <img id="ocrPreviewImage" src="" alt="OCR Preview" class="w-full h-full object-contain">
+          
+          <!-- Animated Scanning Line -->
+          <div id="ocrScanBeam" class="absolute inset-x-0 h-1 bg-gradient-to-r from-transparent via-emerald-400 to-transparent shadow-[0_0_12px_#34d399] transition-all duration-1000 ease-in-out pointer-events-none hidden"></div>
+
+          <!-- Loading State Overlay -->
+          <div id="ocrLoadingOverlay" class="absolute inset-0 bg-black/65 backdrop-blur-[2px] flex flex-col items-center justify-center text-white p-4 text-center hidden">
+            <div class="w-12 h-12 border-4 border-emerald-400 border-t-transparent rounded-full animate-spin mb-3"></div>
+            <p id="ocrStatusText" class="text-sm font-medium text-emerald-200 animate-pulse">กำลังวิเคราะห์รูปภาพ...</p>
+            <p class="text-xs text-gray-300 mt-1 font-light">ระบบกำลังอ่านทั้งบาร์โค้ดและข้อความ OCR</p>
+          </div>
+        </div>
+
+        <!-- Result Box -->
+        <div id="ocrResultContainer" class="hidden space-y-3">
+          <div class="p-3.5 bg-emerald-50/80 border border-emerald-200 rounded-xl">
+            <div class="flex items-center justify-between mb-1.5">
+              <span id="ocrResultBadge" class="text-xs font-semibold px-2 py-0.5 rounded-md bg-emerald-600 text-white flex items-center gap-1">
+                <i class="fa-solid fa-check"></i> <span id="ocrResultType">ตรวจพบ IMEI 1</span>
+              </span>
+              <span class="text-[11px] text-gray-500 font-normal">คัดเฉพาะ IMEI 1 เรียบร้อย</span>
+            </div>
+            
+            <div class="relative mt-2">
+              <input type="text" id="ocrExtractedValue" 
+                class="w-full text-lg sm:text-xl font-mono font-bold text-gray-900 bg-white px-3 py-2 border-2 border-emerald-400 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500/30 text-center tracking-wider"
+                placeholder="ไม่พบข้อมูล">
+              <button type="button" onclick="document.getElementById('ocrExtractedValue').focus(); document.getElementById('ocrExtractedValue').select();" 
+                class="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-emerald-600 text-xs" title="คลิกเพื่อแก้ไข">
+                <i class="fa-solid fa-pen-to-square"></i>
+              </button>
+            </div>
+            <p class="text-[11px] text-gray-500 mt-1.5 text-center">สามารถแก้ไขตัวเลขในช่องได้หากต้องการ</p>
+          </div>
+
+          <!-- Option to include as product image -->
+          <label class="flex items-center gap-2.5 text-xs text-gray-600 cursor-pointer p-2 bg-gray-50 hover:bg-gray-100 rounded-lg transition border border-gray-200/80">
+            <input type="checkbox" id="ocrAttachToProduct" checked class="w-4 h-4 text-emerald-600 rounded border-gray-300 focus:ring-emerald-500">
+            <span>แนบรูปนี้เข้าไปใน <b>"รูปถ่ายสินค้า"</b> ของเครื่องนี้ด้วยอัตโนมัติ</span>
+          </label>
+        </div>
+
+        <!-- Error / Not Found Box -->
+        <div id="ocrErrorContainer" class="hidden p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-xs space-y-1">
+          <div class="font-bold flex items-center gap-1.5 text-sm text-amber-900">
+            <i class="fa-solid fa-triangle-exclamation text-amber-600"></i> ไม่สามารถตรวจหา IMEI 1 หรือ Serial No ได้
+          </div>
+          <p>คำแนะนำ: กรุณาลองถ่ายภาพให้ตรง ใกล้ขึ้น และมีแสงสว่างเพียงพอ หรือเลือกรูปใหม่</p>
+        </div>
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="px-5 py-3.5 bg-gray-50 border-t border-gray-100 flex items-center justify-between gap-2">
+        <button type="button" onclick="triggerOcrFileInput(activeOcrTargetInputId)" 
+          class="px-3.5 py-2 text-xs font-semibold text-gray-600 hover:text-gray-900 hover:bg-gray-200 rounded-lg transition flex items-center gap-1.5">
+          <i class="fa-solid fa-arrow-rotate-right"></i> เลือกรูปใหม่
+        </button>
+        <div class="flex items-center gap-2">
+          <button type="button" onclick="closeOcrModal()" 
+            class="px-4 py-2 text-xs font-medium text-gray-600 hover:bg-gray-200 rounded-lg transition">
+            ยกเลิก
+          </button>
+          <button type="button" id="btnConfirmOcr" onclick="confirmOcrResult()" disabled
+            class="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 text-white text-xs sm:text-sm font-bold rounded-lg shadow hover:shadow-md transition flex items-center gap-1.5 disabled:cursor-not-allowed">
+            <i class="fa-solid fa-check"></i> นำไปใช้ในช่อง IMEI
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- โหลด config.js และ api.js ก่อน แล้วค่อยโหลด app.js -->
   <script src="config.js?v=1.0.2"></script>
   <script src="api.js?v=1.0.2"></script>
-  <script src="app.js?v=1.0.2"></script>
+  <script src="app.js?v=1.0.3"></script>
 
 </body>
 
