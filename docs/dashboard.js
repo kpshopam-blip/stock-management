@@ -168,25 +168,29 @@ async function refreshDashboard() {
     // แดชบอร์ดผู้จัดการใช้เฉพาะข้อมูลจากชีต Products และ SalesData เท่านั้น
     // ไม่รวม Stock_Employee และ Stock_Spare
     allProducts = rawProducts.filter(p => (p.stockType || 'Products') === 'Products');
-    salesSummary = await API_getSalesSummary();
-
     // เริ่มสร้าง Dropdown ตัวกรองหลักก่อน
     initFilterDropdowns();
-    
-    // เรนเดอร์ข้อมูลทั้งหมด
+    // เรนเดอร์ข้อมูลสต็อกก่อน
     renderAllFilteredReports();
-    
-    showLoading(false);
   } catch (err) {
-    showLoading(false);
-    console.error('Refresh dashboard error:', err);
-    if (err.message && err.message.includes('Session expired')) {
-      await showCustomAlert('เซสชันการใช้งานของคุณหมดอายุแล้ว กรุณาเข้าสู่ระบบใหม่อีกครั้ง', 'หมดเวลาการใช้งาน');
+    console.error('Failed to load products from Firebase:', err);
+  }
+
+  try {
+    salesSummary = await API_getSalesSummary();
+    // เรนเดอร์ข้อมูลทั้งหมดรวมยอดขายและเงินเชื่อ
+    renderAllFilteredReports();
+  } catch (err) {
+    console.error('Refresh sales summary error:', err);
+    if (err.message && (err.message.includes('Session expired') || err.message.includes('401') || err.message.includes('Unauthorized'))) {
+      await showCustomAlert('เซสชันการใช้งานของคุณหมดอายุ หรือมีการอัปเดตระบบ กรุณาเข้าสู่ระบบใหม่อีกครั้ง', 'หมดเวลาการใช้งาน');
       clearSession();
       window.location.href = 'index.html';
       return;
     }
-    await showCustomAlert('เกิดข้อผิดพลาดในการดึงข้อมูลรายงาน: ' + err.message + '\n\nโปรดตรวจสอบการเชื่อมต่ออินเทอร์เน็ตหรือลองใหม่อีกครั้ง', 'เกิดข้อผิดพลาด');
+    await showCustomAlert('เกิดข้อผิดพลาดในการดึงข้อมูลรายงานการขาย: ' + err.message + '\n\nข้อมูลสต็อกและสินค้าคงคลังยังคงแสดงผลได้ตามปกติ', 'ข้อผิดพลาดข้อมูลยอดขาย');
+  } finally {
+    showLoading(false);
   }
 }
 
