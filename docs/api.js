@@ -108,6 +108,8 @@ function promptReLogin() {
                 };
                 const res = await fetch(CONFIG.GAS_URL, {
                     method: 'POST',
+                    mode: 'cors',
+                    credentials: 'omit',
                     redirect: 'follow',
                     body: JSON.stringify(payload)
                 });
@@ -159,6 +161,8 @@ async function apiGet(action, extraParams = {}) {
 
     const response = await fetch(url, {
         method: 'GET',
+        mode: 'cors',
+        credentials: 'omit',
         redirect: 'follow'
     });
 
@@ -194,6 +198,8 @@ async function apiPost(action, body = {}) {
 
     const response = await fetch(CONFIG.GAS_URL, {
         method: 'POST',
+        mode: 'cors',
+        credentials: 'omit',
         redirect: 'follow',
         body: JSON.stringify(payload)
     });
