@@ -11,7 +11,7 @@
 const CONFIG = {
     // URL ของ Google Apps Script Web App ของคุณ
     // ได้มาจาก: Apps Script → Deploy → New deployment → Web app → Copy URL
-    GAS_URL: 'https://script.google.com/macros/s/AKfycbxURfg9mXnRzBfgOjdhtcmTjB8j52mAn_GDwjlJRDHMEoEsHo6_SF0KyKbLxXSkeTv3/exec',
+    GAS_URL: 'https://script.google.com/macros/s/AKfycbzeNjpje7BjiooayVVCYPsWEcMk_bM_CUupSBhhRzOj7qw6xF66rI4au0QgPjjw6A2S/exec',
 
     // API Key — ต้องตรงกับค่า API_KEY ใน Code.js
     API_KEY: 'KPSHOP168',
