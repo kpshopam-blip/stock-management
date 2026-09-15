@@ -120,9 +120,13 @@ async function handleLogin(event) {
         }
     } catch (err) {
         showLoading(false);
-        errorMsg.innerText = 'ไม่สามารถเชื่อมต่อฐานข้อมูลได้ กรุณาตรวจสอบ GAS_URL ใน config.js';
-        errorDiv.classList.remove('hidden');
         console.error(err);
+        if (err.message && (err.message.includes('404') || err.message.includes('timeout') || err.message.includes('aborted') || err.message.includes('Failed to fetch'))) {
+            errorMsg.innerText = 'เซิร์ฟเวอร์ Google ตอบสนองช้า หรือกำลังเริ่มต้นระบบ กรุณากด "เข้าสู่ระบบ" ใหม่อีกครั้ง';
+        } else {
+            errorMsg.innerText = 'ไม่สามารถเชื่อมต่อฐานข้อมูลได้ (' + (err.message || 'Error') + ') กรุณาลองใหม่อีกครั้ง';
+        }
+        errorDiv.classList.remove('hidden');
     }
 }
 

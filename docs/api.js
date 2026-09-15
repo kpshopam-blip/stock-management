@@ -106,7 +106,7 @@ function promptReLogin() {
                     username,
                     password
                 };
-                const res = await fetch(CONFIG.GAS_URL, {
+                const res = await fetchWithRetry(CONFIG.GAS_URL, {
                     method: 'POST',
                     mode: 'cors',
                     credentials: 'omit',
@@ -126,7 +126,7 @@ function promptReLogin() {
                     submitBtn.textContent = 'เข้าสู่ระบบและทำต่อ';
                 }
             } catch (err) {
-                errorDiv.textContent = 'เกิดข้อผิดพลาดในการเชื่อมต่อ กรุณาลองใหม่';
+                errorDiv.textContent = 'เกิดข้อผิดพลาดในการเชื่อมต่อ กรุณาลองใหม่อีกครั้ง';
                 errorDiv.style.display = 'block';
                 submitBtn.disabled = false;
                 submitBtn.textContent = 'เข้าสู่ระบบและทำต่อ';
@@ -145,6 +145,57 @@ function promptReLogin() {
     return reLoginPromise;
 }
 
+// ====== Helper: Fetch พร้อมระบบ Auto-Retry สำหรับ Google Apps Script ======
+// แก้ปัญหา Cold Start / Timeout / 404 / 500 ชั่วคราวของ Google Apps Script
+async function fetchWithRetry(url, options = {}, maxRetries = 3, retryDelay = 1500) {
+    let lastError = null;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        const controller = new AbortController();
+        // ให้เวลาแต่ละคำขอ 35 วินาที เผื่อ Apps Script รันครั้งแรก (Cold Start)
+        const timeoutMs = 35000;
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+        try {
+            const fetchOptions = {
+                ...options,
+                signal: controller.signal
+            };
+
+            const response = await fetch(url, fetchOptions);
+            clearTimeout(timer);
+
+            // หากสถานะเป็น 404 (ซึ่งมักเกิดจาก proxy redirect ของ Apps Script ยังสร้างไม่เสร็จ) หรือ 5xx
+            const retryableStatuses = [404, 408, 429, 500, 502, 503, 504];
+            if (!response.ok) {
+                if (retryableStatuses.includes(response.status) && attempt < maxRetries) {
+                    console.warn(`[KP Shop API] ตรวจพบ HTTP ${response.status} (รอบที่ ${attempt}/${maxRetries}) กำลังลองส่งใหม่อัตโนมัติในอีก ${retryDelay / 1000} วินาที...`);
+                    await new Promise(r => setTimeout(r, retryDelay));
+                    continue;
+                }
+                throw new Error(`HTTP Error: ${response.status}`);
+            }
+
+            return response;
+        } catch (err) {
+            clearTimeout(timer);
+            lastError = err;
+
+            const isAbort = err.name === 'AbortError' || (err.message && err.message.includes('aborted'));
+            const isNetwork = err instanceof TypeError || (err.message && err.message.includes('Failed to fetch'));
+            const isRetryable = isAbort || isNetwork || (err.message && (err.message.includes('404') || err.message.includes('50')));
+
+            if (isRetryable && attempt < maxRetries) {
+                console.warn(`[KP Shop API] การเชื่อมต่อสะดุด (รอบที่ ${attempt}/${maxRetries}: ${err.message}) กำลังลองใหม่อัตโนมัติ...`);
+                await new Promise(r => setTimeout(r, retryDelay));
+            } else {
+                throw lastError;
+            }
+        }
+    }
+    throw lastError;
+}
+
 // ====== Core API Call (GET) ======
 async function apiGet(action, extraParams = {}) {
     const session = getSession();
@@ -159,16 +210,12 @@ async function apiGet(action, extraParams = {}) {
 
     const url = `${CONFIG.GAS_URL}?${params.toString()}`;
 
-    const response = await fetch(url, {
+    const response = await fetchWithRetry(url, {
         method: 'GET',
         mode: 'cors',
         credentials: 'omit',
         redirect: 'follow'
     });
-
-    if (!response.ok) {
-        throw new Error(`HTTP Error: ${response.status}`);
-    }
 
     const data = await response.json();
 
@@ -196,17 +243,13 @@ async function apiPost(action, body = {}) {
         ...body
     };
 
-    const response = await fetch(CONFIG.GAS_URL, {
+    const response = await fetchWithRetry(CONFIG.GAS_URL, {
         method: 'POST',
         mode: 'cors',
         credentials: 'omit',
         redirect: 'follow',
         body: JSON.stringify(payload)
     });
-
-    if (!response.ok) {
-        throw new Error(`HTTP Error: ${response.status}`);
-    }
 
     const data = await response.json();
 
@@ -236,8 +279,20 @@ async function API_logout() {
     const session = getSession();
     clearSession();
     if (session && session.token) {
-        // ส่งคำขอ logout ไปหลังบ้านแบบฉากหลัง (Fire-and-forget) ไม่บล็อก UI
-        apiPost('logout', {}).catch(e => console.warn('Background logout request:', e));
+        // ส่งคำขอ logout ไปหลังบ้านแบบฉากหลัง (Fire-and-forget) ไม่รบกวนหน้าจอ
+        try {
+            fetch(CONFIG.GAS_URL, {
+                method: 'POST',
+                mode: 'cors',
+                credentials: 'omit',
+                redirect: 'follow',
+                body: JSON.stringify({
+                    action: 'logout',
+                    apiKey: CONFIG.API_KEY,
+                    token: session.token
+                })
+            }).catch(() => {});
+        } catch (e) {}
     }
 }
 
