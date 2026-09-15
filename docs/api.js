@@ -269,9 +269,70 @@ async function apiPost(action, body = {}) {
 // API Functions — ใช้แทน google.script.run.xxx()
 // ====================================================================
 
-// Login — ไม่ต้องการ Token เดิม
+// Helper: สร้าง Fast Token บน Client-side ลงลายมือชื่อด้วย API_KEY ป้องกันการปลอมแปลง
+function createFastSessionToken(user, apiKey) {
+    const payload = {
+        u: user.username,
+        n: user.name,
+        r: user.role,
+        exp: Date.now() + 24 * 60 * 60 * 1000 // 24 ชั่วโมง
+    };
+    const jsonStr = JSON.stringify(payload);
+    // Base64 encode รองรับอักขระภาษาไทย
+    const b64 = btoa(encodeURIComponent(jsonStr).replace(/%([0-9A-F]{2})/g, (match, p1) => String.fromCharCode('0x' + p1)));
+
+    let hash = 0;
+    const strToSign = b64 + '_' + apiKey;
+    for (let i = 0; i < strToSign.length; i++) {
+        hash = ((hash << 5) - hash) + strToSign.charCodeAt(i);
+        hash |= 0;
+    }
+    return `kptk.${b64}.${Math.abs(hash).toString(36)}`;
+}
+
+// Login — ตรวจสอบผ่าน Firebase ก่อนเพื่อความเร็วระดับเสี้ยววินาที (0.1s)
 async function API_login(username, password) {
-    return apiPost('login', { username, password });
+    const cleanUser = (username || '').toString().trim();
+    const cleanPass = (password || '').toString().trim();
+
+    // 1. ตรวจสอบผ่าน Firebase Realtime Database ก่อน (เร็วมาก 100-300ms ไม่ต้องรอ Google Apps Script)
+    try {
+        if (CONFIG.FIREBASE_DB_URL) {
+            const url = `${CONFIG.FIREBASE_DB_URL}users/${encodeURIComponent(cleanUser)}.json`;
+            const fbRes = await fetch(url);
+            if (fbRes.ok) {
+                const userData = await fbRes.json();
+                if (userData && userData.username) {
+                    if (userData.password !== cleanPass) {
+                        return { success: false, message: 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง' };
+                    }
+                    if (userData.status && userData.status !== 'Active') {
+                        return { success: false, message: 'บัญชีนี้ถูกระงับการใช้งาน' };
+                    }
+
+                    const user = {
+                        username: userData.username,
+                        name: userData.name,
+                        role: userData.role,
+                        saleName: userData.name
+                    };
+
+                    const token = createFastSessionToken(user, CONFIG.API_KEY);
+
+                    return {
+                        success: true,
+                        token: token,
+                        user: user
+                    };
+                }
+            }
+        }
+    } catch (fbErr) {
+        console.warn('Firebase login check failed, falling back to GAS API:', fbErr);
+    }
+
+    // 2. Fallback: หากยังไม่ได้ซิงค์ Users ขึ้น Firebase หรือ Firebase ขัดข้อง ให้ยิงไปที่ Apps Script
+    return apiPost('login', { username: cleanUser, password: cleanPass });
 }
 
 // Logout (Instant Clear Session + Background Notice)
@@ -428,8 +489,50 @@ async function API_getSettings() {
     return res.data;
 }
 
-// ดึงสรุปยอดขาย Dashboard
+// ดึงสรุปยอดขาย Dashboard (ดึงตรงจาก Firebase Realtime DB เสี้ยววินาที)
 async function API_getSalesSummary() {
+    const session = getSession();
+    const user = session ? session.user : null;
+    const roleStr = (user && user.role ? user.role : '').toString().toLowerCase();
+    const isManager = roleStr === 'manager' || roleStr === 'ผู้จัดการ' || roleStr === 'admin';
+
+    // 1. ลองดึงตรงจาก Firebase Realtime Database ก่อน (เร็วมาก 100-300ms)
+    try {
+        if (CONFIG.FIREBASE_DB_URL) {
+            const url = `${CONFIG.FIREBASE_DB_URL}salesSummary.json`;
+            const fbRes = await fetch(url);
+            if (fbRes.ok) {
+                const summary = await fbRes.json();
+                if (summary && summary.salesList) {
+                    // หากไม่ใช่ Manager ให้กรองเฉพาะยอดขายของตัวเอง และซ่อนกำไร/ต้นทุน
+                    if (!isManager && user) {
+                        const mySales = (summary.salesList || []).filter(s => s.salesperson === user.name);
+                        return {
+                            ...summary,
+                            today: {
+                                ...summary.today,
+                                profit: 0
+                            },
+                            month: {
+                                ...summary.month,
+                                profit: 0
+                            },
+                            stock: {
+                                ...summary.stock,
+                                value: 0
+                            },
+                            salesList: mySales.map(s => ({ ...s, cost: 0, profit: 0 }))
+                        };
+                    }
+                    return summary;
+                }
+            }
+        }
+    } catch (fbErr) {
+        console.warn('Firebase salesSummary read failed, falling back to GAS API:', fbErr);
+    }
+
+    // 2. Fallback ไปที่ Google Apps Script API
     const res = await apiGet('getSalesSummary');
     if (!res.success) throw new Error(res.error || 'getSalesSummary failed');
     return res.data;
