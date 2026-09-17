@@ -102,6 +102,9 @@ window.onload = function () {
             }
         }
     }, 180000);
+
+    // เริ่มต้นระบบนำทางด้วยปุ่ม Enter ในฟอร์มรับเข้าสินค้า
+    setupEnterKeyNavigation();
 };
 
 // ====== Login ======
@@ -1658,6 +1661,89 @@ function initCustomDatalists() {
     });
 }
 
+// ====== ระบบนำทางด้วยปุ่ม Enter ในฟอร์มรับเข้าสินค้า (ซ้ายไปขวา และบนลงล่าง) ======
+function setupEnterKeyNavigation() {
+    // ลำดับช่องกรอกจากซ้ายไปขวา และบนลงล่าง ตามหน้าจอ
+    const fieldSequence = [
+        'p_targetSheet',      // คลังเป้าหมาย (หากแสดง)
+        'p_imei',             // IMEI / Serial Number
+        'p_brand',            // ยี่ห้อ (Brand)
+        'p_model',            // รุ่น (Model)
+        'p_model_code',       // โมเดล (Model Code)
+        'p_ram',              // RAM
+        'p_storage',          // ความจุ (Storage)
+        'p_color',            // สี (Color)
+        'p_source',           // ประเภทเครื่อง/แหล่งที่มา
+        'p_cost',             // ราคาต้นทุน (บาท)
+        'p_price',            // ราคาขาย (บาท)
+        'p_wholesalePrice',   // ราคาขายส่ง (บาท)
+        'p_installmentPrice', // ราคาจัดผ่อน (บาท)
+        'p_condition',        // สภาพสินค้า (%)
+        'p_defect',           // ตำหนิ (ถ้ามี)
+        'p_battery',          // แบตเตอรี่ (%)
+        'p_accessories',      // อุปกรณ์เสริม
+        'p_location',         // ที่อยู่/สาขา
+        'p_notes'             // หมายเหตุ (ถ้ามี)
+    ];
+
+    document.addEventListener('keydown', function (e) {
+        if (e.key !== 'Enter') return;
+
+        // ตรวจสอบว่ากำลังพิมพ์อยู่ในฟอร์มรับเข้าสินค้าหรือไม่
+        const form = e.target.closest('#addProductForm');
+        if (!form) return;
+
+        // หากกำลังพิมพ์ใน textarea ให้ปล่อยให้ขึ้นบรรทัดใหม่ตามปกติ
+        if (e.target.tagName === 'TEXTAREA') return;
+
+        // หากกำลังโฟกัสที่ปุ่ม submit ให้ปล่อยให้ submit ตามปกติ
+        if (e.target.tagName === 'BUTTON' && e.target.type === 'submit') return;
+
+        const currentId = e.target.id;
+        const currentIndex = fieldSequence.indexOf(currentId);
+
+        if (currentIndex !== -1) {
+            e.preventDefault(); // ป้องกันไม่ให้ฟอร์ม submit ก่อนเวลา
+
+            // ซ่อน custom dropdown ทั้งหมดที่อาจเปิดค้างอยู่
+            const openDropdowns = form.querySelectorAll('[id^="dropdown_"]');
+            openDropdowns.forEach(d => d.classList.add('hidden'));
+
+            // ทิศทางการเลื่อน: กด Enter เลื่อนไปข้างหน้า / กด Shift + Enter เลื่อนถอยหลัง
+            const step = e.shiftKey ? -1 : 1;
+            let targetIndex = currentIndex + step;
+
+            // ค้นหาฟิลด์ถัดไปที่มองเห็นได้และใช้งานได้
+            while (targetIndex >= 0 && targetIndex < fieldSequence.length) {
+                const targetEl = document.getElementById(fieldSequence[targetIndex]);
+                if (targetEl && isFieldUsable(targetEl)) {
+                    targetEl.focus();
+                    if (typeof targetEl.select === 'function' && targetEl.tagName === 'INPUT' && targetEl.type !== 'file') {
+                        targetEl.select(); // คลุมดำตัวหนังสือเดิมเพื่อให้พิมพ์ทับได้ทันที
+                    }
+                    return;
+                }
+                targetIndex += step;
+            }
+
+            // หากกด Enter ที่ฟิลด์สุดท้าย (หมายเหตุ) ให้เลื่อนโฟกัสไปที่ปุ่มบันทึก
+            if (targetIndex >= fieldSequence.length) {
+                const submitBtn = form.querySelector('button[type="submit"]');
+                if (submitBtn) {
+                    submitBtn.focus();
+                }
+            }
+        }
+    });
+}
+
+function isFieldUsable(el) {
+    if (!el || el.disabled || el.readOnly) return false;
+    // เช็คว่าถูกซ่อนด้วย .hidden หรือไม่
+    if (el.closest('.hidden')) return false;
+    const style = window.getComputedStyle(el);
+    return style.display !== 'none' && style.visibility !== 'hidden';
+}
 
 function toggleForm(formId) {
     const form = document.getElementById(formId);
