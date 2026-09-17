@@ -454,13 +454,11 @@ function saveCachedSettings(data) {
 }
 
 async function API_getSettings() {
-    const cached = getCachedSettings();
-
     // 1. ลองดึงจาก Firebase Realtime Database ก่อน (เร็วมาก 10-50ms)
     try {
-        const baseUrl = (CONFIG.FIREBASE_DB_URL || '').replace(/\/$/, '');
-        if (baseUrl) {
-            const fbRes = await fetch(`${baseUrl}/settings.json`);
+        const url = getFirebaseUrl('settings.json');
+        if (url) {
+            const fbRes = await fetch(url);
             if (fbRes.ok) {
                 const fbData = await fbRes.json();
                 if (fbData && (fbData.brands || fbData.brandModels)) {
@@ -470,19 +468,16 @@ async function API_getSettings() {
             }
         }
     } catch (fbErr) {
-        console.warn('ดึง Settings จาก Firebase ล้มเหลว สลับไปใช้ Cache / GAS API:', fbErr);
+        console.warn('ดึง Settings จาก Firebase ล้มเหลว สลับไปใช้ Cache:', fbErr);
     }
 
     // 2. ถ้ามี Cache ในเครื่อง คืนค่า Cache ออกไปทันที
+    const cached = getCachedSettings();
     if (cached) {
-        // แอบยิงดึงข้อมูลล่าสุดจาก GAS เบื้องหลังเพื่ออัปเดต Cache ล่าสุด
-        apiGet('getSettings').then(res => {
-            if (res && res.success && res.data) saveCachedSettings(res.data);
-        }).catch(() => {});
         return cached;
     }
 
-    // 3. ถ้าไม่มีทั้ง Firebase และ Cache ค่อยยิงดึงจาก GAS API
+    // 3. ถ้าไม่มีทั้ง Firebase และ Cache ค่อยยิงดึงจาก GAS API เป็นตัวเลือกสุดท้าย
     const res = await apiGet('getSettings');
     if (!res.success) throw new Error(res.error || 'getSettings failed');
     saveCachedSettings(res.data);
@@ -775,47 +770,42 @@ async function API_uploadReceiptImage(dataURI, filename) {
 async function uploadImagesToDrive(queue, onProgress = null) {
     if (!queue || queue.length === 0) return [];
     const uploadedUrls = [];
-    const BATCH_SIZE = 2; // ส่งพร้อมกันครั้งละ 2 รูป ปลอดภัยและเร็วขึ้น 2 เท่า
     let completedCount = 0;
 
-    for (let i = 0; i < queue.length; i += BATCH_SIZE) {
-        const chunk = queue.slice(i, i + BATCH_SIZE);
-        const chunkPromises = chunk.map(async (file, idx) => {
-            const fileIndex = i + idx;
-            let url = null;
-            let attempt = 0;
-            const maxAttempts = 2;
+    // ส่งทีละ 1 รูป เพื่อความเสถียรสูงสุด ป้องกัน Google Apps Script ติด Concurrent Quota และเกิด 404
+    for (let i = 0; i < queue.length; i++) {
+        const file = queue[i];
+        let url = null;
+        let attempt = 0;
+        const maxAttempts = 2;
 
-            while (attempt < maxAttempts && !url) {
-                try {
-                    url = await API_uploadImage(file.dataURI, file.filename);
-                    if (url) break;
-                } catch (err) {
-                    console.warn(`[Upload Retry] รูปที่ ${fileIndex + 1}/${queue.length} ลองส่งซ้ำ:`, err);
-                }
-                attempt++;
-                if (!url && attempt < maxAttempts) {
-                    await new Promise(r => setTimeout(r, 600));
-                }
+        while (attempt < maxAttempts && !url) {
+            try {
+                url = await API_uploadImage(file.dataURI, file.filename);
+                if (url) break;
+            } catch (err) {
+                console.warn(`[Upload Retry] รูปที่ ${i + 1}/${queue.length} ลองส่งซ้ำ:`, err);
             }
-
-            completedCount++;
-            if (typeof onProgress === 'function') {
-                try {
-                    onProgress(completedCount, queue.length, url);
-                } catch (pErr) {}
+            attempt++;
+            if (!url && attempt < maxAttempts) {
+                await new Promise(r => setTimeout(r, 1000));
             }
-            return url;
-        });
-
-        const chunkResults = await Promise.all(chunkPromises);
-        for (const u of chunkResults) {
-            if (u) uploadedUrls.push(u);
         }
 
-        // เว้นระยะสั้นๆ 100ms ระหว่างแต่ละคู่
-        if (i + BATCH_SIZE < queue.length) {
-            await new Promise(r => setTimeout(r, 100));
+        if (url) {
+            uploadedUrls.push(url);
+        }
+
+        completedCount++;
+        if (typeof onProgress === 'function') {
+            try {
+                onProgress(completedCount, queue.length, url);
+            } catch (pErr) {}
+        }
+
+        // เว้นระยะสั้นๆ 250ms เพื่อให้ Google Apps Script เคลียร์ instance
+        if (i < queue.length - 1) {
+            await new Promise(r => setTimeout(r, 250));
         }
     }
 
