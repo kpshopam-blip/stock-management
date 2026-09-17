@@ -257,7 +257,7 @@ function formatDateTimeDisplay(dateStr) {
     return s;
 }
 
-function calculateDaysAtBranch(dateString) {
+function calculateDaysAtBranch(dateString, baseToday) {
     if (!dateString) return 0;
     
     let targetDate;
@@ -275,7 +275,7 @@ function calculateDaysAtBranch(dateString) {
     }
     
     if (isNaN(targetDate.getTime())) return 0;
-    const today = new Date();
+    const today = baseToday ? new Date(baseToday) : new Date();
     today.setHours(0, 0, 0, 0);
     targetDate.setHours(0, 0, 0, 0);
     
@@ -291,7 +291,7 @@ function formatNumber(num) {
 function renderProductGrid(products) {
     const grid = document.getElementById('productGrid');
     const noData = document.getElementById('noProductFound');
-    grid.innerHTML = '';
+    if (!grid) return;
 
     // แสดง/ซ่อนตัวกรองสถานะของหน้าร้านหลักตามสิทธิ์
     const statusSelect = document.getElementById('filterStatus');
@@ -304,18 +304,30 @@ function renderProductGrid(products) {
         }
     }
 
-    document.getElementById('totalProductCount').innerText = products.length;
+    const totalCountEl = document.getElementById('totalProductCount');
+    if (totalCountEl) {
+        totalCountEl.innerText = products.length;
+    }
 
-    if (products.length === 0) { noData.classList.remove('hidden'); return; }
-    noData.classList.add('hidden');
+    if (products.length === 0) {
+        grid.innerHTML = '';
+        if (noData) noData.classList.remove('hidden');
+        return;
+    }
+    if (noData) noData.classList.add('hidden');
 
-    products.forEach(p => {
+    const todayMidnight = new Date();
+    todayMidnight.setHours(0, 0, 0, 0);
+    const nowTime = Date.now();
+    const currentUserName = currentUser ? currentUser.name : '';
+
+    const cardsHtml = products.map(p => {
         const coverImage = p.images && p.images.length > 0 && p.images[0].trim() !== '' ? p.images[0] : NO_IMAGE;
         const statusLower = (p.status || 'Available').toLowerCase();
         
         // ตรวจสอบการล็อกชั่วคราว (Cache) เฉพาะเมื่อสินค้ายังมีสถานะเป็น Available (พร้อมขาย)
-        const isLockedByOthers = statusLower === 'available' && p.lockedBy && p.lockedBy !== currentUser.name && p.lockExpires > Date.now();
-        const isLockedByMe = statusLower === 'available' && p.lockedBy && p.lockedBy === currentUser.name && p.lockExpires > Date.now();
+        const isLockedByOthers = statusLower === 'available' && p.lockedBy && p.lockedBy !== currentUserName && p.lockExpires > nowTime;
+        const isLockedByMe = statusLower === 'available' && p.lockedBy && p.lockedBy === currentUserName && p.lockExpires > nowTime;
         
         let tagHtml = '';
         if (isLockedByOthers) {
@@ -335,45 +347,56 @@ function renderProductGrid(products) {
             } else if (statusLower === 'unavailable') {
                 tagHtml = `<div class="absolute top-2 right-2 bg-red-600 text-white text-xs font-bold px-2.5 py-1 rounded shadow font-medium">ไม่พร้อมขาย</div>`;
             } else {
-                tagHtml = `<div class="absolute top-2 right-2 bg-gray-600 text-white text-xs font-bold px-2.5 py-1 rounded shadow font-medium">${p.status}</div>`;
+                tagHtml = `<div class="absolute top-2 right-2 bg-gray-600 text-white text-xs font-bold px-2.5 py-1 rounded shadow font-medium">${p.status || ''}</div>`;
             }
         }
         const specSnippet = `${p.ram ? p.ram + '/' : ''}${p.storage || ''}`;
-        const daysAtBranch = calculateDaysAtBranch(p.branchEntryDate || p.dateAdded);
+        const daysAtBranch = calculateDaysAtBranch(p.branchEntryDate || p.dateAdded, todayMidnight);
         const daysText = daysAtBranch === 0 ? 'เข้าใหม่วันนี้' : (daysAtBranch + ' วัน');
 
-        grid.innerHTML += `
+        return `
       <div class="bg-white rounded border overflow-hidden product-card flex flex-col cursor-pointer w-full max-w-full" onclick="viewProduct('${p.id}')">
         <div class="relative pt-[100%] bg-gray-100">
-          <img src="${coverImage}" class="absolute inset-0 w-full h-full object-cover" alt="${p.model}" loading="lazy" onerror="this.onerror=null;this.src=NO_IMAGE;">
+          <img src="${coverImage}" class="absolute inset-0 w-full h-full object-cover" alt="${p.model || ''}" loading="lazy" onerror="this.onerror=null;this.src=NO_IMAGE;">
           ${tagHtml}
         </div>
         <div class="p-2.5 sm:p-3 flex flex-col flex-grow min-w-0">
           <div class="flex flex-col sm:flex-row justify-between items-start gap-1 mb-1 min-w-0">
-            <div class="text-xs text-gray-500 truncate max-w-full">${p.brand} ${specSnippet}</div>
+            <div class="text-xs text-gray-500 truncate max-w-full">${p.brand || ''} ${specSnippet}</div>
             <div class="text-[10px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded border border-blue-100 flex items-center gap-1 shrink-0 max-w-full truncate" title="สาขาและระยะเวลาที่อยู่">
               <i class="fa-solid fa-location-dot shrink-0"></i>
               <span class="truncate">${p.location || 'ไม่ระบุ'} (${daysText})</span>
             </div>
           </div>
-          <h3 class="font-medium text-xs sm:text-sm text-gray-800 leading-tight mb-2 line-clamp-2 min-w-0">${p.model} <span class="text-xs text-gray-500">(${p.color || 'ไม่ระบุสี'})</span></h3>
-          <div class="mt-auto"><span class="text-brand-600 font-bold text-sm sm:text-base">฿${formatNumber(p.price)}</span></div>
+          <h3 class="font-medium text-xs sm:text-sm text-gray-800 leading-tight mb-2 line-clamp-2 min-w-0">${p.model || ''} <span class="text-xs text-gray-500">(${p.color || 'ไม่ระบุสี'})</span></h3>
+          <div class="mt-auto"><span class="text-brand-600 font-bold text-sm sm:text-base">฿${formatNumber(p.price || 0)}</span></div>
         </div>
       </div>`;
-    });
+    }).join('');
+
+    grid.innerHTML = cardsHtml;
 }
 
 function searchProducts(inputId) {
-    const query = document.getElementById(inputId) ? document.getElementById(inputId).value.toLowerCase() : '';
-    const filterBrand = document.getElementById('filterBrand').value.toLowerCase();
+    const query = document.getElementById(inputId) ? document.getElementById(inputId).value.toLowerCase().trim() : '';
+    const filterBrand = document.getElementById('filterBrand') ? document.getElementById('filterBrand').value.toLowerCase() : '';
     const locFilter = document.getElementById('filterLocation');
     const filterLocation = locFilter ? locFilter.value.toLowerCase() : '';
     executeSearch(query, filterBrand, filterLocation);
 }
 
 function filterProducts() {
-    const query1 = document.getElementById('storeSearchDesktop') ? document.getElementById('storeSearchDesktop').value.toLowerCase() : '';
-    const filterBrand = document.getElementById('filterBrand').value.toLowerCase();
+    let query1 = '';
+    const desktopSearch = document.getElementById('storeSearchDesktop');
+    const mobileSearch = document.getElementById('storeSearchMobile');
+    if (desktopSearch && desktopSearch.value.trim()) {
+        query1 = desktopSearch.value.toLowerCase().trim();
+    } else if (mobileSearch && mobileSearch.value.trim()) {
+        query1 = mobileSearch.value.toLowerCase().trim();
+    }
+
+    const brandEl = document.getElementById('filterBrand');
+    const filterBrand = brandEl ? brandEl.value.toLowerCase() : '';
     const locFilter = document.getElementById('filterLocation');
     const filterLocation = locFilter ? locFilter.value.toLowerCase() : '';
     executeSearch(query1, filterBrand, filterLocation);
