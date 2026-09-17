@@ -265,6 +265,48 @@ async function apiPost(action, body = {}) {
     return data;
 }
 
+// ====== คิวซิงค์ข้อมูลลง Google Sheets เบื้องหลังแบบเรียงลำดับ (Sequential Queue) ======
+const sheetsSyncQueue = [];
+let isProcessingSheetsQueue = false;
+
+function queueSyncToSheets(action, payload, description = '') {
+    sheetsSyncQueue.push({ action, payload, description, attempts: 0 });
+    processSheetsSyncQueue();
+}
+
+async function processSheetsSyncQueue() {
+    if (isProcessingSheetsQueue) return;
+    if (sheetsSyncQueue.length === 0) return;
+
+    isProcessingSheetsQueue = true;
+
+    while (sheetsSyncQueue.length > 0) {
+        const item = sheetsSyncQueue[0];
+        try {
+            console.log(`[Sheets Sync Queue] กำลังซิงค์ (${sheetsSyncQueue.length} รายการในคิว): ${item.action} ${item.description}`);
+            const res = await apiPost(item.action, item.payload);
+            console.log(`[Sheets Sync Queue] สำเร็จ: ${item.action}`, res);
+            sheetsSyncQueue.shift();
+        } catch (err) {
+            console.warn(`[Sheets Sync Queue] พยายามซิงค์ล้มเหลว (${item.action}):`, err);
+            item.attempts++;
+            if (item.attempts >= 3) {
+                console.error(`[Sheets Sync Queue] ข้ามรายการเนื่องจากล้มเหลวเกิน 3 ครั้ง: ${item.action}`, item);
+                sheetsSyncQueue.shift();
+            } else {
+                await new Promise(r => setTimeout(r, 2000));
+            }
+        }
+
+        // เว้นวรรค 400ms ระหว่างรายการเพื่อความเสถียรสูงสุด
+        if (sheetsSyncQueue.length > 0) {
+            await new Promise(r => setTimeout(r, 400));
+        }
+    }
+
+    isProcessingSheetsQueue = false;
+}
+
 // ====================================================================
 // API Functions — ใช้แทน google.script.run.xxx()
 // ====================================================================
@@ -605,14 +647,8 @@ async function API_addProduct(productData) {
         return apiPost('addProduct', { productData: fullProduct });
     }
 
-    // 2. ซิงค์ลง Google Sheets ในเบื้องหลัง (Background Sync ไม่บล็อกหน้าจอ)
-    apiPost('addProduct', { productData: fullProduct })
-        .then(gasRes => {
-            console.log('[Sync to Sheets] บันทึกสินค้าลง Google Sheets สำเร็จ:', id, gasRes);
-        })
-        .catch(gasErr => {
-            console.warn('[Sync to Sheets Notice] บันทึกลงชีตเบื้องหลังล่าช้า:', gasErr);
-        });
+    // 2. ซิงค์ลง Google Sheets ในเบื้องหลังผ่านระบบคิว (Background Sync Queue ไม่บล็อกหน้าจอ และไม่ชนโควต้า)
+    queueSyncToSheets('addProduct', { productData: fullProduct }, `สินค้า ${id} (${fullProduct.brand} ${fullProduct.model})`);
 
     return { 
         success: true, 
@@ -634,14 +670,8 @@ async function API_updateProduct(productData) {
         return apiPost('updateProduct', { productData });
     }
 
-    // 2. ซิงค์ลง Google Sheets ในเบื้องหลัง
-    apiPost('updateProduct', { productData })
-        .then(gasRes => {
-            console.log('[Sync to Sheets] อัปเดตสินค้าใน Google Sheets สำเร็จ:', productData.id, gasRes);
-        })
-        .catch(gasErr => {
-            console.warn('[Sync to Sheets Notice] อัปเดตลงชีตเบื้องหลังล่าช้า:', gasErr);
-        });
+    // 2. ซิงค์ลง Google Sheets ในเบื้องหลังผ่านคิว
+    queueSyncToSheets('updateProduct', { productData }, `แก้ไขสินค้า ${productData.id}`);
 
     return { 
         success: true, 
@@ -673,14 +703,8 @@ async function API_sellProduct(saleData) {
         return apiPost('sellProduct', { saleData });
     }
 
-    // 2. ซิงค์ข้อมูลการขายลงตาราง SalesData ใน Google Sheets ในเบื้องหลัง
-    apiPost('sellProduct', { saleData })
-        .then(gasRes => {
-            console.log('[Sync to Sheets] บันทึกยอดขายลง SalesData สำเร็จ:', gasRes);
-        })
-        .catch(gasErr => {
-            console.warn('[Sync to Sheets Notice] บันทึกยอดขายลงชีตเบื้องหลังล่าช้า:', gasErr);
-        });
+    // 2. ซิงค์ข้อมูลการขายลงตาราง SalesData ใน Google Sheets ในเบื้องหลังผ่านคิว
+    queueSyncToSheets('sellProduct', { saleData }, `ขายสินค้า ${saleData.productId}`);
 
     return { 
         success: true, 
@@ -946,4 +970,9 @@ async function API_updateFirebaseProductImages(productId, images) {
     } catch (e) {
         console.warn('Direct Firebase image update failed:', e);
     }
+}
+
+// ซิงค์สินค้าตกค้างทั้งหมดจาก Firebase ลง Google Sheets ทันที (Batch Recovery Sync)
+async function API_syncMissingProductsToSheets() {
+    return apiPost('syncMissingProductsToSheets', {});
 }
