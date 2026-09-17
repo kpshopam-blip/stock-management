@@ -610,18 +610,46 @@ async function API_uploadReceiptImage(dataURI, filename) {
 }
 
 // ====================================================================
-// อัปโหลดรูปแบบขนาน (Parallel Uploadด้วย Promise.all) เพื่อความเร็วสูงสุด
+// อัปโหลดรูปภาพแบบเรียงคิว (Sequential Upload) เพื่อป้องกันการชน Concurrent Limit ของ Google Apps Script
 // ====================================================================
-async function uploadImagesToDrive(queue) {
+async function uploadImagesToDrive(queue, onProgress = null) {
     if (!queue || queue.length === 0) return [];
-    const uploadPromises = queue.map(file => 
-        API_uploadImage(file.dataURI, file.filename).catch(e => {
-            console.error('Upload error for file ' + file.filename + ':', e);
-            return null;
-        })
-    );
-    const results = await Promise.all(uploadPromises);
-    return results.filter(url => Boolean(url));
+    const uploadedUrls = [];
+
+    for (let i = 0; i < queue.length; i++) {
+        const file = queue[i];
+        let url = null;
+        let attempt = 0;
+        const maxAttempts = 2;
+
+        while (attempt < maxAttempts && !url) {
+            try {
+                url = await API_uploadImage(file.dataURI, file.filename);
+                if (url) break;
+            } catch (err) {
+                console.warn(`[Upload Retry] กำลังลองอัปโหลดรูปที่ ${i + 1}/${queue.length} ซ้ำ (รอบที่ ${attempt + 1}/${maxAttempts}):`, err);
+            }
+            attempt++;
+            if (!url && attempt < maxAttempts) {
+                await new Promise(r => setTimeout(r, 800));
+            }
+        }
+
+        if (url) {
+            uploadedUrls.push(url);
+        }
+
+        if (typeof onProgress === 'function') {
+            try {
+                onProgress(i + 1, queue.length, url);
+            } catch (pErr) {}
+        }
+
+        // หน่วงเวลาสั้นๆ 200ms ระหว่างไฟล์เพื่อให้ Apps Script เคลียร์ทรัพยากร
+        await new Promise(r => setTimeout(r, 200));
+    }
+
+    return uploadedUrls;
 }
 
 // ล็อกสินค้าชั่วคราว ผ่าน Firebase ตรงๆ เพื่อความเร็วสูงระดับมิลลิวินาที
