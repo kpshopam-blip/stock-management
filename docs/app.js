@@ -2997,23 +2997,107 @@ function preprocessImageForOcr(img, options = {}) {
     return canvas;
 }
 
-// ฟังก์ชันช่วยตรวจสอบและทำความสะอาดตัวเลข IMEI (แปลงตัวอักษรที่มักอ่านผิด เช่น O->0, I/l->1)
+// ปรับแต่งภาพเบื้องต้น (Upscaling, Contrast, Grayscale & Multi-Zone Focus) เพื่อเพิ่มความแม่นยำสูงสุด
+function preprocessImageForOcr(img, options = {}) {
+    const canvas = document.createElement('canvas');
+    let srcX = 0, srcY = 0;
+    let srcW = img.width;
+    let srcH = img.height;
+
+    // โหมดตัดเฉพาะโซน (Focus Zone):
+    if (options.cropUpper) {
+        // โฟกัสช่วงความสูง 26% ถึง 58% (ตำแหน่งที่หน้าจอ iPhone และกล่องสินค้าแสดง IMEI 1 เสมอ โดยตัดบาร์โค้ดล่างออก)
+        srcW = Math.round(img.width * 0.78);
+        srcH = Math.round(img.height * 0.32);
+        srcX = Math.round((img.width - srcW) / 2);
+        srcY = Math.round(img.height * 0.26);
+    } else if (options.cropCenter) {
+        // โฟกัส 80% กึ่งกลางภาพ
+        srcW = Math.round(img.width * 0.82);
+        srcH = Math.round(img.height * 0.82);
+        srcX = Math.round((img.width - srcW) / 2);
+        srcY = Math.round((img.height - srcH) / 2);
+    }
+
+    // Upscale ภาพขนาดเล็กให้ใหญ่ขึ้น (ตัวหนังสือต้องสูงอย่างน้อย 25-35px เพื่อให้ Tesseract อ่านชัดเจน)
+    let scale = options.scale || 1.0;
+    if (srcW < 900 && scale === 1.0) {
+        scale = 1.8; // ขยายภาพขนาดเล็กขึ้นเกือบ 2 เท่าอัตโนมัติ
+    }
+
+    let width = Math.round(srcW * scale);
+    let height = Math.round(srcH * scale);
+
+    const MAX_DIM = 2200;
+    if (width > MAX_DIM || height > MAX_DIM) {
+        if (width > height) {
+            height = Math.round((height * MAX_DIM) / width);
+            width = MAX_DIM;
+        } else {
+            width = Math.round((width * MAX_DIM) / height);
+            height = MAX_DIM;
+        }
+    }
+
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(img, srcX, srcY, srcW, srcH, 0, 0, width, height);
+
+    // ปรับ Contrast และ Grayscale ให้เหมาะสม
+    try {
+        const imgData = ctx.getImageData(0, 0, width, height);
+        const d = imgData.data;
+        const contrast = options.highContrast ? 1.30 : 1.18;
+        const factor = (259 * (contrast * 255 + 255)) / (255 * (259 - contrast * 255));
+
+        for (let i = 0; i < d.length; i += 4) {
+            const gray = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+            let adjusted = factor * (gray - 128) + 128;
+            const clamped = Math.min(255, Math.max(0, adjusted));
+            d[i] = clamped;
+            d[i + 1] = clamped;
+            d[i + 2] = clamped;
+        }
+        ctx.putImageData(imgData, 0, 0);
+    } catch (e) {
+        console.warn('Canvas filter adjustment skipped:', e);
+    }
+
+    return canvas;
+}
+
+// ฟังก์ชันช่วยตรวจสอบและทำความสะอาดตัวเลข IMEI (แปลงตัวอักษรที่มักอ่านผิด เช่น O->0, I/l/!/|->1)
 function cleanCandidateImei(raw) {
     if (!raw) return null;
     let cleaned = String(raw)
         .replace(/[oO]/g, '0')
-        .replace(/[iIl|]/g, '1')
+        .replace(/[iIl|!]/g, '1')
         .replace(/[bB]/g, '8')
         .replace(/[sS]/g, '5')
         .replace(/[zZ]/g, '2');
 
-    // กรองเอาเฉพาะตัวเลข
-    const digits = cleaned.replace(/\D/g, '');
+    // 1. ดึงกลุ่มตัวเลข 15 หลักที่ติดกันก่อน
+    const match15 = cleaned.match(/\d{15}/);
+    if (match15) return match15[0];
 
-    // ต้องมีความยาว 15 หลักพอดี (มาตรฐานสากลของ IMEI)
+    // 2. ถ้ามีเว้นวรรค เช่น 35 0431 2763 7025 4
+    const digits = cleaned.replace(/\D/g, '');
     if (digits.length === 15) {
         return digits;
     }
+
+    // 3. ถ้าเกิน 15 หลัก (มีเศษขยะติดมา) แต่ 15 ตัวแรกขึ้นต้นด้วย TAC Code สากล
+    if (digits.length > 15) {
+        const sub = digits.slice(0, 15);
+        if (/^(?:35|86|01|99|98)/.test(sub)) {
+            return sub;
+        }
+    }
+
     return null;
 }
 
@@ -3021,31 +3105,27 @@ function cleanCandidateImei(raw) {
 function extractImeiOrSerial(rawText, barcodes = []) {
     if (!rawText && (!barcodes || barcodes.length === 0)) return null;
 
-    // จัดรูปแบบข้อความ ปรับ space และ newline ให้เป็นมาตรฐาน
     const text = (rawText || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 
-    // 1. ตรวจสอบจากบาร์โค้ดก่อน (หาก BarcodeDetector อ่านบาร์โค้ดได้)
+    // 1. ตรวจสอบจากบาร์โค้ดก่อน
     if (barcodes && barcodes.length > 0) {
-        // กรองเอาเฉพาะบาร์โค้ดที่เป็นตัวเลข 15 หลัก (มาตรฐาน IMEI)
         const imeiBarcodes = barcodes
             .map(b => String(b).replace(/\D/g, ''))
             .filter(b => b.length === 15);
 
         if (imeiBarcodes.length > 0) {
-            // บาร์โค้ดแรกจะเป็น IMEI 1 เสมอ
             return { type: 'IMEI 1 (จากบาร์โค้ด)', value: imeiBarcodes[0] };
         }
     }
 
-    // แยกข้อความก่อนถึงคำว่า "IMEI 2" เพื่อเน้นหาเฉพาะส่วนของ IMEI 1 เป็นหลัก
-    const textParts = text.split(/IMEI\s*2/i);
+    // 2. แยกข้อความก่อนถึงคำว่า "IMEI 2" หรือ "IMEI2" เพื่อเน้นหาเฉพาะ IMEI 1 เสมอ
+    const textParts = text.split(/IMEI\s*2\b/i);
     const beforeImei2 = textParts[0];
 
-    // 2. ตรวจหาคำว่า "IMEI 1" หรือ "IMEI" โดยยอมรับช่องว่าง/เครื่องหมายคั่นระหว่างตัวเลข
-    // เช่น "IMEI 359888173913539" หรือ "IMEI 35 9888 1739 1353 9" หรือ "IMEI: 359888 173913539"
-    const imeiPattern = /IMEI\s*(?:1\b|[:\s-])\s*([0-9oOiIl|bBsSzZ\s\-\.]{15,26})/i;
+    // 3. Regex ฉลาด: ยอมรับ IME, IMEI, IME!, IME1, IME| (ไม่บังคับว่าต้องมีคำว่า "1")
+    const imeiPattern = /IME[!I|1l]?\s*(?:1\b|[:\s-])?\s*([0-9oOiIl|!bBsSzZ\s\-\.]{15,28})/i;
 
-    // 2.1 ค้นหาในท่อนก่อน IMEI 2
+    // 3.1 ค้นหาในท่อนก่อน IMEI 2
     const mBefore = beforeImei2.match(imeiPattern);
     if (mBefore) {
         const cleaned = cleanCandidateImei(mBefore[1]);
@@ -3054,7 +3134,33 @@ function extractImeiOrSerial(rawText, barcodes = []) {
         }
     }
 
-    // 2.2 ค้นหาในข้อความทั้งหมด
+    // 3.2 ตรวจสอบทีละบรรทัดในท่อนก่อน IMEI 2
+    const lines = beforeImei2.split('\n').map(l => l.trim()).filter(Boolean);
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        if (/IME[!I|1l]?\b/i.test(line) && !/IMEI\s*2\b/i.test(line)) {
+            // ในบรรทัดเดียวกัน
+            const sameClean = cleanCandidateImei(line);
+            if (sameClean) return { type: 'IMEI 1', value: sameClean };
+
+            // ในบรรทัดถัดไป
+            if (i + 1 < lines.length) {
+                const nextClean = cleanCandidateImei(lines[i + 1]);
+                if (nextClean) return { type: 'IMEI 1', value: nextClean };
+            }
+        }
+    }
+
+    // 3.3 ค้นหากลุ่มตัวเลข 15 หลักในท่อนก่อน IMEI 2 ที่ขึ้นต้นด้วยรหัส TAC มาตรฐาน
+    const matchesBefore = beforeImei2.match(/[0-9oOiIl|!bBsSzZ\s\-]{15,30}/g) || [];
+    for (const group of matchesBefore) {
+        const cleaned = cleanCandidateImei(group);
+        if (cleaned && /^(?:35|86|01|99|98)/.test(cleaned)) {
+            return { type: 'IMEI 1', value: cleaned };
+        }
+    }
+
+    // 4. ถ้ายังไม่พบ ตรวจหาจากข้อความทั้งหมด
     const mAll = text.match(imeiPattern);
     if (mAll) {
         const cleaned = cleanCandidateImei(mAll[1]);
@@ -3063,61 +3169,27 @@ function extractImeiOrSerial(rawText, barcodes = []) {
         }
     }
 
-    // 3. ตรวจหาตามบรรทัด (กรณีคำว่า IMEI อยู่บรรทัดบน แล้วตัวเลข 15 หลักอยู่บรรทัดถัดไป)
-    const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
-    for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-        if (/IMEI\b/i.test(line) && !/IMEI\s*2\b/i.test(line)) {
-            // ตรวจบรรทัดเดียวกัน
-            const sameClean = cleanCandidateImei(line);
-            if (sameClean) return { type: 'IMEI 1', value: sameClean };
-
-            // ตรวจบรรทัดถัดไป
-            if (i + 1 < lines.length) {
-                const nextClean = cleanCandidateImei(lines[i + 1]);
-                if (nextClean) return { type: 'IMEI 1', value: nextClean };
-            }
-        }
-    }
-
-    // 4. ค้นหากลุ่มตัวเลข 15 หลักใดๆ ในข้อความทั้งหมด (โดยตัดข้ามตัวเลข EID 32 หลัก)
-    const matches = text.match(/[0-9oOiIl|bBsSzZ\s\-]{15,30}/g) || [];
+    // 5. ค้นหากลุ่มตัวเลข 15 หลักใดๆ ในข้อความทั้งหมด
+    const allMatches = text.match(/[0-9oOiIl|!bBsSzZ\s\-]{15,30}/g) || [];
     const candidates = [];
-
-    for (const group of matches) {
+    for (const group of allMatches) {
         const rawDigits = group.replace(/\D/g, '');
-        // ป้องกัน EID 32 หลัก (ถ้าตัวเลขติดกันเกิน 18 ตัวถือว่าเป็น EID)
-        if (rawDigits.length > 18) continue;
-
+        if (rawDigits.length > 18) continue; // ข้าม EID 32 หลัก
         const cleaned = cleanCandidateImei(group);
         if (cleaned) {
-            // เช็ค TAC Code สากล: สมาร์ทโฟนส่วนใหญ่ (โดยเฉพาะ iPhone) ขึ้นต้นด้วย 35, 86, 01, 99
             const isStandardTac = /^(?:35|86|01|99|98)/.test(cleaned);
             candidates.push({ value: cleaned, score: isStandardTac ? 2 : 1 });
         }
     }
-
     if (candidates.length > 0) {
-        // เรียงลำดับเอาตัวที่มีคะแนนสูงสุด (ขึ้นต้นด้วย TAC Code สากล)
         candidates.sort((a, b) => b.score - a.score);
         return { type: 'IMEI 1', value: candidates[0].value };
     }
 
-    // 5. หากไม่พบ IMEI -> ตรวจหา Serial Number (SN) เช่น iPad Wi-Fi
+    // 6. หากไม่พบ IMEI -> ตรวจหา Serial Number (SN) สำหรับ iPad / Wi-Fi
     const snMatch = text.match(/(?:Serial\s*(?:Number|No\.?)|S\/N|SN|หมายเลข(?:ประจำ)?เครื่อง)\s*[:\s-]*([A-Z0-9]{8,14})/i);
     if (snMatch) {
         return { type: 'Serial Number (iPad / Wi-Fi)', value: snMatch[1].toUpperCase() };
-    }
-
-    // 6. บาร์โค้ดที่มีความยาวระหว่าง 8-14 ตัวอักษร (ไม่ใช่ EID 32 หลัก)
-    if (barcodes && barcodes.length > 0) {
-        const snBarcode = barcodes.find(b => {
-            const clean = String(b).trim();
-            return clean.length >= 8 && clean.length <= 14;
-        });
-        if (snBarcode) {
-            return { type: 'Serial Number (จากบาร์โค้ด)', value: snBarcode.toUpperCase() };
-        }
     }
 
     return null;
@@ -3152,7 +3224,6 @@ async function handleOcrImageFile(input) {
     currentOcrFileName = file.name || 'imei_photo.webp';
     currentOcrResult = null;
 
-    // แสดงรูปพรีวิว
     const reader = new FileReader();
     reader.onload = async function(e) {
         previewImg.src = e.target.result;
@@ -3160,10 +3231,11 @@ async function handleOcrImageFile(input) {
         const img = new Image();
         img.onload = async function() {
             try {
-                // ขั้นตอนที่ 1: เตรียมภาพ 2 ชุด (ภาพเต็ม และ ภาพโฟกัสกึ่งกลางหน้าจอ Center-Crop)
+                // ขั้นตอนที่ 1: เตรียมภาพ 3 โหมด (Upper Focus, Center Focus, Full Image)
                 statusText.innerText = 'กำลังปรับโฟกัสและความคมชัดของภาพ...';
-                const fullCanvas = preprocessImageForOcr(img, { cropCenter: false });
+                const upperCanvas = preprocessImageForOcr(img, { cropUpper: true, scale: 2.0 });
                 const centerCanvas = preprocessImageForOcr(img, { cropCenter: true, highContrast: true });
+                const fullCanvas = preprocessImageForOcr(img, { cropCenter: false });
 
                 // บันทึกภาพที่บีบอัดแล้วสำหรับแนบเข้าข้อมูลสินค้า
                 try {
@@ -3180,10 +3252,10 @@ async function handleOcrImageFile(input) {
                         const barcodeDetector = new BarcodeDetector({ 
                             formats: ['code_128', 'ean_13', 'upc_a', 'code_39', 'qr_code'] 
                         });
-                        // ลองตรวจจาก center ก่อน แล้วค่อยตรวจ full
-                        let b1 = await barcodeDetector.detect(centerCanvas);
-                        let b2 = await barcodeDetector.detect(fullCanvas);
-                        const combined = (b1 || []).concat(b2 || []);
+                        let b1 = await barcodeDetector.detect(upperCanvas);
+                        let b2 = await barcodeDetector.detect(centerCanvas);
+                        let b3 = await barcodeDetector.detect(fullCanvas);
+                        const combined = (b1 || []).concat(b2 || []).concat(b3 || []);
                         if (combined.length > 0) {
                             detectedBarcodes = combined.map(b => b.rawValue);
                         }
@@ -3196,42 +3268,49 @@ async function handleOcrImageFile(input) {
                 let finalResult = null;
 
                 if (typeof Tesseract !== 'undefined') {
-                    // Pass 1: อ่านจาก Center Canvas ก่อน (ซูมเข้าหน้าจอมือถือ ตัด Noise ผนัง/มือ/ฉากหลังออก)
+                    const ocrOptions = {
+                        logger: m => {
+                            if (m.status === 'recognizing text' && m.progress) {
+                                statusText.innerText = `กำลังอ่านตัวเลข (${Math.round(m.progress * 100)}%)...`;
+                            }
+                        }
+                    };
+
+                    // Pass 1: Upper Canvas โฟกัสส่วนบนของหน้าจอเหนือแถบบาร์โค้ด (สำหรับหน้าจอ iPhone และกล่อง)
                     statusText.innerText = 'กำลังสแกนโฟกัสหน้าจอ (รอบที่ 1)...';
                     try {
-                        const pass1 = await Tesseract.recognize(centerCanvas, 'eng', {
-                            logger: m => {
-                                if (m.status === 'recognizing text' && m.progress) {
-                                    statusText.innerText = `กำลังอ่านตัวเลข (${Math.round(m.progress * 100)}%)...`;
-                                }
-                            }
-                        });
+                        const pass1 = await Tesseract.recognize(upperCanvas, 'eng', ocrOptions);
                         const pass1Text = (pass1 && pass1.data) ? pass1.data.text : '';
                         finalResult = extractImeiOrSerial(pass1Text, detectedBarcodes);
                     } catch (p1Err) {
                         console.warn('Pass 1 OCR error:', p1Err);
                     }
 
-                    // Pass 2: ถ้า Pass 1 ยังไม่พบ ให้ลองอ่านจาก Full Canvas ทั่วทั้งภาพ
+                    // Pass 2: ถ้า Pass 1 ยังไม่พบ ให้สแกนจาก Center Canvas
                     if (!finalResult || !finalResult.value) {
-                        statusText.innerText = 'กำลังสแกนขยายมุมกว้าง (รอบที่ 2)...';
+                        statusText.innerText = 'กำลังสแกนโฟกัสกึ่งกลาง (รอบที่ 2)...';
                         try {
-                            const pass2 = await Tesseract.recognize(fullCanvas, 'eng', {
-                                logger: m => {
-                                    if (m.status === 'recognizing text' && m.progress) {
-                                        statusText.innerText = `กำลังสแกนมุมกว้าง (${Math.round(m.progress * 100)}%)...`;
-                                    }
-                                }
-                            });
+                            const pass2 = await Tesseract.recognize(centerCanvas, 'eng', ocrOptions);
                             const pass2Text = (pass2 && pass2.data) ? pass2.data.text : '';
                             finalResult = extractImeiOrSerial(pass2Text, detectedBarcodes);
                         } catch (p2Err) {
                             console.warn('Pass 2 OCR error:', p2Err);
                         }
                     }
+
+                    // Pass 3: ถ้ายังไม่พบ ให้สแกนภาพเต็มมุมกว้าง
+                    if (!finalResult || !finalResult.value) {
+                        statusText.innerText = 'กำลังสแกนมุมกว้าง (รอบที่ 3)...';
+                        try {
+                            const pass3 = await Tesseract.recognize(fullCanvas, 'eng', ocrOptions);
+                            const pass3Text = (pass3 && pass3.data) ? pass3.data.text : '';
+                            finalResult = extractImeiOrSerial(pass3Text, detectedBarcodes);
+                        } catch (p3Err) {
+                            console.warn('Pass 3 OCR error:', p3Err);
+                        }
+                    }
                 } else {
                     console.warn('Tesseract.js not loaded!');
-                    // ลองสกัดจากบาร์โค้ดอย่างเดียว
                     finalResult = extractImeiOrSerial('', detectedBarcodes);
                 }
 
