@@ -1859,18 +1859,14 @@ async function submitProduct(event) {
         const pendingQueue = [...fileQueue]; // สำเนาคิวรูปภาพสำหรับ Background Upload
 
         let res;
+        const currentTargetId = editingProductId;
         if (editingProductId) {
-            // กรณีแก้ไขสินค้าเดิม: รออัปโหลดรูปภาพใหม่ทีละรูปพร้อมแสดง Progress บนหน้าจอ
-            showLoading(true, 'กำลังอัปโหลดรูปภาพ...', `อัปโหลดรูปภาพ 0/${fileQueue.length} รูป`);
-            const uploadedUrls = await uploadImagesToDrive(fileQueue, (current, total) => {
-                showLoading(true, 'กำลังอัปโหลดรูปภาพ...', `อัปโหลดรูปภาพที่ ${current}/${total} เรียบร้อย`);
-            });
-            productData.images = existingImages.concat(uploadedUrls);
+            // กรณีแก้ไขสินค้าเดิม: บันทึกข้อมูลและรูปเดิมลงระบบทันทีใน ~0.5 วินาที โดยไม่ต้องรออัปโหลดรูปใหม่
+            productData.images = existingImages;
             productData.id = editingProductId;
-            showLoading(true, 'กำลังบันทึกข้อมูลสินค้า...', 'อัปเดตข้อมูลเข้าระบบ');
             res = await API_updateProduct(productData);
         } else {
-            // กรณีเพิ่มสินค้าใหม่: ส่งบันทึกลงระบบทันทีใน ~0.5-1 วินาที! โดยไม่ต้องรออัปโหลดรูป
+            // กรณีเพิ่มสินค้าใหม่: ส่งบันทึกลงระบบทันทีใน ~0.5-1 วินาที
             productData.images = existingImages;
             res = await API_addProduct(productData);
         }
@@ -1878,10 +1874,12 @@ async function submitProduct(event) {
         showLoading(false);
         if (res.success) {
             showToast(res.message, 'success');
+            const finalTargetId = currentTargetId || res.id;
+            const finalTargetSheet = productData.targetSheet;
             resetProductForm();
 
             // Optimistic Local Update: แทรกสินค้าใหม่ลงตารางหน้าจอทันที (0ms) ไม่ต้องรอโหลดใหม่
-            if (res.product && !editingProductId) {
+            if (res.product && !currentTargetId) {
                 const fullModel = res.product.modelCode ? `${res.product.model} ${res.product.modelCode}` : res.product.model;
                 const formattedProd = {
                     ...res.product,
@@ -1891,13 +1889,13 @@ async function submitProduct(event) {
                 allProducts.unshift(formattedProd); // แสดงสินค้าชิ้นใหม่ไว้บนสุด
                 renderInventoryTable(allProducts);
                 filterInventory();
-
-                // หากมีรูปภาพแนบ ให้เริ่มระบบ Background Async Upload ทันที!
-                if (pendingQueue.length > 0) {
-                    startBackgroundUpload(res.id, productData.targetSheet, pendingQueue, existingImages);
-                }
             } else {
                 fetchInventoryData();
+            }
+
+            // หากมีรูปภาพใหม่ที่ต้องอัปโหลด ให้ทำงานแบบ Background Async Upload ทันทีทั้งสองกรณี!
+            if (pendingQueue.length > 0 && finalTargetId) {
+                startBackgroundUpload(finalTargetId, finalTargetSheet, pendingQueue, existingImages);
             }
         } else {
             showToast(res.message, 'error', 6000);

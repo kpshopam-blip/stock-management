@@ -610,43 +610,53 @@ async function API_uploadReceiptImage(dataURI, filename) {
 }
 
 // ====================================================================
-// อัปโหลดรูปภาพแบบเรียงคิว (Sequential Upload) เพื่อป้องกันการชน Concurrent Limit ของ Google Apps Script
+// อัปโหลดรูปภาพแบบ Batch Queue (รอบละ 2 รูปพร้อมกัน) เพื่อความเร็วสูงสุดและไม่ชน Concurrent Limit
 // ====================================================================
 async function uploadImagesToDrive(queue, onProgress = null) {
     if (!queue || queue.length === 0) return [];
     const uploadedUrls = [];
+    const BATCH_SIZE = 2; // ส่งพร้อมกันครั้งละ 2 รูป ปลอดภัยและเร็วขึ้น 2 เท่า
+    let completedCount = 0;
 
-    for (let i = 0; i < queue.length; i++) {
-        const file = queue[i];
-        let url = null;
-        let attempt = 0;
-        const maxAttempts = 2;
+    for (let i = 0; i < queue.length; i += BATCH_SIZE) {
+        const chunk = queue.slice(i, i + BATCH_SIZE);
+        const chunkPromises = chunk.map(async (file, idx) => {
+            const fileIndex = i + idx;
+            let url = null;
+            let attempt = 0;
+            const maxAttempts = 2;
 
-        while (attempt < maxAttempts && !url) {
-            try {
-                url = await API_uploadImage(file.dataURI, file.filename);
-                if (url) break;
-            } catch (err) {
-                console.warn(`[Upload Retry] กำลังลองอัปโหลดรูปที่ ${i + 1}/${queue.length} ซ้ำ (รอบที่ ${attempt + 1}/${maxAttempts}):`, err);
+            while (attempt < maxAttempts && !url) {
+                try {
+                    url = await API_uploadImage(file.dataURI, file.filename);
+                    if (url) break;
+                } catch (err) {
+                    console.warn(`[Upload Retry] รูปที่ ${fileIndex + 1}/${queue.length} ลองส่งซ้ำ:`, err);
+                }
+                attempt++;
+                if (!url && attempt < maxAttempts) {
+                    await new Promise(r => setTimeout(r, 600));
+                }
             }
-            attempt++;
-            if (!url && attempt < maxAttempts) {
-                await new Promise(r => setTimeout(r, 800));
+
+            completedCount++;
+            if (typeof onProgress === 'function') {
+                try {
+                    onProgress(completedCount, queue.length, url);
+                } catch (pErr) {}
             }
+            return url;
+        });
+
+        const chunkResults = await Promise.all(chunkPromises);
+        for (const u of chunkResults) {
+            if (u) uploadedUrls.push(u);
         }
 
-        if (url) {
-            uploadedUrls.push(url);
+        // เว้นระยะสั้นๆ 100ms ระหว่างแต่ละคู่
+        if (i + BATCH_SIZE < queue.length) {
+            await new Promise(r => setTimeout(r, 100));
         }
-
-        if (typeof onProgress === 'function') {
-            try {
-                onProgress(i + 1, queue.length, url);
-            } catch (pErr) {}
-        }
-
-        // หน่วงเวลาสั้นๆ 200ms ระหว่างไฟล์เพื่อให้ Apps Script เคลียร์ทรัพยากร
-        await new Promise(r => setTimeout(r, 200));
     }
 
     return uploadedUrls;
