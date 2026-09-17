@@ -1294,20 +1294,31 @@ function getDynamicChartData(selectedSource) {
   return daysData;
 }
 
-// ====== 8. ซิงค์ข้อมูลสินค้าทั้งหมดจาก Google Sheets ขึ้น Firebase ======
+// ====== 8. ซิงค์ข้อมูลสินค้าให้ตรงกันระหว่าง Google Sheets และ Firebase (2-Way Smart Sync) ======
 async function syncFirebaseFromDashboard() {
-  if (!await showCustomConfirm('คุณต้องการซิงค์ข้อมูลสินค้าจาก Google Sheets ไปยัง Firebase ทั้งหมดใหม่หรือไม่?\n(ระบบจะอ่านข้อมูลล่าสุดจากชีตเพื่ออัปเดต Firebase ให้ตรงกัน)')) {
+  if (!await showCustomConfirm('คุณต้องการซิงค์ข้อมูลให้ตรงกันระหว่าง Google Sheets และ Firebase หรือไม่?\n\n(ระบบจะดึงสินค้าที่อยู่ใน Firebase เขียนลง Google Sheets ให้ครบถ้วน และอัปเดตข้อมูลทั้งหมดให้ตรงกัน 100%)')) {
     return;
   }
   
   showLoading(true);
   try {
+    // 1. ตรวจสอบและดึงสินค้าตกค้างจาก Firebase ลง Google Sheets ก่อนเสมอ
+    let missingRes = null;
+    try {
+      missingRes = await apiPost('syncMissingProductsToSheets', {});
+      console.log('syncMissingProductsToSheets result:', missingRes);
+    } catch (e) {
+      console.warn('syncMissingProductsToSheets notice:', e);
+    }
+
+    // 2. ซิงค์ข้อมูลทั้งหมดให้ตรงกัน 100% ทั้ง 2 ฝั่ง
     const response = await apiPost('syncAllProducts', {});
     showLoading(false);
     if (response.success) {
       if (typeof SETTINGS_CACHE_KEY !== 'undefined') localStorage.removeItem(SETTINGS_CACHE_KEY);
       if (typeof loadSettings === 'function') loadSettings();
-      await showCustomAlert('ซิงค์ข้อมูลสำเร็จ! จำนวน ' + (response.count || 0) + ' รายการ', 'สำเร็จ');
+      const addedText = (missingRes && missingRes.addedCount > 0) ? `\n(ดึงสินค้าที่ตกค้างเข้า Google Sheets เพิ่ม ${missingRes.addedCount} เครื่อง)` : '';
+      await showCustomAlert('ซิงค์ข้อมูลตรงกันเรียบร้อยแล้ว! ข้อมูลทั้งหมด ' + (response.count || 0) + ' รายการ' + addedText, 'สำเร็จ');
       await refreshDashboard();
     } else {
       await showCustomAlert('ซิงค์ข้อมูลไม่สำเร็จ: ' + (response.error || response.message || 'ไม่ทราบสาเหตุ'), 'ผิดพลาด');
