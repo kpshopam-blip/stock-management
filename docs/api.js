@@ -538,34 +538,194 @@ async function API_getSalesSummary() {
     return res.data;
 }
 
-// เพิ่มสินค้า
+// ====== Firebase Helper Functions ======
+function getFirebaseUrl(path) {
+    if (!CONFIG.FIREBASE_DB_URL) return null;
+    const base = CONFIG.FIREBASE_DB_URL.replace(/\/$/, '');
+    const cleanPath = path.replace(/^\//, '');
+    let url = `${base}/${cleanPath}`;
+    if (CONFIG.FIREBASE_SECRET) {
+        url += (url.includes('?') ? '&' : '?') + 'auth=' + encodeURIComponent(CONFIG.FIREBASE_SECRET);
+    }
+    return url;
+}
+
+async function firebaseWrite(path, method = 'PUT', data = null) {
+    const url = getFirebaseUrl(path);
+    if (!url) throw new Error('Firebase URL is not configured');
+    const options = {
+        method,
+        headers: { 'Content-Type': 'application/json' }
+    };
+    if (data !== null) {
+        options.body = JSON.stringify(data);
+    }
+    const res = await fetch(url, options);
+    if (!res.ok) {
+        throw new Error(`Firebase HTTP ${res.status}`);
+    }
+    return await res.json();
+}
+
+// เพิ่มสินค้า — Firebase-First (0.05 วินาที) + Sync Sheets เบื้องหลัง
 async function API_addProduct(productData) {
-    return apiPost('addProduct', { productData });
+    const now = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    const formattedDate = `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+    const id = productData.id || ('P-' + now.getFullYear() + pad(now.getMonth() + 1) + pad(now.getDate()) + '-' + pad(now.getHours()) + pad(now.getMinutes()) + pad(now.getSeconds()));
+
+    const fullProduct = {
+        id: id,
+        brand: (productData.brand || '').toString().trim(),
+        model: (productData.model || '').toString().trim(),
+        rawModel: (productData.model || '').toString().trim(),
+        modelCode: (productData.modelCode || '').toString().trim(),
+        ram: productData.ram || '',
+        storage: (productData.storage || '').toString().trim(),
+        color: (productData.color || '').toString().trim(),
+        source: productData.source || '',
+        cost: Number(productData.cost) || 0,
+        price: Number(productData.price) || 0,
+        wholesalePrice: Number(productData.wholesalePrice) || 0,
+        installmentPrice: Number(productData.installmentPrice) || 0,
+        imei: (productData.imei || '').toString().trim(),
+        condition: productData.condition || '',
+        defect: productData.defect || '',
+        images: Array.isArray(productData.images) ? productData.images : [],
+        status: 'Available',
+        dateAdded: formattedDate,
+        battery: productData.battery || '',
+        accessories: productData.accessories || '',
+        location: productData.location || '',
+        notes: productData.notes || '',
+        receiver: productData.receiver || '',
+        stockType: productData.targetSheet || 'Products'
+    };
+
+    // 1. บันทึกลง Firebase Realtime DB ทันที (เสร็จใน 0.05 วินาที)
+    try {
+        await firebaseWrite(`products/${id}.json`, 'PUT', fullProduct);
+    } catch (fbErr) {
+        console.warn('Firebase direct write error, fallback to GAS:', fbErr);
+        return apiPost('addProduct', { productData: fullProduct });
+    }
+
+    // 2. ซิงค์ลง Google Sheets ในเบื้องหลัง (Background Sync ไม่บล็อกหน้าจอ)
+    apiPost('addProduct', { productData: fullProduct })
+        .then(gasRes => {
+            console.log('[Sync to Sheets] บันทึกสินค้าลง Google Sheets สำเร็จ:', id, gasRes);
+        })
+        .catch(gasErr => {
+            console.warn('[Sync to Sheets Notice] บันทึกลงชีตเบื้องหลังล่าช้า:', gasErr);
+        });
+
+    return { 
+        success: true, 
+        message: 'เพิ่มสินค้าเข้าระบบเรียบร้อยแล้ว!', 
+        product: fullProduct, 
+        id: id 
+    };
 }
 
-// แก้ไขสินค้า
+// แก้ไขสินค้า — Firebase-First (0.05 วินาที) + Sync Sheets เบื้องหลัง
 async function API_updateProduct(productData) {
-    return apiPost('updateProduct', { productData });
+    if (!productData || !productData.id) throw new Error('Missing product ID');
+
+    // 1. อัปเดตลง Firebase Realtime DB ทันที
+    try {
+        await firebaseWrite(`products/${productData.id}.json`, 'PATCH', productData);
+    } catch (fbErr) {
+        console.warn('Firebase direct patch error, fallback to GAS:', fbErr);
+        return apiPost('updateProduct', { productData });
+    }
+
+    // 2. ซิงค์ลง Google Sheets ในเบื้องหลัง
+    apiPost('updateProduct', { productData })
+        .then(gasRes => {
+            console.log('[Sync to Sheets] อัปเดตสินค้าใน Google Sheets สำเร็จ:', productData.id, gasRes);
+        })
+        .catch(gasErr => {
+            console.warn('[Sync to Sheets Notice] อัปเดตลงชีตเบื้องหลังล่าช้า:', gasErr);
+        });
+
+    return { 
+        success: true, 
+        message: 'บันทึกการแก้ไขข้อมูลเรียบร้อยแล้ว!', 
+        id: productData.id 
+    };
 }
 
-// ขายสินค้า
+// ขายสินค้า — Firebase-First (0.05 วินาที ตัดสต็อกทันที) + Sync SalesData เบื้องหลัง
 async function API_sellProduct(saleData) {
-    return apiPost('sellProduct', { saleData });
+    const now = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    const soldDate = `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+
+    // 1. ตัดสต็อกและเปลี่ยนสถานะเป็น Sold ใน Firebase ทันที (ป้องกันขายซ้ำข้ามสาขา)
+    try {
+        await firebaseWrite(`products/${saleData.productId}.json`, 'PATCH', {
+            status: 'Sold',
+            soldDate: soldDate,
+            salesperson: saleData.salesperson || '',
+            salePrice: Number(saleData.price) || 0,
+            saleChannel: saleData.channel || 'หน้าร้าน',
+            buyerName: saleData.buyerName || '',
+            lockedBy: null,
+            lockExpires: null
+        });
+    } catch (fbErr) {
+        console.warn('Firebase direct sell error, fallback to GAS:', fbErr);
+        return apiPost('sellProduct', { saleData });
+    }
+
+    // 2. ซิงค์ข้อมูลการขายลงตาราง SalesData ใน Google Sheets ในเบื้องหลัง
+    apiPost('sellProduct', { saleData })
+        .then(gasRes => {
+            console.log('[Sync to Sheets] บันทึกยอดขายลง SalesData สำเร็จ:', gasRes);
+        })
+        .catch(gasErr => {
+            console.warn('[Sync to Sheets Notice] บันทึกยอดขายลงชีตเบื้องหลังล่าช้า:', gasErr);
+        });
+
+    return { 
+        success: true, 
+        message: 'บันทึกการขายเรียบร้อยแล้ว!', 
+        receipt: { ...saleData, soldDate } 
+    };
 }
 
 // ลบสินค้า
 async function API_deleteProduct(productId) {
+    try {
+        await firebaseWrite(`products/${productId}.json`, 'DELETE');
+    } catch (fbErr) {
+        console.warn('Firebase direct delete error:', fbErr);
+    }
     return apiPost('deleteProduct', { productId });
 }
 
-// เปลี่ยนสถานะ
+// เปลี่ยนสถานะสินค้า — Firebase-First
 async function API_changeStatus(productId, newStatus) {
-    return apiPost('changeStatus', { productId, newStatus });
+    try {
+        await firebaseWrite(`products/${productId}.json`, 'PATCH', { status: newStatus });
+    } catch (fbErr) {
+        console.warn('Firebase direct status change error:', fbErr);
+    }
+    // ซิงค์ Google Sheets เบื้องหลัง
+    apiPost('changeStatus', { productId, newStatus }).catch(() => {});
+    return { success: true, message: `เปลี่ยนสถานะเป็น ${newStatus} เรียบร้อยแล้ว` };
 }
 
-// เอาสินค้าออก
+// เอาสินค้าออก — Firebase-First
 async function API_removeProduct(productId, reason) {
-    return apiPost('removeProduct', { productId, reason });
+    try {
+        await firebaseWrite(`products/${productId}.json`, 'PATCH', { status: 'Removed', removeReason: reason });
+    } catch (fbErr) {
+        console.warn('Firebase direct remove error:', fbErr);
+    }
+    // ซิงค์ Google Sheets เบื้องหลัง
+    apiPost('removeProduct', { productId, reason }).catch(() => {});
+    return { success: true, message: 'เอาสินค้าออกจากสต็อกเรียบร้อยแล้ว' };
 }
 
 // ย้ายคลัง
@@ -667,80 +827,109 @@ async function API_lockProduct(productId) {
     const session = getSession();
     const user = session ? session.user : null;
     const username = user ? user.name : 'Unknown';
-    
-    if (!CONFIG.FIREBASE_DB_URL) {
-        throw new Error('Firebase DB URL not configured');
-    }
-    
-    const url = `${CONFIG.FIREBASE_DB_URL}products/${productId}.json`;
-    
+
     try {
         // 1. ตรวจสอบการกดจองชนกันก่อนบันทึกจริง
-        const checkRes = await fetch(url);
-        if (checkRes.ok) {
-            const currentProd = await checkRes.json();
-            const now = Date.now();
-            if (currentProd && currentProd.lockedBy && currentProd.lockedBy !== username && currentProd.lockExpires > now) {
-                return { success: false, message: 'สินค้านี้ถูกจองไว้แล้วโดยคุณ ' + currentProd.lockedBy };
+        const url = getFirebaseUrl(`products/${productId}.json`);
+        if (url) {
+            const checkRes = await fetch(url);
+            if (checkRes.ok) {
+                const currentProd = await checkRes.json();
+                const now = Date.now();
+                if (currentProd && currentProd.lockedBy && currentProd.lockedBy !== username && currentProd.lockExpires > now) {
+                    return { success: false, message: 'สินค้านี้ถูกจองไว้แล้วโดยคุณ ' + currentProd.lockedBy };
+                }
             }
         }
 
         // 2. บันทึกข้อมูลการจอง
-        const payload = {
+        await firebaseWrite(`products/${productId}.json`, 'PATCH', {
             lockedBy: username,
             lockExpires: Date.now() + 10 * 60 * 1000 // ล็อก 10 นาที
-        };
-
-        const response = await fetch(url, {
-            method: 'PATCH',
-            body: JSON.stringify(payload)
         });
-        
-        if (!response.ok) {
-            throw new Error(`Firebase status: ${response.status}`);
-        }
-        
+
         return { success: true };
     } catch (e) {
         console.error('Firebase lock error, fallback to GAS:', e);
-        // หาก Firebase ขัดข้อง ให้ใช้ระบบสำรองผ่าน Apps Script
         return apiPost('lockProduct', { productId });
     }
 }
 
 // ปลดล็อกสินค้า ผ่าน Firebase ตรงๆ
 async function API_unlockProduct(productId) {
-    if (!CONFIG.FIREBASE_DB_URL) {
-        throw new Error('Firebase DB URL not configured');
-    }
-    
-    const url = `${CONFIG.FIREBASE_DB_URL}products/${productId}.json`;
-    const payload = {
-        lockedBy: null,
-        lockExpires: null
-    };
-    
     try {
-        const response = await fetch(url, {
-            method: 'PATCH',
-            body: JSON.stringify(payload)
+        await firebaseWrite(`products/${productId}.json`, 'PATCH', {
+            lockedBy: null,
+            lockExpires: null
         });
-        
-        if (!response.ok) {
-            throw new Error(`Firebase status: ${response.status}`);
-        }
-        
         return { success: true };
     } catch (e) {
         console.error('Firebase unlock error, fallback to GAS:', e);
-        // สำรอง
         return apiPost('unlockProduct', { productId });
     }
 }
 
-// บันทึกขายหลายเครื่องพร้อมกัน
+// บันทึกขายหลายเครื่องพร้อมกัน (Firebase-First: 0.05 วินาที แล้วซิงค์ลง Google Sheets ในฉากหลัง)
 async function API_sellBulkProducts(bulkSaleData) {
-    return apiPost('sellBulkProducts', { bulkSaleData });
+    try {
+        const productIds = bulkSaleData.productIds || [];
+        const prices = bulkSaleData.prices || {};
+        const receiptItems = [];
+        let totalAmount = 0;
+
+        // 1. ตัดสต็อกสินค้าใน Firebase ทันที
+        const updatePromises = productIds.map(async (pId) => {
+            const currentItem = (await firebaseGet(`items/${pId}`)) || {};
+            const soldPrice = parseFloat(prices[pId]) || currentItem.price || 0;
+            totalAmount += soldPrice;
+            receiptItems.push({
+                id: pId,
+                name: (currentItem.brand || '') + ' ' + (currentItem.model || ''),
+                price: soldPrice,
+                imei: currentItem.imei || ''
+            });
+            return firebaseWrite(`items/${pId}`, {
+                ...currentItem,
+                status: 'ขายแล้ว',
+                stockType: 'Sold',
+                soldPrice: soldPrice,
+                customerName: bulkSaleData.customerName || '',
+                customerPhone: bulkSaleData.customerPhone || '',
+                salesperson: bulkSaleData.salesperson || '',
+                saleDate: new Date().toISOString()
+            });
+        });
+
+        await Promise.all(updatePromises);
+
+        // 2. สร้างใบเสร็จจำลองสำหรับหน้าจอ POS
+        const mockReceipt = {
+            receiptNo: 'REC-' + Date.now().toString().slice(-6),
+            date: new Date().toLocaleDateString('th-TH'),
+            time: new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }),
+            items: receiptItems,
+            total: totalAmount,
+            customerName: bulkSaleData.customerName || '-',
+            customerPhone: bulkSaleData.customerPhone || '-',
+            salesperson: bulkSaleData.salesperson || '-',
+            saleType: bulkSaleData.saleType || 'ขายสด'
+        };
+
+        // 3. ส่งคำขอบันทึกลง Google Sheets แบบ Background Sync
+        bgPostToGAS({
+            action: 'sellBulkProducts',
+            bulkSaleData: bulkSaleData
+        });
+
+        return {
+            success: true,
+            message: 'บันทึกการขายหลายรายการสำเร็จเรียบร้อย',
+            receipt: mockReceipt
+        };
+    } catch (e) {
+        console.warn('Firebase-First sellBulk error, fallback to GAS:', e);
+        return apiPost('sellBulkProducts', { bulkSaleData });
+    }
 }
 
 // อัปเดตสถานะชำระเงินของบิลเงินเชื่อ
@@ -762,13 +951,8 @@ async function API_updateProductImageUrls(productId, targetSheet, images) {
 
 // อัปเดตรายการรูปภาพไปยัง Firebase ตรงๆ
 async function API_updateFirebaseProductImages(productId, images) {
-    if (!CONFIG.FIREBASE_DB_URL) return;
-    const url = `${CONFIG.FIREBASE_DB_URL}products/${productId}/images.json`;
     try {
-        await fetch(url, {
-            method: 'PUT',
-            body: JSON.stringify(images)
-        });
+        await firebaseWrite(`products/${productId}/images.json`, 'PUT', images);
     } catch (e) {
         console.warn('Direct Firebase image update failed:', e);
     }

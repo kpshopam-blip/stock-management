@@ -18,6 +18,7 @@ const CONFIG = {
 
     // URL ของ Firebase Realtime Database
     FIREBASE_DB_URL: 'https://kpshop-stock-mobile-phone-default-rtdb.asia-southeast1.firebasedatabase.app/',
+    FIREBASE_SECRET: 'GAPQqTBRQMxEmMkEOuKn2nYAbRza0jFvIqWprb9l',
 
     // อีเมลประจำสาขาสำหรับการส่งแจ้งเตือนการขายและการโอนสินค้า
     BRANCH_EMAILS: {
