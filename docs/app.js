@@ -14,6 +14,7 @@ let fileQueue = [];
 let existingImages = [];
 let editingProductId = null;
 let sellReceiptDataURI = null;
+let sellSlipDataURI = null;
 let _dashboardData = null;
 let currentStockTab = 'Products';
 
@@ -1420,12 +1421,17 @@ function renderSalesList(list) {
                 customerPhone: s.customerPhone,
                 salesperson: s.salesperson,
                 receiptImage: s.receiptImage,
+                paymentSlip: s.paymentSlip || '',
+                paymentMethod: s.paymentMethod || '',
                 downPayment: parseFloat(s.downPayment || 0),
                 items: [],
                 totalPrice: 0,
                 totalProfit: 0
             };
         }
+        if (s.receiptImage) billGroups[billId].receiptImage = s.receiptImage;
+        if (s.paymentSlip) billGroups[billId].paymentSlip = s.paymentSlip;
+        if (s.paymentMethod) billGroups[billId].paymentMethod = s.paymentMethod;
         billGroups[billId].items.push(s);
         billGroups[billId].totalPrice += parseFloat(s.soldPrice || 0);
         billGroups[billId].totalProfit += parseFloat(s.profit || 0);
@@ -1462,6 +1468,19 @@ function renderSalesList(list) {
             </div>`;
         }
 
+        // ป้ายแสดงช่องทางชำระเงิน
+        const payMethodBadge = bill.paymentMethod ? `
+          <span class="text-[10px] font-bold px-2 py-0.5 rounded border inline-flex items-center gap-1 ${
+            bill.paymentMethod === 'เงินโอน'
+              ? 'bg-blue-50 text-blue-700 border-blue-200'
+              : bill.paymentMethod === 'เงินสด'
+                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                : 'bg-purple-50 text-purple-700 border-purple-200'
+          }">
+            <i class="fa-solid ${bill.paymentMethod === 'เงินโอน' ? 'fa-mobile-screen-button' : (bill.paymentMethod === 'เงินสด' ? 'fa-money-bill-wave' : 'fa-handshake')}"></i>${bill.paymentMethod}
+          </span>
+        ` : '';
+
         // เตรียม object ใบเสร็จดิจิทัลสำหรับส่งไปแสดงผล
         const receiptObj = {
             saleId: bill.saleId,
@@ -1470,6 +1489,8 @@ function renderSalesList(list) {
             customerName: bill.customerName || '',
             customerPhone: bill.customerPhone || '',
             saleType: bill.saleType || '',
+            paymentMethod: bill.paymentMethod || '',
+            paymentSlip: bill.paymentSlip || '',
             downPayment: bill.downPayment || 0,
             isBulk: isBulk,
             items: bill.items.map(item => ({
@@ -1491,9 +1512,10 @@ function renderSalesList(list) {
         html += `
       <div class="bg-gray-50 border rounded-lg p-3 hover:bg-gray-100 transition shadow-sm">
         <div class="flex justify-between items-start mb-1 pb-1 border-b border-gray-200">
-          <div>
+          <div class="flex items-center gap-1.5 flex-wrap">
             <span class="text-[9px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded font-bold font-mono">${bill.saleId}</span>
             ${isBulk ? `<span class="text-[9px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-bold">${bill.items.length} เครื่อง</span>` : ''}
+            ${payMethodBadge}
           </div>
           <div class="text-right shrink-0">
             <div class="font-bold text-brand-600 text-sm">รวม ฿${formatNumber(bill.totalPrice)}</div>
@@ -1510,9 +1532,10 @@ function renderSalesList(list) {
           <div>${bill.customerName ? '<i class="fa-regular fa-address-card mr-1"></i>' + bill.customerName : ''}</div>
         </div>
         
-        <div class="flex gap-2 mt-2 border-t pt-2">
-          <button onclick='viewSaleReceipt(${JSON.stringify(receiptObj).replace(/'/g, "&#39;")})' class="text-xs text-indigo-600 hover:text-indigo-800 flex items-center gap-1"><i class="fa-solid fa-receipt"></i> ดูใบเสร็จ</button>
-          ${bill.receiptImage ? `<button onclick="viewFullImage('${bill.receiptImage}')" class="text-xs text-amber-600 hover:text-amber-800 flex items-center gap-1"><i class="fa-solid fa-image"></i> ใบเสร็จ POS</button>` : ''}
+        <div class="flex gap-2 mt-2 border-t pt-2 flex-wrap">
+          <button onclick='viewSaleReceipt(${JSON.stringify(receiptObj).replace(/'/g, "&#39;")})' class="text-xs text-indigo-600 hover:text-indigo-800 flex items-center gap-1 font-semibold"><i class="fa-solid fa-receipt"></i> ดูใบเสร็จ</button>
+          ${bill.receiptImage ? `<button onclick="viewFullImage('${bill.receiptImage}')" class="text-xs text-amber-600 hover:text-amber-800 flex items-center gap-1 font-semibold"><i class="fa-solid fa-image"></i> ใบเสร็จ POS</button>` : ''}
+          ${bill.paymentSlip ? `<button onclick="viewFullImage('${bill.paymentSlip}')" class="text-xs text-emerald-600 hover:text-emerald-800 flex items-center gap-1 font-semibold"><i class="fa-solid fa-file-invoice-dollar"></i> สลิปโอนเงิน</button>` : ''}
         </div>
       </div>`;
     });
@@ -2245,18 +2268,21 @@ function toggleDownPayment() {
     const dpContainer = document.getElementById('sell_downPaymentContainer');
     const dueContainer = document.getElementById('sell_dueDateContainer');
     const partnerPayContainer = document.getElementById('partner_payment_container');
+    const payMethodContainer = document.getElementById('payment_method_container');
     if (!dpContainer) return;
 
     // ตรวจสอบว่าเป็นประเภท "ส่งร้านพาร์ทเนอร์" หรือไม่
     const isPartner = type && type.includes('พาร์ทเนอร์');
+    let isPartnerCredit = false;
 
     if (isPartner) {
         if (partnerPayContainer) partnerPayContainer.classList.remove('hidden');
         
         // อ่านค่าประเภทชำระเงินของพาร์ทเนอร์ (สด หรือ เชื่อ)
         const partnerPayType = document.querySelector('input[name="partner_payment_type"]:checked')?.value || 'สด';
+        isPartnerCredit = (partnerPayType === 'เชื่อ');
         
-        if (partnerPayType === 'เชื่อ') {
+        if (isPartnerCredit) {
             // แสดงช่องกำหนดชำระและเงินดาวน์สำหรับพาร์ทเนอร์เงินเชื่อ
             if (dueContainer) {
                 dueContainer.classList.remove('hidden');
@@ -2294,12 +2320,40 @@ function toggleDownPayment() {
             if (dpInput) dpInput.value = '';
         }
 
-        // แสดงช่องวันกำหนดชำระเงินเชื่อ (ตามเงื่อนไขใหม่ ซ่อนช่องวันครบกำหนดชำระเงินเชื่อสำหรับประเภทการขายอื่นทั้งหมด)
+        // ซ่อนช่องวันครบกำหนดชำระเงินเชื่อสำหรับประเภทการขายอื่นทั้งหมด
         if (dueContainer) {
             dueContainer.classList.add('hidden');
             const sellDueDate = document.getElementById('sell_dueDate');
             if (sellDueDate) sellDueDate.value = '';
         }
+    }
+
+    // จัดการแสดง/ซ่อนช่องทางการรับเงิน (เงินสด / เงินโอน)
+    if (payMethodContainer) {
+        if (isPartnerCredit) {
+            payMethodContainer.classList.add('hidden');
+            const slipContainer = document.getElementById('transferSlipContainer');
+            if (slipContainer) slipContainer.classList.add('hidden');
+        } else {
+            payMethodContainer.classList.remove('hidden');
+            togglePaymentMethod();
+        }
+    }
+}
+
+// สลับการแสดงผลกล่องอัปโหลดสลิปโอนเงินตามช่องทางการรับเงิน
+function togglePaymentMethod() {
+    const payMethodContainer = document.getElementById('payment_method_container');
+    if (payMethodContainer && payMethodContainer.classList.contains('hidden')) return;
+
+    const method = document.querySelector('input[name="sell_payment_method"]:checked')?.value || 'เงินสด';
+    const slipContainer = document.getElementById('transferSlipContainer');
+    if (!slipContainer) return;
+
+    if (method === 'เงินโอน') {
+        slipContainer.classList.remove('hidden');
+    } else {
+        slipContainer.classList.add('hidden');
     }
 }
 
@@ -2322,6 +2376,11 @@ function openSellModal(productId) {
     document.getElementById('sell_customerPhone').value = '';
     document.getElementById('receiptPreview').classList.add('hidden');
     sellReceiptDataURI = null;
+    clearSlipImage();
+
+    // รีเซ็ตตัวเลือกช่องทางรับเงินเป็นเงินสด
+    const defaultCashRadio = document.querySelector('input[name="sell_payment_method"][value="เงินสด"]');
+    if (defaultCashRadio) defaultCashRadio.checked = true;
 
     const dpContainer = document.getElementById('sell_downPaymentContainer');
     if (dpContainer) dpContainer.classList.add('hidden');
@@ -2375,15 +2434,20 @@ function openSellModal(productId) {
 function closeSellModal() { 
     document.getElementById('sellModal').classList.add('hidden'); 
     sellReceiptDataURI = null; 
+    clearSlipImage();
     
     // รีเซ็ตปุ่มวิทยุพาร์ทเนอร์กลับไปเป็น สด
     const firstRadio = document.querySelector('input[name="partner_payment_type"][value="สด"]');
     if (firstRadio) firstRadio.checked = true;
+
+    // รีเซ็ตปุ่มวิทยุช่องทางรับเงินกลับไปเป็น เงินสด
+    const defaultCashRadio = document.querySelector('input[name="sell_payment_method"][value="เงินสด"]');
+    if (defaultCashRadio) defaultCashRadio.checked = true;
 }
 
 function previewReceiptImage(input) {
     if (!input.files || input.files.length === 0) return;
-    showLoading(true);
+    showLoading(true, 'กำลังประมวลผลรูปใบเสร็จ...');
     const file = input.files[0];
     const reader = new FileReader();
 
@@ -2421,9 +2485,75 @@ function previewReceiptImage(input) {
             input.value = '';
             showLoading(false);
         };
+        img.onerror = function() {
+            showToast('เกิดข้อผิดพลาดในการโหลดรูปใบเสร็จ', 'error');
+            showLoading(false);
+        };
         img.src = e.target.result;
     };
     reader.readAsDataURL(file);
+}
+
+function previewSlipImage(input) {
+    if (!input.files || input.files.length === 0) return;
+    showLoading(true, 'กำลังประมวลผลรูปสลิปโอนเงิน...');
+    const file = input.files[0];
+    const reader = new FileReader();
+
+    const MAX_WIDTH = 1200;
+    const MAX_HEIGHT = 1200;
+    const QUALITY = 0.85;
+
+    reader.onload = function (e) {
+        const img = new Image();
+        img.onload = function () {
+            let width = img.width;
+            let height = img.height;
+
+            if (width > height) {
+                if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
+            } else {
+                if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; }
+            }
+
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+
+            let compressedDataURI = canvas.toDataURL('image/webp', QUALITY);
+            if (!compressedDataURI || !compressedDataURI.startsWith('data:image/webp')) {
+                compressedDataURI = canvas.toDataURL('image/jpeg', QUALITY);
+            }
+
+            sellSlipDataURI = compressedDataURI;
+            const previewEl = document.getElementById('slipPreview');
+            const previewImg = document.getElementById('slipPreviewImg');
+            if (previewImg) previewImg.src = compressedDataURI;
+            if (previewEl) previewEl.classList.remove('hidden');
+            input.value = '';
+            showLoading(false);
+        };
+        img.onerror = function() {
+            showToast('เกิดข้อผิดพลาดในการโหลดรูปสลิป', 'error');
+            showLoading(false);
+        };
+        img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+}
+
+function clearSlipImage() {
+    sellSlipDataURI = null;
+    const previewEl = document.getElementById('slipPreview');
+    const previewImg = document.getElementById('slipPreviewImg');
+    if (previewImg) previewImg.src = '';
+    if (previewEl) previewEl.classList.add('hidden');
+    const f1 = document.getElementById('sell_slipFile');
+    if (f1) f1.value = '';
+    const f2 = document.getElementById('sell_slipCamera');
+    if (f2) f2.value = '';
 }
 
 let isSubmittingSell = false;
@@ -2451,6 +2581,19 @@ async function confirmSell() {
     // บังคับกรอกวันกำหนดชำระเงินเชื่อเฉพาะการส่งร้านพาร์ทเนอร์ที่เป็นเงินเชื่อเท่านั้น
     if (isPartnerCredit && !dueDate) { showToast('กรุณาระบุวันกำหนดชำระเงินเชื่อ', 'warning'); return; }
     
+    // ตรวจสอบช่องทางการรับเงิน (เงินสด / เงินโอน)
+    const payMethodContainer = document.getElementById('payment_method_container');
+    const isPayMethodVisible = payMethodContainer && !payMethodContainer.classList.contains('hidden');
+    const paymentMethod = isPayMethodVisible 
+        ? (document.querySelector('input[name="sell_payment_method"]:checked')?.value || 'เงินสด')
+        : (isPartnerCredit ? 'เงินเชื่อ' : 'เงินสด');
+
+    // กรณีเป็นเงินโอน ต้องบังคับแนบรูปสลิป
+    if (isPayMethodVisible && paymentMethod === 'เงินโอน' && !sellSlipDataURI) {
+        showToast('กรุณาแนบสลิปโอนเงินก่อนกดยืนยันการขาย', 'warning');
+        return;
+    }
+
     if (!sellReceiptDataURI) { showToast('กรุณาอัปโหลดรูปใบเสร็จจากเครื่อง POS ก่อนกดยืนยัน', 'warning'); return; }
 
     let salePrices = {};
@@ -2514,12 +2657,18 @@ async function confirmSell() {
     }
     showLoading(true);
 
-    try {
+    let uploadCount = 0;
     const hasReceipt = Boolean(sellReceiptDataURI);
+    const hasSlip = Boolean(sellSlipDataURI);
     const receiptExt = (sellReceiptDataURI && sellReceiptDataURI.includes('image/webp')) ? '.webp' : '.jpg';
-    
-    if (hasReceipt) {
-        activeBackgroundUploadsCount++;
+    const slipExt = (sellSlipDataURI && sellSlipDataURI.includes('image/webp')) ? '.webp' : '.jpg';
+
+    if (hasReceipt) uploadCount++;
+    if (hasSlip) uploadCount++;
+
+    try {
+    if (uploadCount > 0) {
+        activeBackgroundUploadsCount += uploadCount;
         updateUploadBadge();
         window.onbeforeunload = function () {
             if (activeBackgroundUploadsCount > 0) {
@@ -2539,7 +2688,9 @@ async function confirmSell() {
                 salesperson: currentUser ? (currentUser.saleName || currentUser.name) : '',
                 recordedBy: currentUser ? currentUser.name : '',
                 notes: sellNotes,
-                receiptImage: sellReceiptDataURI ? { filename: 'receipt_bulk_' + Date.now() + receiptExt, dataURI: sellReceiptDataURI } : null
+                paymentMethod: paymentMethod,
+                receiptImage: sellReceiptDataURI ? { filename: 'receipt_bulk_' + Date.now() + receiptExt, dataURI: sellReceiptDataURI } : null,
+                paymentSlipImage: sellSlipDataURI ? { filename: 'slip_bulk_' + Date.now() + slipExt, dataURI: sellSlipDataURI } : null
             };
             const res = await API_sellBulkProducts(saleData);
             if (res.success) {
@@ -2563,7 +2714,9 @@ async function confirmSell() {
                 salesperson: currentUser ? (currentUser.saleName || currentUser.name) : '',
                 recordedBy: currentUser ? currentUser.name : '',
                 notes: sellNotes,
-                receiptImage: sellReceiptDataURI ? { filename: 'receipt_' + Date.now() + receiptExt, dataURI: sellReceiptDataURI } : null
+                paymentMethod: paymentMethod,
+                receiptImage: sellReceiptDataURI ? { filename: 'receipt_' + Date.now() + receiptExt, dataURI: sellReceiptDataURI } : null,
+                paymentSlipImage: sellSlipDataURI ? { filename: 'slip_' + Date.now() + slipExt, dataURI: sellSlipDataURI } : null
             };
             const res = await API_sellProduct(saleData);
             if (res.success) {
@@ -2579,8 +2732,8 @@ async function confirmSell() {
             }
         }
     } finally {
-        if (hasReceipt) {
-            activeBackgroundUploadsCount--;
+        if (uploadCount > 0) {
+            activeBackgroundUploadsCount -= uploadCount;
             if (activeBackgroundUploadsCount <= 0) {
                 activeBackgroundUploadsCount = 0;
                 window.onbeforeunload = null;
@@ -2755,6 +2908,7 @@ function showReceipt(r) {
                 ${itemsHtml}
             </div>
             <div class="flex justify-between"><span class="text-gray-500">รูปแบบการขาย:</span><span class="font-medium">${r.saleType}</span></div>
+            ${r.paymentMethod ? `<div class="flex justify-between"><span class="text-gray-500">ช่องทางการรับเงิน:</span><span class="font-bold ${r.paymentMethod === 'เงินโอน' ? 'text-blue-600' : 'text-emerald-600'}">${r.paymentMethod}</span></div>` : ''}
             <hr>
             <div class="flex justify-between text-base"><span class="font-bold text-gray-800">ราคาขายรวม:</span><span class="font-bold text-brand-600">฿${formatNumber(totalAmount)}</span></div>
             ${r.downPayment > 0 ? `
@@ -3746,6 +3900,11 @@ function checkoutCart() {
     document.getElementById('sell_customerPhone').value = '';
     document.getElementById('receiptPreview').classList.add('hidden');
     sellReceiptDataURI = null;
+    clearSlipImage();
+
+    // รีเซ็ตตัวเลือกช่องทางรับเงินเป็นเงินสด
+    const defaultCashRadio = document.querySelector('input[name="sell_payment_method"][value="เงินสด"]');
+    if (defaultCashRadio) defaultCashRadio.checked = true;
 
     const dpContainer = document.getElementById('sell_downPaymentContainer');
     if (dpContainer) dpContainer.classList.add('hidden');

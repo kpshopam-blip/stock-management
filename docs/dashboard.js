@@ -880,6 +880,7 @@ function renderWholesaleReport() {
         dueDate: s.dueDate,
         receiptImage: s.receiptImage || '',
         paymentSlip: s.paymentSlip || '',
+        paymentMethod: s.paymentMethod || '',
         downPayment: parseFloat(s.downPayment || 0),
         items: [],
         totalPrice: 0,
@@ -896,9 +897,10 @@ function renderWholesaleReport() {
       billGroups[billId].dueDate = s.dueDate;
       billGroups[billId].downPayment = parseFloat(s.downPayment || 0);
     }
-    // อัปเดตรูปใบเสร็จ POS และพนักงานขายจากแถวล่าสุดที่มีข้อมูล
+    // อัปเดตรูปใบเสร็จ POS, สลิปโอนเงิน และพนักงานขายจากแถวล่าสุดที่มีข้อมูล
     if (s.receiptImage) billGroups[billId].receiptImage = s.receiptImage;
     if (s.paymentSlip) billGroups[billId].paymentSlip = s.paymentSlip;
+    if (s.paymentMethod) billGroups[billId].paymentMethod = s.paymentMethod;
     if (s.salesperson) billGroups[billId].salesperson = s.salesperson;
   });
 
@@ -999,6 +1001,8 @@ function renderWholesaleReport() {
       downPayment: bill.downPayment || 0,
       dueDate: bill.dueDate || '',
       receiptImage: bill.receiptImage || '',
+      paymentSlip: bill.paymentSlip || '',
+      paymentMethod: bill.paymentMethod || '',
       isBulk: bill.items.length > 1,
       items: bill.items.map(item => ({
         brand: item.brand,
@@ -1044,8 +1048,18 @@ function renderWholesaleReport() {
             <span class="text-[9px] bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-400 px-2 py-0.5 rounded-full font-bold uppercase font-mono">${bill.saleId}</span>
             <span class="text-[9px] bg-gray-100 dark:bg-darkbg-700 text-gray-500 dark:text-gray-400 px-1.5 py-0.5 rounded font-bold">${itemCount} เครื่อง</span>
           </div>
-          <div class="flex items-center gap-1.5">
+          <div class="flex items-center gap-1.5 flex-wrap">
             <span class="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-100 dark:border-indigo-500/10">${bill.saleType}</span>
+            ${bill.paymentMethod ? `
+            <span class="text-[10px] font-bold px-2 py-0.5 rounded border inline-flex items-center gap-1 ${
+              bill.paymentMethod === 'เงินโอน'
+                ? 'bg-blue-50 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-500/30'
+                : bill.paymentMethod === 'เงินสด'
+                  ? 'bg-emerald-50 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-500/30'
+                  : 'bg-purple-50 dark:bg-purple-500/20 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-500/30'
+            }">
+              <i class="fa-solid ${bill.paymentMethod === 'เงินโอน' ? 'fa-mobile-screen-button' : (bill.paymentMethod === 'เงินสด' ? 'fa-money-bill-wave' : 'fa-handshake')}"></i>${bill.paymentMethod}
+            </span>` : ''}
             ${payBadge}
           </div>
         </div>
@@ -1372,6 +1386,7 @@ function showReceipt(r) {
         ${itemsHtml}
       </div>
       <div class="flex justify-between"><span class="text-gray-500 dark:text-gray-400">รูปแบบการขาย:</span><span class="font-medium">${r.saleType}</span></div>
+      ${r.paymentMethod ? `<div class="flex justify-between"><span class="text-gray-500 dark:text-gray-400">ช่องทางการรับเงิน:</span><span class="font-bold ${r.paymentMethod === 'เงินโอน' ? 'text-blue-600 dark:text-blue-400' : 'text-emerald-600 dark:text-emerald-400'}">${r.paymentMethod}</span></div>` : ''}
       <hr class="dark:border-darkbg-700">
       <div class="flex justify-between text-base"><span class="font-bold text-gray-800 dark:text-white">ราคาขายรวม:</span><span class="font-bold text-brand-600 dark:text-indigo-400">฿${formatNumber(totalAmount)}</span></div>
       ${r.downPayment > 0 ? `
