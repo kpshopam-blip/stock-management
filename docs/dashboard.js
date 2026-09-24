@@ -1850,7 +1850,7 @@ function setupEditBillImageHandlers() {
   }
 }
 
-// ฟังก์ชันช่วยย่อขนาดรูปภาพ
+// ฟังก์ชันช่วยย่อขนาดรูปภาพ (ใช้ JPEG เพื่อความเข้ากันได้กับ Google Apps Script / Drive)
 function compressImageFile(file, callback) {
   if (!file || !file.type.startsWith('image/')) return;
   const reader = new FileReader();
@@ -1875,10 +1875,8 @@ function compressImageFile(file, callback) {
       const ctx = canvas.getContext('2d');
       ctx.drawImage(img, 0, 0, width, height);
 
-      let compressed = canvas.toDataURL('image/webp', 0.85);
-      if (!compressed || !compressed.startsWith('data:image/webp')) {
-        compressed = canvas.toDataURL('image/jpeg', 0.85);
-      }
+      // บีบอัดเป็น JPEG ขนาดกะทัดรัด โหลดเร็ว ไม่ติดข้อจำกัด Drive
+      const compressed = canvas.toDataURL('image/jpeg', 0.82);
       callback(compressed);
     };
     img.src = e.target.result;
@@ -1952,6 +1950,15 @@ async function handleEditBillSubmit(e) {
     const res = await apiPost('updateSaleBill', { saleId, billData });
     showLoading(false);
     if (res.success) {
+      // อัปเดตรูปใหม่ใน state ทันทีหากเซิร์ฟเวอร์ส่ง URL กลับมา เพื่อไม่ต้องรอ Firebase sync
+      if (salesSummary && Array.isArray(salesSummary.salesList)) {
+        salesSummary.salesList.forEach(s => {
+          if (s.saleId === saleId) {
+            if (res.receiptUrl) s.receiptImage = res.receiptUrl;
+            if (res.slipUrl) s.paymentSlip = res.slipUrl;
+          }
+        });
+      }
       await showCustomAlert(res.message || 'แก้ไขข้อมูลบิลและอัปเดตสต็อกเรียบร้อยแล้ว!', 'สำเร็จ');
       closeEditBillModal();
       await refreshDashboard();
@@ -2332,11 +2339,8 @@ function openPaymentModal(saleId) {
           const ctx = canvas.getContext('2d');
           ctx.drawImage(img, 0, 0, width, height);
 
-          let compressedWebP = canvas.toDataURL('image/webp', 0.85);
-          if (!compressedWebP || !compressedWebP.startsWith('data:image/webp')) {
-            compressedWebP = canvas.toDataURL('image/jpeg', 0.85);
-          }
-          selectedDataURI = compressedWebP;
+          const compressed = canvas.toDataURL('image/jpeg', 0.82);
+          selectedDataURI = compressed;
 
           previewImg.src = selectedDataURI;
           previewContainer.classList.remove('hidden');
