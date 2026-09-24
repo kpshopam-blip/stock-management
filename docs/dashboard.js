@@ -841,9 +841,9 @@ function renderWholesaleReport() {
 
   // กรองตามสถานะการชำระเงิน
   if (paymentFilter === 'unpaid') {
-    list = list.filter(s => s.saleType && s.saleType.includes('พาร์ทเนอร์') && s.saleType.includes('เชื่อ') && s.paymentStatus !== 'จ่ายแล้ว');
+    list = list.filter(s => s.saleType && s.saleType.includes('พาร์ทเนอร์') && s.saleType.includes('เชื่อ') && !String(s.paymentStatus || '').includes('จ่ายแล้ว'));
   } else if (paymentFilter === 'paid') {
-    list = list.filter(s => s.paymentStatus === 'จ่ายแล้ว');
+    list = list.filter(s => String(s.paymentStatus || '').includes('จ่ายแล้ว'));
   } else if (paymentFilter === 'cash') {
     list = list.filter(s => s.saleType && s.saleType.includes('สด'));
   }
@@ -882,6 +882,9 @@ function renderWholesaleReport() {
         paymentSlip: s.paymentSlip || '',
         paymentMethod: s.paymentMethod || '',
         downPayment: parseFloat(s.downPayment || 0),
+        actualPaidAmount: (s.actualPaidAmount !== null && s.actualPaidAmount !== undefined && s.actualPaidAmount !== '') ? parseFloat(s.actualPaidAmount) : null,
+        paidDate: s.paidDate || '',
+        paymentNote: s.paymentNote || '',
         items: [],
         totalPrice: 0,
         totalProfit: 0
@@ -890,6 +893,7 @@ function renderWholesaleReport() {
     billGroups[billId].items.push(s);
     billGroups[billId].totalPrice += parseFloat(s.soldPrice || 0);
     billGroups[billId].totalProfit += parseFloat(s.profit || 0);
+    
     // ใช้ข้อมูลเงินเชื่อล่าสุด
     if (s.saleType && s.saleType.toString().includes('พาร์ทเนอร์') && s.saleType.toString().includes('เชื่อ')) {
       billGroups[billId].saleType = s.saleType;
@@ -902,6 +906,11 @@ function renderWholesaleReport() {
     if (s.paymentSlip) billGroups[billId].paymentSlip = s.paymentSlip;
     if (s.paymentMethod) billGroups[billId].paymentMethod = s.paymentMethod;
     if (s.salesperson) billGroups[billId].salesperson = s.salesperson;
+    if (s.actualPaidAmount !== null && s.actualPaidAmount !== undefined && s.actualPaidAmount !== '') {
+      billGroups[billId].actualPaidAmount = parseFloat(s.actualPaidAmount);
+    }
+    if (s.paidDate) billGroups[billId].paidDate = s.paidDate;
+    if (s.paymentNote) billGroups[billId].paymentNote = s.paymentNote;
   });
 
   let html = '';
@@ -911,22 +920,33 @@ function renderWholesaleReport() {
 
   billList.forEach((bill, idx) => {
     const isCredit = bill.saleType && bill.saleType.toString().includes('พาร์ทเนอร์') && bill.saleType.toString().includes('เชื่อ');
+    const isPaid = String(bill.paymentStatus || '').includes('จ่ายแล้ว');
+    const isUnpaid = isCredit && !isPaid;
+    const balance = bill.totalPrice - bill.downPayment;
+    const actualPaid = bill.actualPaidAmount !== null ? bill.actualPaidAmount : (isPaid ? balance : 0);
+    const hasDiscount = isPaid && bill.actualPaidAmount !== null && bill.actualPaidAmount < balance;
+    const discountAmount = hasDiscount ? (balance - bill.actualPaidAmount) : 0;
     const itemCount = bill.items.length;
 
     // สถานะการชำระ badge
     let payBadge = '';
     if (isCredit) {
-      payBadge = bill.paymentStatus === 'จ่ายแล้ว'
-        ? '<span class="bg-green-500 text-white px-2 py-0.5 rounded text-[10px] font-bold">🟢 ชำระแล้ว</span>'
-        : '<span class="bg-red-500 text-white px-2 py-0.5 rounded text-[10px] font-bold">🔴 ค้างจ่าย</span>';
+      if (isPaid) {
+        if (hasDiscount) {
+          payBadge = `<span class="bg-amber-500 text-white px-2 py-0.5 rounded text-[10px] font-bold shadow-sm inline-flex items-center gap-1"><i class="fa-solid fa-file-invoice-dollar"></i> จ่ายแล้ว (ปรับลด ฿${formatNumber(discountAmount)})</span>`;
+        } else {
+          payBadge = '<span class="bg-green-500 text-white px-2 py-0.5 rounded text-[10px] font-bold shadow-sm inline-flex items-center gap-1"><i class="fa-solid fa-check"></i> ชำระครบแล้ว</span>';
+        }
+      } else {
+        payBadge = '<span class="bg-red-500 text-white px-2 py-0.5 rounded text-[10px] font-bold shadow-sm inline-flex items-center gap-1"><i class="fa-solid fa-circle-exclamation"></i> ค้างจ่าย</span>';
+      }
     } else {
       payBadge = '<span class="bg-emerald-500 text-white px-2 py-0.5 rounded text-[10px] font-bold">💵 จ่ายสด</span>';
     }
 
-    // เงินเชื่อ countdown
+    // เงินเชื่อ countdown และแผงรายละเอียดการชำระ
     let debtPanel = '';
     if (isCredit) {
-      const isUnpaid = bill.paymentStatus !== 'จ่ายแล้ว';
       const dDate = parseDueDate(bill.dueDate);
       let countdownHtml = '';
       if (isUnpaid && dDate) {
@@ -940,14 +960,12 @@ function renderWholesaleReport() {
           countdownHtml = `<span class="bg-red-600 text-white px-2 py-0.5 rounded text-[10px] font-bold animate-pulse neon-border-red"><i class="fa-solid fa-circle-exclamation mr-1"></i>เลยกำหนดแล้ว ${Math.abs(diffDays)} วัน!</span>`;
         }
       } else if (!isUnpaid) {
-        countdownHtml = '<span class="bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded text-[10px] font-bold"><i class="fa-solid fa-circle-check mr-1"></i>ชำระเงินตรงเวลา</span>';
+        if (hasDiscount) {
+          countdownHtml = '<span class="bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 px-2 py-0.5 rounded text-[10px] font-bold"><i class="fa-solid fa-handshake-angle mr-1"></i>ปิดยอด/มียอดปรับลด</span>';
+        } else {
+          countdownHtml = '<span class="bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded text-[10px] font-bold"><i class="fa-solid fa-circle-check mr-1"></i>ชำระเรียบร้อย</span>';
+        }
       }
-
-      const balance = bill.totalPrice - bill.downPayment;
-      const actionBtn = isUnpaid ? `
-        <button onclick="event.stopPropagation(); markAsPaid('${bill.saleId}')" class="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 rounded-lg shadow shadow-emerald-700/20 hover:shadow-lg transition-all flex items-center gap-1.5 whitespace-nowrap">
-          <i class="fa-solid fa-check"></i> เปลี่ยนเป็นจ่ายแล้ว
-        </button>` : '';
 
       // คำนวณสีของวันครบกำหนดจ่าย
       let dueDateColor = 'text-gray-600 dark:text-gray-300';
@@ -960,21 +978,58 @@ function renderWholesaleReport() {
         dueDateColor = 'text-emerald-600 dark:text-emerald-400';
       }
 
-      debtPanel = `
-      <div class="mt-2 pt-2 border-t border-dashed border-gray-200 dark:border-darkbg-700 flex flex-wrap items-center justify-between gap-2 bg-gray-50/50 dark:bg-darkbg-900/30 p-2 rounded-lg">
-        <div class="text-[11px]">
-          <span class="text-gray-400">เงินเชื่อค้างชำระ:</span> <b class="text-red-500 dark:text-red-400 text-sm">฿${formatNumber(balance)}</b>
-          <div class="text-[10px] text-gray-400 dark:text-gray-500 mt-1 flex items-center gap-1.5">
-            <i class="fa-regular fa-calendar-days text-indigo-400"></i>
-            <span>กำหนดจ่าย:</span>
-            <b class="${dueDateColor}">${formatDueDateDisplay(bill.dueDate)}</b>
+      if (isUnpaid) {
+        debtPanel = `
+        <div class="mt-2 pt-2 border-t border-dashed border-gray-200 dark:border-darkbg-700 flex flex-wrap items-center justify-between gap-2 bg-gray-50/50 dark:bg-darkbg-900/30 p-2.5 rounded-xl">
+          <div class="text-[11px]">
+            <span class="text-gray-400">เงินเชื่อค้างชำระ:</span> <b class="text-red-500 dark:text-red-400 text-sm">฿${formatNumber(balance)}</b>
+            <div class="text-[10px] text-gray-400 dark:text-gray-500 mt-1 flex items-center gap-1.5">
+              <i class="fa-regular fa-calendar-days text-indigo-400"></i>
+              <span>กำหนดจ่าย:</span>
+              <b class="${dueDateColor}">${formatDueDateDisplay(bill.dueDate)}</b>
+            </div>
           </div>
-        </div>
-        <div class="flex items-center gap-2">
-          ${countdownHtml}
-          ${actionBtn}
-        </div>
-      </div>`;
+          <div class="flex items-center gap-2">
+            ${countdownHtml}
+            <button onclick="event.stopPropagation(); openPaymentModal('${bill.saleId}')" class="text-xs bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold px-3 py-1.5 rounded-lg shadow shadow-emerald-700/20 hover:shadow-lg transition-all flex items-center gap-1.5 whitespace-nowrap">
+              <i class="fa-solid fa-hand-holding-dollar"></i> บันทึกรับยอดเงิน
+            </button>
+          </div>
+        </div>`;
+      } else {
+        // แผงข้อมูลกรณีจ่ายแล้ว แสดงยอดรับจริง วันที่รับจริง และหมายเหตุ
+        let noteBoxHtml = '';
+        if (bill.paymentNote) {
+          noteBoxHtml = `
+          <div class="mt-2 p-2 bg-amber-50/90 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-800/40 rounded-lg text-[11px] text-amber-900 dark:text-amber-200 flex items-start gap-1.5">
+            <i class="fa-solid fa-note-sticky text-amber-500 mt-0.5 shrink-0"></i>
+            <div class="leading-relaxed"><b class="text-amber-950 dark:text-amber-300">หมายเหตุรับเงิน:</b> ${escapeHtml(bill.paymentNote)}</div>
+          </div>`;
+        }
+
+        debtPanel = `
+        <div class="mt-2 pt-2 border-t border-dashed border-gray-200 dark:border-darkbg-700 bg-gray-50/60 dark:bg-darkbg-900/30 p-2.5 rounded-xl">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div class="text-[11px]">
+              <span class="text-gray-400">ยอดรับจริง:</span> 
+              <b class="${hasDiscount ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'} text-sm">฿${formatNumber(actualPaid)}</b>
+              ${hasDiscount ? `<span class="text-[10px] text-amber-500 font-bold ml-1">(ยอดเดิม ฿${formatNumber(balance)})</span>` : ''}
+              <div class="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5 flex items-center gap-1.5">
+                <i class="fa-solid fa-calendar-check text-emerald-500"></i>
+                <span>วันที่รับเงิน:</span>
+                <b class="text-gray-700 dark:text-gray-300">${bill.paidDate || bill.dueDate || 'ชำระแล้ว'}</b>
+              </div>
+            </div>
+            <div class="flex items-center gap-1.5">
+              ${countdownHtml}
+              <button onclick="event.stopPropagation(); openPaymentModal('${bill.saleId}')" title="แก้ไขหรือบันทึกข้อมูลรับเงินเพิ่มเติม" class="text-[11px] bg-gray-100 hover:bg-gray-200 dark:bg-darkbg-700 dark:hover:bg-darkbg-600 text-gray-700 dark:text-gray-300 font-semibold px-2 py-1 rounded-lg transition-all flex items-center gap-1 shadow-sm">
+                <i class="fa-solid fa-pen-to-square text-xs text-indigo-500"></i> แก้ไขการรับเงิน
+              </button>
+            </div>
+          </div>
+          ${noteBoxHtml}
+        </div>`;
+      }
     }
 
     // สร้าง HTML สำหรับรายการสินค้าภายในบิล (ซ่อนไว้)
@@ -1003,6 +1058,9 @@ function renderWholesaleReport() {
       receiptImage: bill.receiptImage || '',
       paymentSlip: bill.paymentSlip || '',
       paymentMethod: bill.paymentMethod || '',
+      actualPaidAmount: bill.actualPaidAmount,
+      paidDate: bill.paidDate || '',
+      paymentNote: bill.paymentNote || '',
       isBulk: bill.items.length > 1,
       items: bill.items.map(item => ({
         brand: item.brand,
@@ -1031,6 +1089,9 @@ function renderWholesaleReport() {
       <button onclick="event.stopPropagation(); viewFullImage('${bill.paymentSlip}')" class="text-[10px] bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 px-2.5 py-1 rounded font-bold transition flex items-center gap-1 shadow-sm hover:bg-emerald-100">
         <i class="fa-solid fa-receipt"></i> สลิปการโอน
       </button>` : ''}
+      <button onclick="event.stopPropagation(); openPaymentModal('${bill.saleId}')" class="text-[10px] bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 px-2.5 py-1 rounded font-bold transition flex items-center gap-1 shadow-sm hover:bg-emerald-100">
+        <i class="fa-solid fa-hand-holding-dollar"></i> บันทึกรับยอด
+      </button>
       <button onclick='event.stopPropagation(); openEditBillModal(${JSON.stringify(receiptObj).replace(/'/g, "&#39;")})' class="text-[10px] bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-400 px-2.5 py-1 rounded font-bold transition flex items-center gap-1 shadow-sm hover:bg-blue-100">
         <i class="fa-solid fa-pen"></i> แก้ไขบิล
       </button>
@@ -1108,22 +1169,9 @@ function toggleBillAccordion(id) {
   }
 }
 
-// ====== 6. สั่งอัปเดตบิลเงินเชื่อเป็นจ่ายแล้ว ======
+// ====== 6. สั่งบันทึกรับชำระเงินของบิลเงินเชื่อ ======
 async function markAsPaid(saleId) {
-  const result = await openPaymentSlipUploadModal(saleId);
-  if (!result) return;
-  
-  showLoading(true);
-  try {
-    const res = await API_updatePaymentStatus(saleId, 'จ่ายแล้ว', result.slipDataURI);
-    showLoading(false);
-    await showCustomAlert(res.message || 'บันทึกสถานะการชำระเงินเรียบร้อยแล้ว!', 'สำเร็จ');
-    await refreshDashboard();
-  } catch (err) {
-    showLoading(false);
-    console.error('Update payment status error:', err);
-    await showCustomAlert('อัปเดตสถานะชำระเงินไม่สำเร็จ: ' + err.message, 'เกิดข้อผิดพลาด');
-  }
+  await openPaymentModal(saleId);
 }
 
 // ====== 7. จัดเรนเดอร์กราฟวิเคราะห์ยอดขาย 7 วันย้อนหลัง กรองตามแหล่งที่มาเครื่อง ======
@@ -1391,8 +1439,29 @@ function showReceipt(r) {
       <div class="flex justify-between text-base"><span class="font-bold text-gray-800 dark:text-white">ราคาขายรวม:</span><span class="font-bold text-brand-600 dark:text-indigo-400">฿${formatNumber(totalAmount)}</span></div>
       ${r.downPayment > 0 ? `
       <div class="flex justify-between text-sm mt-1"><span class="text-gray-500 dark:text-gray-400">เงินดาวน์:</span><span class="font-medium">฿${formatNumber(r.downPayment)}</span></div>
-      <div class="flex justify-between text-sm"><span class="text-gray-500 dark:text-gray-400">ยอดจัด:</span><span class="font-medium text-red-500">฿${formatNumber(totalAmount - r.downPayment)}</span></div>
+      <div class="flex justify-between text-sm"><span class="text-gray-500 dark:text-gray-400">ยอดจัด/ค้างชำระ:</span><span class="font-medium text-red-500">฿${formatNumber(totalAmount - r.downPayment)}</span></div>
       ` : ''}
+      ${(r.actualPaidAmount !== null && r.actualPaidAmount !== undefined) ? `
+      <div class="mt-2 pt-2 border-t border-dashed border-gray-200 dark:border-darkbg-700 bg-emerald-50/50 dark:bg-emerald-950/20 p-2.5 rounded-lg space-y-1">
+        <div class="flex justify-between text-sm font-bold">
+          <span class="text-emerald-700 dark:text-emerald-400"><i class="fa-solid fa-hand-holding-dollar mr-1"></i>ยอดรับเงินจริง:</span>
+          <span class="text-emerald-700 dark:text-emerald-400">฿${formatNumber(r.actualPaidAmount)}</span>
+        </div>
+        ${(totalAmount - (r.downPayment || 0)) > r.actualPaidAmount ? `
+        <div class="flex justify-between text-[11px] text-amber-600 dark:text-amber-400">
+          <span>ส่วนต่าง/มียอดปรับลด:</span>
+          <span>-฿${formatNumber((totalAmount - (r.downPayment || 0)) - r.actualPaidAmount)}</span>
+        </div>` : ''}
+        ${r.paidDate ? `
+        <div class="flex justify-between text-[11px] text-gray-500 dark:text-gray-400">
+          <span>วันที่รับเงิน:</span>
+          <span>${r.paidDate}</span>
+        </div>` : ''}
+        ${r.paymentNote ? `
+        <div class="pt-1 text-[11px] text-gray-600 dark:text-gray-300 border-t border-emerald-100 dark:border-emerald-900/40 mt-1">
+          <b>หมายเหตุรับเงิน:</b> ${escapeHtml(r.paymentNote)}
+        </div>` : ''}
+      </div>` : ''}
       <hr class="dark:border-darkbg-700">
       ${r.customerName ? `<div class="flex justify-between"><span class="text-gray-500 dark:text-gray-400">ลูกค้า:</span><span class="font-medium">${r.customerName}</span></div>` : ''}
       ${r.customerPhone ? `<div class="flex justify-between"><span class="text-gray-500 dark:text-gray-400">เบอร์โทร:</span><span class="font-medium">${r.customerPhone}</span></div>` : ''}
@@ -1643,38 +1712,165 @@ function openPaymentSlipUploadModal(saleId) {
     const oldModal = document.getElementById('payment-slip-modal');
     if (oldModal) oldModal.remove();
 
+// ====== Helper: เข้ารหัสข้อความ HTML เพื่อความปลอดภัย ======
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+// ====== ระบบ Modal บันทึกรับชำระเงินบิลเงินเชื่อ (ยอดรับจริง วันที่รับจริง และหมายเหตุ) ======
+function openPaymentModal(saleId) {
+  return new Promise((resolve) => {
+    const oldModal = document.getElementById('payment-modal');
+    if (oldModal) oldModal.remove();
+
+    // ดึงข้อมูลบิลและรายการสินค้าจากแคช salesSummary
+    const billItems = (salesSummary && salesSummary.salesList) ? salesSummary.salesList.filter(s => s.saleId === saleId) : [];
+    const firstItem = billItems[0] || {};
+    const totalPrice = billItems.reduce((sum, item) => sum + (parseFloat(item.soldPrice) || 0), 0);
+    const downPayment = parseFloat(firstItem.downPayment || 0);
+    const balance = totalPrice - downPayment;
+    const isAlreadyPaid = String(firstItem.paymentStatus || '').includes('จ่ายแล้ว');
+    
+    // ดึงค่าเดิมถ้าเคยบันทึกไว้
+    let defaultActualPaid = (firstItem.actualPaidAmount !== null && firstItem.actualPaidAmount !== undefined && firstItem.actualPaidAmount !== '') 
+      ? firstItem.actualPaidAmount 
+      : balance;
+    
+    // จัดรูปแบบวันที่เริ่มต้น YYYY-MM-DD
+    let defaultPaidDate = '';
+    if (firstItem.paidDate) {
+      const parts = firstItem.paidDate.split('/');
+      if (parts.length === 3) {
+        defaultPaidDate = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+      }
+    }
+    if (!defaultPaidDate) {
+      const now = new Date();
+      const pad = (n) => String(n).padStart(2, '0');
+      defaultPaidDate = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+    }
+
+    const defaultPaymentMethod = firstItem.paymentMethod || 'เงินโอน';
+    const defaultPaymentNote = firstItem.paymentNote || '';
+    let selectedDataURI = firstItem.paymentSlip || null;
+
     const modal = document.createElement('div');
-    modal.id = 'payment-slip-modal';
-    modal.className = 'fixed inset-0 z-[99] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm transition-all duration-300';
+    modal.id = 'payment-modal';
+    modal.className = 'fixed inset-0 z-[99] flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm transition-all duration-300';
     modal.innerHTML = `
-      <div class="bg-white dark:bg-darkbg-800 w-full max-w-sm rounded-2xl shadow-2xl border border-gray-150 dark:border-darkbg-700 overflow-hidden transform scale-95 opacity-0 transition-all duration-300 flex flex-col">
-        <div class="px-5 py-4 border-b border-gray-100 dark:border-darkbg-700 flex justify-between items-center bg-gray-50 dark:bg-darkbg-900/30">
-          <h3 class="font-bold text-gray-900 dark:text-white text-sm flex items-center gap-2">
-            <i class="fa-solid fa-receipt text-emerald-500"></i> ยืนยันการชำระเงินบิลเงินเชื่อ
-          </h3>
-          <button id="payment-slip-close" class="w-8 h-8 rounded-full bg-gray-100 dark:bg-darkbg-700 text-gray-600 dark:text-gray-400 hover:bg-red-50 hover:text-red-500 flex justify-center items-center transition"><i class="fa-solid fa-xmark"></i></button>
+      <div class="bg-white dark:bg-darkbg-800 w-full max-w-lg rounded-2xl shadow-2xl border border-gray-150 dark:border-darkbg-700 overflow-hidden transform scale-95 opacity-0 transition-all duration-300 flex flex-col max-h-[92vh]">
+        <!-- หัว Modal -->
+        <div class="px-5 py-4 border-b border-gray-100 dark:border-darkbg-700 flex justify-between items-center bg-gray-50/80 dark:bg-darkbg-900/40 shrink-0">
+          <div>
+            <h3 class="font-bold text-gray-900 dark:text-white text-sm flex items-center gap-2">
+              <i class="fa-solid fa-hand-holding-dollar text-emerald-500 text-base"></i> บันทึกรับชำระเงิน (บิลเงินเชื่อ)
+            </h3>
+            <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
+              เลขที่บิล: <b class="font-mono text-indigo-600 dark:text-indigo-400">${saleId}</b> | ลูกค้า: <b>${escapeHtml(firstItem.customerName || 'ไม่ระบุ')}</b> (${billItems.length} เครื่อง)
+            </p>
+          </div>
+          <button id="pay-modal-close" class="w-8 h-8 rounded-full bg-gray-100 dark:bg-darkbg-700 text-gray-500 hover:bg-red-50 hover:text-red-500 flex justify-center items-center transition">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
         </div>
+
+        <!-- เนื้อหาฟอร์ม -->
         <div class="p-5 space-y-4 flex-grow overflow-y-auto">
-          <p class="text-[11px] text-gray-500 dark:text-gray-400">
-            โปรดแนบรูปภาพสลิปการโอนเงินเพื่อเปลี่ยนสถานะบิล <b class="text-gray-750 dark:text-gray-200 font-mono">${saleId}</b> เป็น <b>"จ่ายแล้ว"</b>
-          </p>
-          
-          <div class="flex flex-col items-center justify-center border-2 border-dashed border-gray-250 dark:border-darkbg-600 rounded-2xl p-6 bg-gray-50 dark:bg-darkbg-900/10 hover:bg-gray-100 dark:hover:bg-darkbg-900/20 cursor-pointer relative group transition-all" id="payment-slip-dropzone">
-            <input type="file" id="payment-slip-input" accept="image/*" class="absolute inset-0 opacity-0 cursor-pointer" />
-            <i class="fa-solid fa-cloud-arrow-up text-3xl text-gray-400 group-hover:text-emerald-500 transition-colors mb-2"></i>
-            <span class="text-[11px] font-bold text-gray-600 dark:text-gray-300">เลือกรูปภาพสลิป หรือลากมาวาง</span>
-            <span class="text-[9px] text-gray-400 mt-1">รองรับไฟล์ JPG, PNG</span>
+          <!-- กล่องข้อมูลสรุปยอดบิลเดิม -->
+          <div class="p-3 bg-gray-50 dark:bg-darkbg-900/50 rounded-xl border border-gray-200 dark:border-darkbg-700 flex flex-wrap items-center justify-between gap-2 text-xs">
+            <div>
+              <span class="text-gray-400">ราคาขายรวม:</span>
+              <b class="text-gray-700 dark:text-gray-200 ml-1">฿${formatNumber(totalPrice)}</b>
+              ${downPayment > 0 ? `<span class="text-gray-400 ml-2">ดาวน์:</span> <b class="text-gray-700 dark:text-gray-200">฿${formatNumber(downPayment)}</b>` : ''}
+            </div>
+            <div>
+              <span class="text-gray-400">ยอดค้างชำระตามบิล:</span>
+              <b class="text-red-500 dark:text-red-400 font-extrabold text-sm ml-1" id="pay_orig_balance_display">฿${formatNumber(balance)}</b>
+            </div>
           </div>
 
-          <div id="payment-slip-preview-container" class="hidden relative rounded-xl border border-gray-200 dark:border-darkbg-700 overflow-hidden max-h-[220px] flex items-center justify-center bg-gray-50 dark:bg-darkbg-900/30 p-2">
-            <img id="payment-slip-preview" src="" class="max-h-[200px] object-contain rounded" />
-            <button id="payment-slip-remove-btn" class="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/60 text-white hover:bg-red-600 flex items-center justify-center transition shadow-lg"><i class="fa-solid fa-trash-can text-xs"></i></button>
+          <!-- ช่องกรอกยอดเงินที่รับจริง -->
+          <div>
+            <div class="flex justify-between items-center mb-1">
+              <label class="block text-xs font-bold text-gray-700 dark:text-gray-200">
+                <i class="fa-solid fa-money-bill-wave text-emerald-500 mr-1"></i> ยอดเงินที่รับจริง (บาท) <span class="text-red-500">*</span>
+              </label>
+              <button type="button" id="pay_btn_fill_full" class="text-[10px] text-indigo-600 dark:text-indigo-400 hover:underline font-bold">
+                ใส่วงเงินเต็ม (฿${formatNumber(balance)})
+              </button>
+            </div>
+            <div class="relative">
+              <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400 text-sm font-bold">฿</span>
+              <input type="number" id="pay_actual_amount" step="any" required value="${defaultActualPaid}" class="w-full pl-8 pr-3 py-2 bg-white dark:bg-darkbg-700 border border-gray-300 dark:border-darkbg-600 rounded-xl text-base font-extrabold text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500 transition" />
+            </div>
+            <!-- Dynamic Badge เปรียบเทียบยอด -->
+            <div id="pay_diff_badge" class="mt-1.5 text-[11px] font-bold"></div>
+          </div>
+
+          <!-- วันที่รับเงินจริง และ ช่องทางรับเงิน -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-bold text-gray-700 dark:text-gray-200 mb-1">
+                <i class="fa-regular fa-calendar-check text-indigo-500 mr-1"></i> วันที่รับเงินจริง <span class="text-red-500">*</span>
+              </label>
+              <input type="date" id="pay_date" required value="${defaultPaidDate}" class="w-full p-2 bg-white dark:bg-darkbg-700 border border-gray-300 dark:border-darkbg-600 rounded-xl text-xs font-semibold text-gray-800 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500 transition" />
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-gray-700 dark:text-gray-200 mb-1">
+                <i class="fa-solid fa-credit-card text-indigo-500 mr-1"></i> ช่องทางรับเงิน
+              </label>
+              <select id="pay_method" class="w-full p-2 bg-white dark:bg-darkbg-700 border border-gray-300 dark:border-darkbg-600 rounded-xl text-xs font-semibold text-gray-800 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500 transition">
+                <option value="เงินโอน" ${defaultPaymentMethod === 'เงินโอน' ? 'selected' : ''}>📱 เงินโอนเข้าบัญชี</option>
+                <option value="เงินสด" ${defaultPaymentMethod === 'เงินสด' ? 'selected' : ''}>💵 เงินสด</option>
+                <option value="อื่นๆ" ${defaultPaymentMethod !== 'เงินโอน' && defaultPaymentMethod !== 'เงินสด' ? 'selected' : ''}>🤝 อื่นๆ / พาร์ทเนอร์</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- ช่องกรอกหมายเหตุการรับเงิน (คืนเครื่อง, เปลี่ยนเครื่อง, ปรับลดยอด) -->
+          <div>
+            <label class="block text-xs font-bold text-gray-700 dark:text-gray-200 mb-1">
+              <i class="fa-solid fa-note-sticky text-amber-500 mr-1"></i> หมายเหตุการรับเงิน (คืนเครื่อง / เปลี่ยนเครื่อง / หักยอด)
+            </label>
+            <textarea id="pay_note" rows="2" placeholder="เช่น ลูกค้าคืน iPhone 11 หักออก 6,000 บ., เปลี่ยนเครื่อง 1 เครื่อง รับโอนสุทธิ 55,000 บ." class="w-full p-2.5 bg-white dark:bg-darkbg-700 border border-gray-300 dark:border-darkbg-600 rounded-xl text-xs text-gray-800 dark:text-gray-100 outline-none focus:ring-2 focus:ring-emerald-500 transition resize-none leading-relaxed">${escapeHtml(defaultPaymentNote)}</textarea>
+            <p class="text-[10px] text-gray-400 mt-0.5">บันทึกนี้จะแสดงในการ์ดบิลและใบเสร็จดิจิทัลเพื่อให้ตรวจสอบย้อนหลังได้ตลอดเวลา</p>
+          </div>
+
+          <!-- อัปโหลดสลิปการโอนเงิน -->
+          <div>
+            <label class="block text-xs font-bold text-gray-700 dark:text-gray-200 mb-1">
+              <i class="fa-solid fa-receipt text-emerald-500 mr-1"></i> สลิปการโอนเงิน (ถ้ามี)
+            </label>
+            
+            <div class="flex flex-col items-center justify-center border-2 border-dashed border-gray-300 dark:border-darkbg-600 rounded-2xl p-4 bg-gray-50/60 dark:bg-darkbg-900/20 hover:bg-gray-100 dark:hover:bg-darkbg-900/40 cursor-pointer relative group transition-all ${selectedDataURI ? 'hidden' : ''}" id="pay-slip-dropzone">
+              <input type="file" id="pay-slip-input" accept="image/*" class="absolute inset-0 opacity-0 cursor-pointer" />
+              <i class="fa-solid fa-cloud-arrow-up text-2xl text-gray-400 group-hover:text-emerald-500 transition-colors mb-1.5"></i>
+              <span class="text-xs font-bold text-gray-600 dark:text-gray-300">คลิกเพื่อเลือกรูปสลิป หรือลากไฟล์มาวาง</span>
+              <span class="text-[10px] text-gray-400 mt-0.5">รองรับไฟล์ JPG, PNG (ระบบจะบีบอัดภาพให้อัตโนมัติ)</span>
+            </div>
+
+            <div id="pay-slip-preview-container" class="${selectedDataURI ? '' : 'hidden'} relative rounded-xl border border-gray-200 dark:border-darkbg-700 overflow-hidden max-h-[200px] flex items-center justify-center bg-gray-50 dark:bg-darkbg-900/30 p-2">
+              <img id="pay-slip-preview" src="${selectedDataURI || ''}" class="max-h-[185px] object-contain rounded-lg" />
+              <button id="pay-slip-remove-btn" type="button" class="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/65 text-white hover:bg-red-600 flex items-center justify-center transition shadow-lg">
+                <i class="fa-solid fa-trash-can text-xs"></i>
+              </button>
+            </div>
           </div>
         </div>
-        <div class="px-5 py-3.5 border-t border-gray-100 dark:border-darkbg-700 bg-gray-50 dark:bg-darkbg-900/30 flex justify-end gap-2 shrink-0">
-          <button id="payment-slip-cancel" class="px-4 py-2 border border-gray-250 dark:border-darkbg-600 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-darkbg-700 rounded-xl font-bold text-xs transition">ยกเลิก</button>
-          <button id="payment-slip-submit" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs shadow-md shadow-emerald-500/10 active:scale-95 transition-all flex items-center gap-1.5">
-            <i class="fa-solid fa-circle-check"></i> บันทึกชำระเงิน
+
+        <!-- แถบปุ่มกดยืนยัน -->
+        <div class="px-5 py-3.5 border-t border-gray-100 dark:border-darkbg-700 bg-gray-50/90 dark:bg-darkbg-900/40 flex justify-end gap-2.5 shrink-0">
+          <button type="button" id="pay-modal-cancel" class="px-4 py-2 border border-gray-300 dark:border-darkbg-600 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-darkbg-700 rounded-xl font-bold text-xs transition">
+            ยกเลิก
+          </button>
+          <button type="button" id="pay-modal-submit" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs shadow-md shadow-emerald-500/10 active:scale-95 transition-all flex items-center gap-1.5">
+            <i class="fa-solid fa-circle-check"></i> บันทึกการรับชำระเงิน
           </button>
         </div>
       </div>
@@ -1688,13 +1884,39 @@ function openPaymentSlipUploadModal(saleId) {
       box.classList.add('scale-100', 'opacity-100');
     }, 10);
 
-    const input = modal.querySelector('#payment-slip-input');
-    const previewContainer = modal.querySelector('#payment-slip-preview-container');
-    const previewImg = modal.querySelector('#payment-slip-preview');
-    const removeBtn = modal.querySelector('#payment-slip-remove-btn');
-    const dropzone = modal.querySelector('#payment-slip-dropzone');
-    let selectedDataURI = null;
+    const amountInput = modal.querySelector('#pay_actual_amount');
+    const diffBadge = modal.querySelector('#pay_diff_badge');
+    const fillFullBtn = modal.querySelector('#pay_btn_fill_full');
+    const dateInput = modal.querySelector('#pay_date');
+    const methodSelect = modal.querySelector('#pay_method');
+    const noteInput = modal.querySelector('#pay_note');
+    const fileInput = modal.querySelector('#pay-slip-input');
+    const dropzone = modal.querySelector('#pay-slip-dropzone');
+    const previewContainer = modal.querySelector('#pay-slip-preview-container');
+    const previewImg = modal.querySelector('#pay-slip-preview');
+    const removeBtn = modal.querySelector('#pay-slip-remove-btn');
 
+    // ฟังก์ชันคำนวณและแสดงสถานะยอดเงิน
+    const updateDiffStatus = () => {
+      const currentVal = parseFloat(amountInput.value) || 0;
+      const diff = balance - currentVal;
+      if (Math.abs(diff) < 0.01) {
+        diffBadge.innerHTML = `<span class="text-emerald-600 dark:text-emerald-400 flex items-center gap-1"><i class="fa-solid fa-circle-check"></i> รับเงินครบถ้วนตรงตามบิล (฿${formatNumber(balance)})</span>`;
+      } else if (diff > 0) {
+        diffBadge.innerHTML = `<span class="text-amber-600 dark:text-amber-400 flex items-center gap-1"><i class="fa-solid fa-triangle-exclamation"></i> ยอดรับจริงน้อยกว่าบิล ฿${formatNumber(diff)} (มียอดปรับลด/คืนเครื่อง - บิลจะปิดยอดเป็น 'จ่ายแล้ว/มียอดปรับลด')</span>`;
+      } else {
+        diffBadge.innerHTML = `<span class="text-blue-600 dark:text-blue-400 flex items-center gap-1"><i class="fa-solid fa-circle-info"></i> ยอดรับจริงมากกว่าบิล ฿${formatNumber(Math.abs(diff))}</span>`;
+      }
+    };
+    updateDiffStatus();
+    amountInput.addEventListener('input', updateDiffStatus);
+
+    fillFullBtn.addEventListener('click', () => {
+      amountInput.value = balance;
+      updateDiffStatus();
+    });
+
+    // จัดการอัปโหลดไฟล์รูปภาพสลิป
     const handleFile = (file) => {
       if (!file) return;
       if (!file.type.startsWith('image/')) {
@@ -1738,7 +1960,7 @@ function openPaymentSlipUploadModal(saleId) {
       reader.readAsDataURL(file);
     };
 
-    input.addEventListener('change', (e) => {
+    fileInput.addEventListener('change', (e) => {
       if (e.target.files.length > 0) {
         handleFile(e.target.files[0]);
       }
@@ -1750,7 +1972,7 @@ function openPaymentSlipUploadModal(saleId) {
       previewImg.src = '';
       previewContainer.classList.add('hidden');
       dropzone.classList.remove('hidden');
-      input.value = '';
+      fileInput.value = '';
     });
 
     const close = (val) => {
@@ -1763,15 +1985,51 @@ function openPaymentSlipUploadModal(saleId) {
       }, 200);
     };
 
-    modal.querySelector('#payment-slip-cancel').addEventListener('click', () => close(null));
-    modal.querySelector('#payment-slip-close').addEventListener('click', () => close(null));
-    
-    modal.querySelector('#payment-slip-submit').addEventListener('click', () => {
-      if (!selectedDataURI) {
-        showCustomAlert('กรุณาอัปโหลดรูปภาพสลิปการโอนเงินก่อนยืนยัน', 'ต้องการสลิป');
+    modal.querySelector('#pay-modal-cancel').addEventListener('click', () => close(null));
+    modal.querySelector('#pay-modal-close').addEventListener('click', () => close(null));
+
+    modal.querySelector('#pay-modal-submit').addEventListener('click', async () => {
+      const actualVal = parseFloat(amountInput.value);
+      if (isNaN(actualVal) || actualVal < 0) {
+        showCustomAlert('กรุณาระบุยอดเงินที่รับจริงให้ถูกต้อง', 'ยอดเงินไม่ถูกต้อง');
         return;
       }
-      close({ slipDataURI: selectedDataURI });
+
+      const rawDate = dateInput.value; // YYYY-MM-DD
+      if (!rawDate) {
+        showCustomAlert('กรุณาระบุวันที่รับเงินจริง', 'ข้อมูลไม่ครบถ้วน');
+        return;
+      }
+      
+      // แปลงวันที่เป็น DD/MM/YYYY
+      const dateParts = rawDate.split('-');
+      const formattedPaidDate = `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}`;
+      const methodVal = methodSelect.value;
+      const noteVal = noteInput.value.trim();
+
+      // ตรวจสอบสถานะการจ่าย: หากยอดรับจริงน้อยกว่ายอดบิลเดิม ถือว่าปิดยอดแล้ว (จ่ายแล้ว/มียอดปรับลด)
+      let finalStatus = 'จ่ายแล้ว';
+      if (actualVal < balance) {
+        finalStatus = 'จ่ายแล้ว (ปรับลดยอด)';
+      }
+
+      close(true);
+      showLoading(true);
+      try {
+        const res = await API_updatePaymentStatus(saleId, finalStatus, selectedDataURI, {
+          actualPaidAmount: actualVal,
+          paidDate: formattedPaidDate,
+          paymentNote: noteVal,
+          paymentMethod: methodVal
+        });
+        showLoading(false);
+        await showCustomAlert(res.message || 'บันทึกการรับชำระเงินเรียบร้อยแล้ว!', 'สำเร็จ');
+        await refreshDashboard();
+      } catch (err) {
+        showLoading(false);
+        console.error('Update payment status error:', err);
+        await showCustomAlert('บันทึกการรับชำระเงินไม่สำเร็จ: ' + err.message, 'เกิดข้อผิดพลาด');
+      }
     });
 
     modal.addEventListener('click', (e) => {

@@ -946,9 +946,18 @@ async function API_sellBulkProducts(bulkSaleData) {
     }
 }
 
-// อัปเดตสถานะชำระเงินของบิลเงินเชื่อ
-async function API_updatePaymentStatus(saleId, paymentStatus, paymentSlipDataURI = null) {
-    const res = await apiPost('updatePaymentStatus', { saleId, paymentStatus, paymentSlipDataURI });
+// อัปเดตสถานะชำระเงินของบิลเงินเชื่อ (รองรับยอดรับจริง วันที่รับจริง และหมายเหตุ)
+async function API_updatePaymentStatus(saleId, paymentStatus, paymentSlipDataURI = null, extraData = {}) {
+    const payload = {
+        saleId,
+        paymentStatus,
+        paymentSlipDataURI,
+        actualPaidAmount: extraData.actualPaidAmount !== undefined ? extraData.actualPaidAmount : null,
+        paidDate: extraData.paidDate || '',
+        paymentNote: extraData.paymentNote || '',
+        paymentMethod: extraData.paymentMethod || ''
+    };
+    const res = await apiPost('updatePaymentStatus', payload);
     if (!res.success) throw new Error(res.message || 'updatePaymentStatus failed');
     return res;
 }
