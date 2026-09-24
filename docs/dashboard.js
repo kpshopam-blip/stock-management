@@ -1063,12 +1063,16 @@ function renderWholesaleReport() {
       paymentNote: bill.paymentNote || '',
       isBulk: bill.items.length > 1,
       items: bill.items.map(item => ({
+        productId: item.productId,
         brand: item.brand,
         model: item.model,
         spec: item.spec,
         imei: item.imei,
+        cost: item.cost,
         soldPrice: item.soldPrice
       })),
+      productId: bill.items[0].productId,
+      cost: bill.items[0].cost,
       brand: bill.items[0].brand,
       model: bill.items[0].model,
       spec: bill.items[0].spec,
@@ -1480,34 +1484,40 @@ function closeImageViewer() {
   document.getElementById('imageViewerModal').classList.add('hidden');
 }
 
-// ====== ระบบแก้ไข & ลบบิลการขาย (ผู้จัดการเท่านั้น) ======
+// ====== ระบบแก้ไข & ลบบิลการขาย (ผู้จัดการเท่านั้น - รองรับจัดการสินค้า คืนเครื่อง สลับเครื่อง แนบรูป) ======
 let currentEditBill = null;
+let currentEditBillItems = [];
+let editNewPosDataURI = null;
+let editNewSlipDataURI = null;
+let productSelectMode = 'add'; // 'add' หรือ 'swap'
+let productSwapIndex = -1;
 
 function openEditBillModal(bill) {
   currentEditBill = bill;
+  currentEditBillItems = Array.isArray(bill.items) ? JSON.parse(JSON.stringify(bill.items)) : [];
+  editNewPosDataURI = null;
+  editNewSlipDataURI = null;
+
+  // กรอกข้อมูลทั่วไปของบิล
   document.getElementById('edit_billId').value = bill.saleId;
-  document.getElementById('edit_customerName').value = bill.customerName || '';
-  document.getElementById('edit_customerPhone').value = bill.customerPhone || '';
-  document.getElementById('edit_downPayment').value = bill.downPayment || 0;
-  document.getElementById('edit_saleType').value = bill.saleType || '';
-  document.getElementById('edit_totalPrice').value = bill.soldPrice || '';
-  
-  // แสดงชื่อพนักงานเป็นข้อความ (readonly - ไม่อนุญาตให้แก้ไข)
+  const billIdBadge = document.getElementById('edit_billId_badge');
+  if (billIdBadge) billIdBadge.textContent = bill.saleId;
+
   const salespersonDisplay = document.getElementById('edit_salesperson_display');
   if (salespersonDisplay) salespersonDisplay.textContent = bill.salesperson || '(ไม่ระบุ)';
-  
-  // แสดงรูปใบเสร็จ POS ถ้ามี
-  const posReceiptBtn = document.getElementById('edit_posReceiptBtn');
-  if (posReceiptBtn) {
-    if (bill.receiptImage) {
-      posReceiptBtn.classList.remove('hidden');
-      posReceiptBtn.onclick = () => viewFullImage(bill.receiptImage);
-    } else {
-      posReceiptBtn.classList.add('hidden');
-    }
+
+  document.getElementById('edit_customerName').value = bill.customerName || '';
+  document.getElementById('edit_customerPhone').value = bill.customerPhone || '';
+  document.getElementById('edit_saleType').value = bill.saleType || '';
+  document.getElementById('edit_downPayment').value = bill.downPayment || 0;
+  document.getElementById('edit_notes').value = bill.notes || '';
+
+  const paymentMethodSelect = document.getElementById('edit_paymentMethod');
+  if (paymentMethodSelect) {
+    paymentMethodSelect.value = bill.paymentMethod || 'เงินโอน';
   }
-  
-  // แปลงรูปแบบวันที่ DD/MM/YYYY ของ Google Sheets เป็น YYYY-MM-DD สำหรับอินพุตเดท
+
+  // วันกำหนดชำระ
   const dDate = parseDueDate(bill.dueDate);
   let dateVal = '';
   if (dDate) {
@@ -1517,19 +1527,378 @@ function openEditBillModal(bill) {
     dateVal = `${y}-${m}-${d}`;
   }
   document.getElementById('edit_dueDate').value = dateVal;
-  
+
+  // จัดการรูปภาพหลักฐานเดิม
+  const viewPosBtn = document.getElementById('edit_viewPosBtn');
+  if (viewPosBtn) {
+    if (bill.receiptImage) {
+      viewPosBtn.classList.remove('hidden');
+      viewPosBtn.onclick = () => viewFullImage(bill.receiptImage);
+    } else {
+      viewPosBtn.classList.add('hidden');
+    }
+  }
+
+  const viewSlipBtn = document.getElementById('edit_viewSlipBtn');
+  if (viewSlipBtn) {
+    if (bill.paymentSlip) {
+      viewSlipBtn.classList.remove('hidden');
+      viewSlipBtn.onclick = () => viewFullImage(bill.paymentSlip);
+    } else {
+      viewSlipBtn.classList.add('hidden');
+    }
+  }
+
+  // ล้าง preview รูปใหม่
+  resetEditImagePreviews();
+
+  // เรนเดอร์รายการสินค้าในบิล
+  renderEditBillItems();
+
   document.getElementById('editBillModal').classList.remove('hidden');
 }
 
 function closeEditBillModal() {
   document.getElementById('editBillModal').classList.add('hidden');
   currentEditBill = null;
+  currentEditBillItems = [];
 }
 
+// เรนเดอร์รายการสินค้าในการแก้ไขบิล
+function renderEditBillItems() {
+  const container = document.getElementById('edit_items_container');
+  const countEl = document.getElementById('edit_items_count');
+  const sumEl = document.getElementById('edit_items_sum_display');
+  const totalPriceInput = document.getElementById('edit_totalPrice');
+  if (!container) return;
+
+  if (countEl) countEl.textContent = currentEditBillItems.length;
+
+  if (currentEditBillItems.length === 0) {
+    container.innerHTML = `
+      <div class="text-center py-6 text-gray-400 bg-white dark:bg-darkbg-800 rounded-xl border border-dashed border-gray-200 dark:border-darkbg-700">
+        <i class="fa-solid fa-box-open text-2xl mb-1 text-gray-300"></i>
+        <p class="text-xs">ไม่มีสินค้าในบิลนี้แล้ว (กดปุ่มเพิ่มเครื่องเข้าบิล หรือกดยกเลิกบิล)</p>
+      </div>`;
+    if (sumEl) sumEl.textContent = '0';
+    if (totalPriceInput) totalPriceInput.value = 0;
+    return;
+  }
+
+  let totalSum = 0;
+  let html = '';
+
+  currentEditBillItems.forEach((item, idx) => {
+    const soldPrice = parseFloat(item.soldPrice) || 0;
+    totalSum += soldPrice;
+
+    html += `
+    <div class="bg-white dark:bg-darkbg-800 p-2.5 rounded-xl border border-gray-200 dark:border-darkbg-700 flex flex-wrap items-center justify-between gap-2 shadow-xs hover:border-indigo-300 transition">
+      <div class="flex items-center gap-2.5 min-w-[200px] flex-grow">
+        <div class="w-7 h-7 rounded-lg bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold text-xs shrink-0">
+          ${idx + 1}
+        </div>
+        <div>
+          <div class="font-bold text-gray-800 dark:text-white text-xs">${escapeHtml(item.brand)} ${escapeHtml(item.model)}</div>
+          <div class="text-[10px] text-gray-400 font-mono">IMEI: ${escapeHtml(item.imei || '-')} | ${escapeHtml(item.spec || '-')}</div>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <div class="flex items-center gap-1">
+          <span class="text-[11px] text-gray-400">ราคา: ฿</span>
+          <input type="number" step="any" value="${soldPrice}" onchange="updateEditBillItemPrice(${idx}, this.value)"
+            class="w-24 p-1 border border-gray-250 dark:border-darkbg-600 dark:bg-darkbg-700 dark:text-white rounded text-xs font-extrabold text-right outline-none focus:ring-1 focus:ring-indigo-500" />
+        </div>
+        
+        <button type="button" onclick="startSwapProduct(${idx})" title="สลับเป็นเครื่องอื่นในสต็อก"
+          class="px-2 py-1 bg-amber-50 hover:bg-amber-100 dark:bg-amber-500/10 dark:hover:bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-500/30 rounded text-[11px] font-bold transition flex items-center gap-1">
+          <i class="fa-solid fa-arrows-rotate text-[10px]"></i> สลับเครื่อง
+        </button>
+
+        <button type="button" onclick="removeEditBillItem(${idx})" title="ลบเครื่องนี้ออกจากบิล (คืนสต็อก)"
+          class="px-2 py-1 bg-red-50 hover:bg-red-100 dark:bg-red-500/10 dark:hover:bg-red-500/20 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-500/30 rounded text-[11px] font-bold transition flex items-center gap-1">
+          <i class="fa-solid fa-trash-can text-[10px]"></i> ลบออก
+        </button>
+      </div>
+    </div>`;
+  });
+
+  container.innerHTML = html;
+  if (sumEl) sumEl.textContent = formatNumber(totalSum);
+  if (totalPriceInput) totalPriceInput.value = totalSum;
+}
+
+// อัปเดตราคาของสินค้าในบิล
+function updateEditBillItemPrice(idx, val) {
+  if (!currentEditBillItems[idx]) return;
+  currentEditBillItems[idx].soldPrice = parseFloat(val) || 0;
+  renderEditBillItems();
+}
+
+// ลบสินค้าออกจากบิล (คืนเข้าสต็อก)
+async function removeEditBillItem(idx) {
+  const item = currentEditBillItems[idx];
+  if (!item) return;
+
+  const confirmed = await showCustomConfirm(
+    `คุณต้องการลบเครื่อง:\n"${item.brand} ${item.model}" (IMEI: ${item.imei || '-'})\n\nออกจากบิลนี้ใช่หรือไม่?\n(เครื่องนี้จะถูกคืนกลับเข้าสต็อกเป็น "พร้อมขาย" โดยอัตโนมัติเมื่อกดบันทึกบิล)`,
+    'ยืนยันการลบเครื่องออกจากบิล'
+  );
+  if (!confirmed) return;
+
+  currentEditBillItems.splice(idx, 1);
+  renderEditBillItems();
+}
+
+// เริ่มต้นสลับเครื่อง
+function startSwapProduct(idx) {
+  productSelectMode = 'swap';
+  productSwapIndex = idx;
+  const currentItem = currentEditBillItems[idx];
+  const title = `สลับเปลี่ยนเครื่องแทน: ${currentItem.brand} ${currentItem.model}`;
+  openSelectProductModal(title);
+}
+
+// เริ่มต้นเพิ่มเครื่องเข้าบิล
+function openAddProductToBillModal() {
+  productSelectMode = 'add';
+  productSwapIndex = -1;
+  openSelectProductModal('เลือกเครื่องพร้อมขายจากสต็อกเพื่อเพิ่มเข้าบิล');
+}
+
+// เปิด Modal เลือกสินค้าพร้อมขาย
+function openSelectProductModal(title) {
+  const titleEl = document.getElementById('selectProductModalTitle');
+  if (titleEl) titleEl.innerHTML = `<i class="fa-solid fa-mobile-screen text-indigo-500 mr-1.5"></i> ${escapeHtml(title)}`;
+  
+  const searchInput = document.getElementById('select_product_search');
+  if (searchInput) searchInput.value = '';
+
+  document.getElementById('selectProductModal').classList.remove('hidden');
+  renderSelectableProducts();
+}
+
+function closeSelectProductModal() {
+  document.getElementById('selectProductModal').classList.add('hidden');
+}
+
+// เรนเดอร์รายการสินค้าที่สามารถเลือกได้ (เฉพาะ Available และไม่อยู่ในบิลปัจจุบัน)
+function renderSelectableProducts() {
+  const listEl = document.getElementById('select_product_list');
+  const searchInput = document.getElementById('select_product_search');
+  if (!listEl) return;
+
+  const keyword = (searchInput ? searchInput.value : '').toLowerCase().trim();
+  
+  // รวบรวม productId ที่อยู่ในบิลปัจจุบันแล้ว เพื่อไม่ให้เลือกซ้ำ
+  const chosenIds = currentEditBillItems.map(item => String(item.productId || ''));
+
+  // ดึงสินค้าจาก allProducts ที่พร้อมขาย
+  let availables = (allProducts || []).filter(p => {
+    const status = (p.status || 'Available').toString().toLowerCase();
+    const isAvail = status !== 'sold' && status !== 'unavailable' && status !== 'ขายแล้ว';
+    return isAvail && !chosenIds.includes(String(p.id));
+  });
+
+  if (keyword) {
+    availables = availables.filter(p => 
+      String(p.brand || '').toLowerCase().includes(keyword) ||
+      String(p.model || '').toLowerCase().includes(keyword) ||
+      String(p.imei || '').toLowerCase().includes(keyword) ||
+      String(p.id || '').toLowerCase().includes(keyword) ||
+      String(p.storage || '').toLowerCase().includes(keyword) ||
+      String(p.color || '').toLowerCase().includes(keyword)
+    );
+  }
+
+  if (availables.length === 0) {
+    listEl.innerHTML = '<div class="text-center py-10 text-gray-400 text-xs">ไม่พบสินค้าพร้อมขายตามเงื่อนไข</div>';
+    return;
+  }
+
+  let html = '';
+  availables.slice(0, 40).forEach(p => {
+    const priceDisplay = p.wholesalePrice ? formatNumber(p.wholesalePrice) : formatNumber(p.price || 0);
+    const spec = [(p.storage || ''), (p.color || '')].filter(Boolean).join(' ');
+
+    html += `
+    <div class="bg-gray-50 dark:bg-darkbg-900/40 p-2.5 rounded-xl border border-gray-200 dark:border-darkbg-700 flex justify-between items-center hover:border-indigo-400 transition gap-2">
+      <div>
+        <div class="font-bold text-gray-800 dark:text-white text-xs">${escapeHtml(p.brand)} ${escapeHtml(p.model)}</div>
+        <div class="text-[10px] text-gray-400 font-mono">IMEI: ${escapeHtml(p.imei || '-')} | ${escapeHtml(spec || '-')}</div>
+        <div class="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold mt-0.5">ราคาแนะนำ: ฿${priceDisplay} (ทุน ฿${formatNumber(p.cost || 0)})</div>
+      </div>
+      <button type="button" onclick='chooseProductForBill(${JSON.stringify(p).replace(/'/g, "&#39;")})'
+        class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-lg text-xs font-bold transition shadow-sm whitespace-nowrap flex items-center gap-1">
+        <i class="fa-solid fa-check"></i> เลือกเครื่องนี้
+      </button>
+    </div>`;
+  });
+
+  listEl.innerHTML = html;
+}
+
+// เมื่อเลือกสินค้าจาก Modal เข้ามาในบิล
+function chooseProductForBill(prod) {
+  const spec = ((prod.ram ? prod.ram + '/' : '') + (prod.storage || '') + ' ' + (prod.color || '')).trim();
+  const defaultSoldPrice = parseFloat(prod.wholesalePrice || prod.price) || 0;
+
+  const newItem = {
+    productId: prod.id,
+    brand: prod.brand || '',
+    model: prod.model || '',
+    spec: spec,
+    imei: prod.imei || '',
+    cost: parseFloat(prod.cost) || 0,
+    soldPrice: defaultSoldPrice,
+    modelCode: prod.modelCode || ''
+  };
+
+  if (productSelectMode === 'swap' && productSwapIndex >= 0) {
+    // สลับเปลี่ยนเครื่องเดิม
+    currentEditBillItems[productSwapIndex] = newItem;
+  } else {
+    // เพิ่มเครื่องใหม่เข้าบิล
+    currentEditBillItems.push(newItem);
+  }
+
+  closeSelectProductModal();
+  renderEditBillItems();
+}
+
+// ล้าง preview รูปภาพในการแก้ไขบิล
+function resetEditImagePreviews() {
+  editNewPosDataURI = null;
+  editNewSlipDataURI = null;
+
+  const posInput = document.getElementById('edit_newPosInput');
+  const posContainer = document.getElementById('edit_posPreviewContainer');
+  const posPreview = document.getElementById('edit_posPreview');
+  if (posInput) posInput.value = '';
+  if (posContainer) posContainer.classList.add('hidden');
+  if (posPreview) posPreview.src = '';
+
+  const slipInput = document.getElementById('edit_newSlipInput');
+  const slipContainer = document.getElementById('edit_slipPreviewContainer');
+  const slipPreview = document.getElementById('edit_slipPreview');
+  if (slipInput) slipInput.value = '';
+  if (slipContainer) slipContainer.classList.add('hidden');
+  if (slipPreview) slipPreview.src = '';
+}
+
+// ตั้งค่า event listener สำหรับการเลือกไฟล์รูปภาพใน editBillModal
+document.addEventListener('DOMContentLoaded', () => {
+  setupEditBillImageHandlers();
+});
+// เรียกซ้ำในกรณี DOM พร้อมอยู่แล้ว
+setupEditBillImageHandlers();
+
+function setupEditBillImageHandlers() {
+  const posInput = document.getElementById('edit_newPosInput');
+  const posContainer = document.getElementById('edit_posPreviewContainer');
+  const posPreview = document.getElementById('edit_posPreview');
+  const posRemoveBtn = document.getElementById('edit_posRemoveBtn');
+
+  if (posInput && !posInput._handled) {
+    posInput._handled = true;
+    posInput.addEventListener('change', (e) => {
+      if (e.target.files.length > 0) {
+        compressImageFile(e.target.files[0], (dataURI) => {
+          editNewPosDataURI = dataURI;
+          posPreview.src = dataURI;
+          posContainer.classList.remove('hidden');
+        });
+      }
+    });
+  }
+  if (posRemoveBtn && !posRemoveBtn._handled) {
+    posRemoveBtn._handled = true;
+    posRemoveBtn.addEventListener('click', () => {
+      editNewPosDataURI = null;
+      posInput.value = '';
+      posPreview.src = '';
+      posContainer.classList.add('hidden');
+    });
+  }
+
+  const slipInput = document.getElementById('edit_newSlipInput');
+  const slipContainer = document.getElementById('edit_slipPreviewContainer');
+  const slipPreview = document.getElementById('edit_slipPreview');
+  const slipRemoveBtn = document.getElementById('edit_slipRemoveBtn');
+
+  if (slipInput && !slipInput._handled) {
+    slipInput._handled = true;
+    slipInput.addEventListener('change', (e) => {
+      if (e.target.files.length > 0) {
+        compressImageFile(e.target.files[0], (dataURI) => {
+          editNewSlipDataURI = dataURI;
+          slipPreview.src = dataURI;
+          slipContainer.classList.remove('hidden');
+        });
+      }
+    });
+  }
+  if (slipRemoveBtn && !slipRemoveBtn._handled) {
+    slipRemoveBtn._handled = true;
+    slipRemoveBtn.addEventListener('click', () => {
+      editNewSlipDataURI = null;
+      slipInput.value = '';
+      slipPreview.src = '';
+      slipContainer.classList.add('hidden');
+    });
+  }
+}
+
+// ฟังก์ชันช่วยย่อขนาดรูปภาพ
+function compressImageFile(file, callback) {
+  if (!file || !file.type.startsWith('image/')) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      let width = img.width;
+      let height = img.height;
+      const maxDim = 1200;
+      if (width > maxDim || height > maxDim) {
+        if (width > height) {
+          height = Math.round((height * maxDim) / width);
+          width = maxDim;
+        } else {
+          width = Math.round((width * maxDim) / height);
+          height = maxDim;
+        }
+      }
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, width, height);
+
+      let compressed = canvas.toDataURL('image/webp', 0.85);
+      if (!compressed || !compressed.startsWith('data:image/webp')) {
+        compressed = canvas.toDataURL('image/jpeg', 0.85);
+      }
+      callback(compressed);
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+// ยกเลิกบิลปัจจุบัน
+async function cancelCurrentBill() {
+  if (!currentEditBill) return;
+  const saleId = currentEditBill.saleId;
+  closeEditBillModal();
+  await deleteSaleBill(saleId);
+}
+
+// บันทึกการแก้ไขบิล
 async function handleEditBillSubmit(e) {
   e.preventDefault();
   if (!currentEditBill) return;
-  
+
   const saleId = document.getElementById('edit_billId').value;
   const customerName = document.getElementById('edit_customerName').value.trim();
   const customerPhone = document.getElementById('edit_customerPhone').value.trim();
@@ -1537,17 +1906,30 @@ async function handleEditBillSubmit(e) {
   const totalPrice = parseFloat(document.getElementById('edit_totalPrice').value) || 0;
   const downPayment = parseFloat(document.getElementById('edit_downPayment').value) || 0;
   const rawDueDate = document.getElementById('edit_dueDate').value; // YYYY-MM-DD
-  
-  // ไม่เปลี่ยนชื่อพนักงาน (salesperson) ใช้ค่าเดิมเสมอ
+  const paymentMethod = document.getElementById('edit_paymentMethod').value;
+  const notes = document.getElementById('edit_notes').value.trim();
   const salesperson = currentEditBill.salesperson || '';
-  
-  // แปลงรูปแบบวันที่กลับเป็น DD/MM/YYYY สำหรับ Google Sheets
+
+  // แปลงรูปแบบวันที่ DD/MM/YYYY
   let dueDate = '';
   if (rawDueDate) {
     const parts = rawDueDate.split('-');
     if (parts.length === 3) {
       dueDate = `${parts[2]}/${parts[1]}/${parts[0]}`;
     }
+  }
+
+  // หากไม่มีสินค้าเหลือในบิล
+  if (currentEditBillItems.length === 0) {
+    const confirmCancel = await showCustomConfirm(
+      'คุณได้ลบรายการสินค้าออกจากบิลนี้จนหมดแล้ว\nต้องการดำเนินการ "ยกเลิกบิลการขายนี้" เลยใช่หรือไม่?',
+      'ยืนยันยกเลิกบิล'
+    );
+    if (confirmCancel) {
+      closeEditBillModal();
+      await deleteSaleBill(saleId);
+    }
+    return;
   }
 
   const billData = {
@@ -1558,6 +1940,11 @@ async function handleEditBillSubmit(e) {
     dueDate,
     saleType,
     totalPrice,
+    paymentMethod,
+    notes,
+    items: currentEditBillItems,
+    newReceiptImageDataURI: editNewPosDataURI,
+    newPaymentSlipDataURI: editNewSlipDataURI
   };
 
   showLoading(true);
@@ -1565,7 +1952,7 @@ async function handleEditBillSubmit(e) {
     const res = await apiPost('updateSaleBill', { saleId, billData });
     showLoading(false);
     if (res.success) {
-      await showCustomAlert(res.message || 'แก้ไขข้อมูลบิลสำเร็จ!', 'สำเร็จ');
+      await showCustomAlert(res.message || 'แก้ไขข้อมูลบิลและอัปเดตสต็อกเรียบร้อยแล้ว!', 'สำเร็จ');
       closeEditBillModal();
       await refreshDashboard();
     } else {

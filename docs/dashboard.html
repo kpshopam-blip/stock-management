@@ -477,83 +477,189 @@
     <img id="imageViewerImg" src="" class="max-w-[95%] max-h-[90vh] object-contain select-none" alt="Full Image">
   </div>
 
-  <!-- Modal แก้ไขบิลการขาย -->
+  <!-- Modal แก้ไขบิลการขาย (ระดับจัดการสินค้า คืนเครื่อง สลับเครื่อง แนบรูป และยกเลิกบิล) -->
   <div id="editBillModal"
-    class="fixed inset-0 bg-black/60 z-[90] hidden flex items-center justify-center p-2 sm:p-4 backdrop-blur-sm">
-    <div class="bg-white dark:bg-darkbg-800 w-full max-w-md rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-      <div class="px-4 py-3 border-b bg-blue-50 dark:bg-blue-950/20 flex justify-between items-center shrink-0">
-        <h3 class="font-bold text-blue-700 dark:text-blue-400 text-lg"><i class="fa-solid fa-pen-to-square mr-1"></i> แก้ไขบิลการขาย</h3>
-        <button onclick="closeEditBillModal()"
-          class="w-8 h-8 rounded-full bg-gray-200 dark:bg-darkbg-700 text-gray-600 dark:text-gray-400 hover:bg-red-100 hover:text-red-500 flex justify-center items-center transition"><i
-            class="fa-solid fa-xmark"></i></button>
+    class="fixed inset-0 bg-black/65 z-[90] hidden flex items-center justify-center p-2 sm:p-4 backdrop-blur-sm">
+    <div class="bg-white dark:bg-darkbg-800 w-full max-w-3xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh] border border-gray-150 dark:border-darkbg-700">
+      
+      <!-- หัว Modal -->
+      <div class="px-5 py-3.5 border-b border-gray-100 dark:border-darkbg-700 bg-blue-50/70 dark:bg-blue-950/20 flex justify-between items-center shrink-0">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center text-sm shadow-sm">
+            <i class="fa-solid fa-pen-to-square"></i>
+          </div>
+          <div>
+            <h3 class="font-bold text-gray-900 dark:text-white text-sm flex items-center gap-2">
+              แก้ไขบิลการขาย <span id="edit_billId_badge" class="font-mono text-xs px-2 py-0.5 rounded bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-300"></span>
+            </h3>
+            <p class="text-[11px] text-gray-500 dark:text-gray-400">พนักงานขาย: <b id="edit_salesperson_display" class="text-gray-700 dark:text-gray-200">-</b></p>
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <button type="button" onclick="cancelCurrentBill()"
+            class="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 dark:bg-rose-500/10 dark:hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-500/30 rounded-lg text-xs font-bold transition flex items-center gap-1">
+            <i class="fa-solid fa-trash-can"></i> ยกเลิกบิลนี้
+          </button>
+          <button onclick="closeEditBillModal()"
+            class="w-8 h-8 rounded-full bg-gray-100 dark:bg-darkbg-700 text-gray-500 hover:bg-red-50 hover:text-red-500 flex justify-center items-center transition">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
       </div>
-      <form onsubmit="handleEditBillSubmit(event)" class="p-4 space-y-3 overflow-y-auto">
+
+      <!-- ฟอร์มเนื้อหา -->
+      <form onsubmit="handleEditBillSubmit(event)" class="p-4 sm:p-5 space-y-4 overflow-y-auto flex-grow text-xs">
         <input type="hidden" id="edit_billId">
 
-        <!-- พนักงานขาย (readonly) -->
-        <div>
-          <label class="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">
-            <i class="fa-solid fa-lock text-[9px] mr-1 text-gray-400"></i>พนักงานขาย (ไม่สามารถแก้ไขได้)
-          </label>
-          <div id="edit_salesperson_display"
-            class="w-full p-2 bg-gray-100 dark:bg-darkbg-700/50 border border-gray-200 dark:border-darkbg-600 rounded text-sm text-gray-500 dark:text-gray-400 font-medium select-none cursor-not-allowed">
+        <!-- กล่องที่ 1: รายการสินค้าในบิล (ลบ/เปลี่ยน/เพิ่ม/แก้ราคา) -->
+        <div class="bg-gray-50/80 dark:bg-darkbg-900/40 p-3.5 rounded-xl border border-gray-200 dark:border-darkbg-700 space-y-3">
+          <div class="flex justify-between items-center">
+            <div class="font-bold text-gray-800 dark:text-white flex items-center gap-1.5 text-xs">
+              <i class="fa-solid fa-boxes-stacked text-indigo-500"></i> รายการสินค้าในบิล (<span id="edit_items_count">0</span> เครื่อง)
+            </div>
+            <button type="button" onclick="openAddProductToBillModal()"
+              class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[11px] font-bold shadow-sm transition flex items-center gap-1 active:scale-95">
+              <i class="fa-solid fa-plus"></i> เพิ่มเครื่องเข้าบิล
+            </button>
+          </div>
+
+          <!-- ตาราง/การ์ดรายการสินค้า -->
+          <div id="edit_items_container" class="space-y-2">
+            <!-- เรนเดอร์ด้วย Javascript -->
+          </div>
+
+          <div class="flex justify-between items-center pt-2 border-t border-dashed border-gray-200 dark:border-darkbg-700 text-xs">
+            <span class="text-gray-500 dark:text-gray-400">คำนวณรวมราคาสินค้าในบิล:</span>
+            <span class="text-sm font-extrabold text-indigo-600 dark:text-indigo-400">฿<span id="edit_items_sum_display">0</span></span>
           </div>
         </div>
 
-        <!-- ปุ่มดูใบเสร็จ POS -->
-        <button type="button" id="edit_posReceiptBtn"
-          class="hidden w-full py-2 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 text-amber-700 dark:text-amber-400 rounded-lg text-sm font-bold flex items-center justify-center gap-2 hover:bg-amber-100 dark:hover:bg-amber-500/20 transition">
-          <i class="fa-solid fa-image"></i> ดูใบเสร็จ POS ที่พนักงานอัปโหลด
-        </button>
-
-        <div class="border-t dark:border-darkbg-700 pt-3">
-          <p class="text-[10px] text-blue-500 font-semibold mb-2"><i class="fa-solid fa-pen mr-1"></i>ข้อมูลที่แก้ไขได้</p>
-        </div>
-
-        <div>
-          <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">ชื่อลูกค้า *</label>
-          <input type="text" id="edit_customerName" required class="w-full p-2 border border-gray-300 dark:border-darkbg-600 dark:bg-darkbg-700 dark:text-white rounded outline-none focus:ring-1 focus:ring-blue-500 text-sm">
-        </div>
-
-        <div>
-          <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">เบอร์โทรลูกค้า *</label>
-          <input type="text" id="edit_customerPhone" required class="w-full p-2 border border-gray-300 dark:border-darkbg-600 dark:bg-darkbg-700 dark:text-white rounded outline-none focus:ring-1 focus:ring-blue-500 text-sm">
-        </div>
-
-        <div>
-          <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">ประเภทการขาย</label>
-          <input type="text" id="edit_saleType" class="w-full p-2 border border-gray-300 dark:border-darkbg-600 dark:bg-darkbg-700 dark:text-white rounded outline-none focus:ring-1 focus:ring-blue-500 text-sm" placeholder="เช่น ขายสด, ขายส่ง, สินเชื่อ">
-        </div>
-
-        <div class="grid grid-cols-2 gap-3">
+        <!-- กล่องที่ 2: ข้อมูลลูกค้าและการขาย -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">ราคาขาย (บาท)</label>
-            <input type="number" id="edit_totalPrice" class="w-full p-2 border border-gray-300 dark:border-darkbg-600 dark:bg-darkbg-700 dark:text-white rounded outline-none focus:ring-1 focus:ring-blue-500 text-sm">
+            <label class="block font-bold text-gray-700 dark:text-gray-300 mb-1">ชื่อลูกค้า *</label>
+            <input type="text" id="edit_customerName" required
+              class="w-full p-2 border border-gray-300 dark:border-darkbg-600 dark:bg-darkbg-700 dark:text-white rounded-lg outline-none focus:ring-1 focus:ring-blue-500 text-xs">
           </div>
           <div>
-            <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">เงินดาวน์ (บาท)</label>
-            <input type="number" id="edit_downPayment" class="w-full p-2 border border-gray-300 dark:border-darkbg-600 dark:bg-darkbg-700 dark:text-white rounded outline-none focus:ring-1 focus:ring-blue-500 text-sm">
+            <label class="block font-bold text-gray-700 dark:text-gray-300 mb-1">เบอร์โทรลูกค้า *</label>
+            <input type="text" id="edit_customerPhone" required
+              class="w-full p-2 border border-gray-300 dark:border-darkbg-600 dark:bg-darkbg-700 dark:text-white rounded-lg outline-none focus:ring-1 focus:ring-blue-500 text-xs">
           </div>
         </div>
 
-        <div>
-          <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">วันกำหนดชำระเงินเชื่อ (ถ้ามี)</label>
-          <input type="date" id="edit_dueDate" class="w-full p-2 border border-gray-300 dark:border-darkbg-600 dark:bg-darkbg-700 dark:text-white rounded outline-none focus:ring-1 focus:ring-blue-500 text-sm">
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div>
+            <label class="block font-bold text-gray-700 dark:text-gray-300 mb-1">ประเภทการขาย</label>
+            <input type="text" id="edit_saleType"
+              class="w-full p-2 border border-gray-300 dark:border-darkbg-600 dark:bg-darkbg-700 dark:text-white rounded-lg outline-none focus:ring-1 focus:ring-blue-500 text-xs"
+              placeholder="เช่น ส่งร้านพาร์ทเนอร์ (เงินเชื่อ)">
+          </div>
+          <div>
+            <label class="block font-bold text-gray-700 dark:text-gray-300 mb-1">ยอดรวมบิลสุทธิ (บาท) *</label>
+            <input type="number" id="edit_totalPrice" step="any" required
+              class="w-full p-2 border border-gray-300 dark:border-darkbg-600 dark:bg-darkbg-700 dark:text-white font-extrabold text-gray-900 rounded-lg outline-none focus:ring-1 focus:ring-blue-500 text-xs">
+          </div>
+          <div>
+            <label class="block font-bold text-gray-700 dark:text-gray-300 mb-1">เงินดาวน์ (บาท)</label>
+            <input type="number" id="edit_downPayment" step="any"
+              class="w-full p-2 border border-gray-300 dark:border-darkbg-600 dark:bg-darkbg-700 dark:text-white rounded-lg outline-none focus:ring-1 focus:ring-blue-500 text-xs">
+          </div>
         </div>
 
-        <div class="px-4 py-3 border-t bg-gray-50 dark:bg-darkbg-800 -mx-4 -mb-4 flex justify-end gap-2 text-sm">
-          <button type="button" onclick="closeEditBillModal()" class="px-4 py-2 border rounded text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-darkbg-700 font-medium transition">ยกเลิก</button>
-          <button type="submit" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded font-medium shadow transition"><i class="fa-solid fa-check"></i> บันทึกการแก้ไข</button>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block font-bold text-gray-700 dark:text-gray-300 mb-1">วันกำหนดชำระเงินเชื่อ (ถ้ามี)</label>
+            <input type="date" id="edit_dueDate"
+              class="w-full p-2 border border-gray-300 dark:border-darkbg-600 dark:bg-darkbg-700 dark:text-white rounded-lg outline-none focus:ring-1 focus:ring-blue-500 text-xs">
+          </div>
+          <div>
+            <label class="block font-bold text-gray-700 dark:text-gray-300 mb-1">ช่องทางการรับเงิน</label>
+            <select id="edit_paymentMethod"
+              class="w-full p-2 border border-gray-300 dark:border-darkbg-600 dark:bg-darkbg-700 dark:text-white rounded-lg outline-none focus:ring-1 focus:ring-blue-500 text-xs">
+              <option value="เงินโอน">📱 เงินโอน</option>
+              <option value="เงินสด">💵 เงินสด</option>
+              <option value="เงินเชื่อ">🤝 เงินเชื่อ</option>
+              <option value="อื่นๆ">อื่นๆ</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- หมายเหตุบิล -->
+        <div>
+          <label class="block font-bold text-gray-700 dark:text-gray-300 mb-1">หมายเหตุบิล</label>
+          <input type="text" id="edit_notes" placeholder="ระบุหมายเหตุเพิ่มเติม (ถ้ามี)"
+            class="w-full p-2 border border-gray-300 dark:border-darkbg-600 dark:bg-darkbg-700 dark:text-white rounded-lg outline-none focus:ring-1 focus:ring-blue-500 text-xs">
+        </div>
+
+        <!-- กล่องที่ 3: จัดการรูปภาพหลักฐาน (ใบเสร็จ POS / สลิปโอนเงิน) -->
+        <div class="pt-2 border-t border-gray-200 dark:border-darkbg-700">
+          <div class="font-bold text-gray-800 dark:text-white mb-2 text-xs flex items-center gap-1.5">
+            <i class="fa-solid fa-paperclip text-amber-500"></i> รูปภาพหลักฐาน (เปลี่ยนหรือแนบรูปใหม่)
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <!-- รูปใบเสร็จ POS -->
+            <div class="p-3 bg-gray-50/70 dark:bg-darkbg-900/30 rounded-xl border border-gray-200 dark:border-darkbg-700 space-y-2">
+              <div class="flex justify-between items-center">
+                <span class="font-bold text-gray-700 dark:text-gray-300 text-[11px]"><i class="fa-solid fa-file-invoice text-amber-500 mr-1"></i>ใบเสร็จ POS</span>
+                <button type="button" id="edit_viewPosBtn" class="hidden text-[10px] text-indigo-600 dark:text-indigo-400 hover:underline font-bold">ดูรูปปัจจุบัน</button>
+              </div>
+              <input type="file" id="edit_newPosInput" accept="image/*" class="w-full text-[10px] text-gray-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-[10px] file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer" />
+              <div id="edit_posPreviewContainer" class="hidden relative max-h-[120px] rounded overflow-hidden bg-black/10 flex items-center justify-center p-1">
+                <img id="edit_posPreview" src="" class="max-h-[110px] object-contain rounded" />
+                <button type="button" id="edit_posRemoveBtn" class="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/70 text-white flex items-center justify-center text-[10px] hover:bg-red-600"><i class="fa-solid fa-xmark"></i></button>
+              </div>
+            </div>
+
+            <!-- รูปสลิปโอนเงิน -->
+            <div class="p-3 bg-gray-50/70 dark:bg-darkbg-900/30 rounded-xl border border-gray-200 dark:border-darkbg-700 space-y-2">
+              <div class="flex justify-between items-center">
+                <span class="font-bold text-gray-700 dark:text-gray-300 text-[11px]"><i class="fa-solid fa-receipt text-emerald-500 mr-1"></i>สลิปการโอนเงิน</span>
+                <button type="button" id="edit_viewSlipBtn" class="hidden text-[10px] text-emerald-600 dark:text-emerald-400 hover:underline font-bold">ดูรูปปัจจุบัน</button>
+              </div>
+              <input type="file" id="edit_newSlipInput" accept="image/*" class="w-full text-[10px] text-gray-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-[10px] file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 cursor-pointer" />
+              <div id="edit_slipPreviewContainer" class="hidden relative max-h-[120px] rounded overflow-hidden bg-black/10 flex items-center justify-center p-1">
+                <img id="edit_slipPreview" src="" class="max-h-[110px] object-contain rounded" />
+                <button type="button" id="edit_slipRemoveBtn" class="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/70 text-white flex items-center justify-center text-[10px] hover:bg-red-600"><i class="fa-solid fa-xmark"></i></button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- แถบปุ่มกดยืนยัน -->
+        <div class="px-5 py-3.5 border-t border-gray-100 dark:border-darkbg-700 bg-gray-50 dark:bg-darkbg-800 -mx-4 sm:-mx-5 -mb-4 sm:-mb-5 flex justify-end gap-2 shrink-0">
+          <button type="button" onclick="closeEditBillModal()" class="px-4 py-2 border border-gray-300 dark:border-darkbg-600 rounded-xl text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-darkbg-700 font-bold transition">ยกเลิก</button>
+          <button type="submit" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white rounded-xl font-bold shadow-md shadow-blue-500/10 transition flex items-center gap-1.5">
+            <i class="fa-solid fa-check"></i> บันทึกการแก้ไขบิล
+          </button>
         </div>
       </form>
     </div>
   </div>
 
+  <!-- Modal ย่อย: ค้นหาและเลือกเครื่องจากสต็อก Available (สำหรับสลับเครื่อง / เพิ่มเครื่องเข้าบิล) -->
+  <div id="selectProductModal" class="fixed inset-0 bg-black/70 z-[95] hidden flex items-center justify-center p-3 sm:p-4 backdrop-blur-sm">
+    <div class="bg-white dark:bg-darkbg-800 w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] border border-gray-200 dark:border-darkbg-700">
+      <div class="px-4 py-3 border-b border-gray-100 dark:border-darkbg-700 bg-gray-50 dark:bg-darkbg-900/40 flex justify-between items-center shrink-0">
+        <h4 id="selectProductModalTitle" class="font-bold text-gray-900 dark:text-white text-xs flex items-center gap-2">
+          <i class="fa-solid fa-mobile-screen text-indigo-500"></i> เลือกสินค้าพร้อมขายจากสต็อก
+        </h4>
+        <button type="button" onclick="closeSelectProductModal()" class="w-7 h-7 rounded-full bg-gray-100 dark:bg-darkbg-700 text-gray-500 hover:bg-red-50 hover:text-red-500 flex justify-center items-center transition"><i class="fa-solid fa-xmark text-xs"></i></button>
+      </div>
+      <div class="p-3 border-b border-gray-100 dark:border-darkbg-700 bg-gray-50/50 dark:bg-darkbg-800">
+        <input type="text" id="select_product_search" oninput="renderSelectableProducts()" placeholder="ค้นหาชื่อรุ่น / IMEI / แบรนด์..." class="w-full pl-3 pr-3 py-1.5 bg-white dark:bg-darkbg-700 border border-gray-300 dark:border-darkbg-600 rounded-lg text-xs outline-none focus:ring-1 focus:ring-indigo-500 text-gray-800 dark:text-gray-100" />
+      </div>
+      <div id="select_product_list" class="p-3 space-y-2 overflow-y-auto flex-grow min-h-[220px]">
+        <!-- รายการสินค้าสต็อก Available -->
+      </div>
+    </div>
+  </div>
+
 
   <!-- Script การควบคุมหลักแดชบอร์ด (เพิ่ม v เพื่อแก้ปัญหา Browser/Netlify Cache ค้าง) -->
-  <script src="config.js?v=1.1.5"></script>
-  <script src="api.js?v=1.1.5"></script>
-  <script src="dashboard.js?v=1.1.5"></script>
+  <script src="config.js?v=1.1.6"></script>
+  <script src="api.js?v=1.1.6"></script>
+  <script src="dashboard.js?v=1.1.6"></script>
 
 </body>
 
