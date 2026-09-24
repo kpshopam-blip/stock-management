@@ -1707,10 +1707,10 @@ function showCustomConfirm(message, title = 'ยืนยันการทำ�
   });
 }
 
+// ====== Helper: openPaymentSlipUploadModal (สำหรับ backward compatibility) ======
 function openPaymentSlipUploadModal(saleId) {
-  return new Promise((resolve) => {
-    const oldModal = document.getElementById('payment-slip-modal');
-    if (oldModal) oldModal.remove();
+  return openPaymentModal(saleId);
+}
 
 // ====== Helper: เข้ารหัสข้อความ HTML เพื่อความปลอดภัย ======
 function escapeHtml(str) {
