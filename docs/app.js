@@ -2198,12 +2198,19 @@ function editProductFromStore(id) {
 // ====== Action ย้ายคลัง & คอมเมนต์ ======
 async function moveProductAction(productId) {
     const targetSheet = document.getElementById('move_targetSheet').value;
+    const p = allProducts.find(x => x.id === productId);
+    const existingImages = p ? (p.images || []) : [];
+
     showLoading(true);
     try {
-        const res = await API_moveProduct(productId, targetSheet);
+        const res = await API_moveProduct(productId, targetSheet, existingImages);
         showLoading(false);
         showToast(res.message, res.success ? 'success' : 'error');
         if (res.success) {
+            if (p) {
+                const stockTypeMap = { 'Products': 'Products', 'Stock_Employee': 'Employee', 'Stock_Spare': 'Spare' };
+                p.stockType = stockTypeMap[targetSheet] || targetSheet;
+            }
             closeProductView();
             fetchProducts();
         }

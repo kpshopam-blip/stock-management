@@ -748,8 +748,26 @@ async function API_removeProduct(productId, reason) {
 }
 
 // ย้ายคลัง
-async function API_moveProduct(productId, targetSheet) {
-    return apiPost('moveProduct', { productId, targetSheet });
+async function API_moveProduct(productId, targetSheet, images = []) {
+    const stockTypeMap = {
+        'Products': 'Products',
+        'Stock_Employee': 'Employee',
+        'Stock_Spare': 'Spare'
+    };
+    const newStockType = stockTypeMap[targetSheet] || targetSheet;
+
+    // อัปเดตไปยัง Firebase ทันที เพื่อความรวดเร็วและป้องกันรูปภาพสูญหาย
+    try {
+        const patchData = { stockType: newStockType };
+        if (Array.isArray(images) && images.length > 0) {
+            patchData.images = images;
+        }
+        await firebaseWrite(`products/${productId}.json`, 'PATCH', patchData);
+    } catch (e) {
+        console.warn('Firebase moveProduct write warning:', e);
+    }
+
+    return apiPost('moveProduct', { productId, targetSheet, images });
 }
 
 // โอนข้ามสาขาหลายรายการ
