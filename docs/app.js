@@ -1469,15 +1469,18 @@ function renderSalesList(list) {
         }
 
         // ป้ายแสดงช่องทางชำระเงิน
+        const isSplitPay = bill.paymentMethod && bill.paymentMethod.includes('เงินสด+เงินโอน');
         const payMethodBadge = bill.paymentMethod ? `
           <span class="text-[10px] font-bold px-2 py-0.5 rounded border inline-flex items-center gap-1 ${
-            bill.paymentMethod === 'เงินโอน'
-              ? 'bg-blue-50 text-blue-700 border-blue-200'
-              : bill.paymentMethod === 'เงินสด'
-                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                : 'bg-purple-50 text-purple-700 border-purple-200'
+            isSplitPay
+              ? 'bg-purple-50 text-purple-700 border-purple-200'
+              : bill.paymentMethod === 'เงินโอน'
+                ? 'bg-blue-50 text-blue-700 border-blue-200'
+                : bill.paymentMethod === 'เงินสด'
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                  : 'bg-amber-50 text-amber-700 border-amber-200'
           }">
-            <i class="fa-solid ${bill.paymentMethod === 'เงินโอน' ? 'fa-mobile-screen-button' : (bill.paymentMethod === 'เงินสด' ? 'fa-money-bill-wave' : 'fa-handshake')}"></i>${bill.paymentMethod}
+            <i class="fa-solid ${isSplitPay ? 'fa-money-bill-transfer' : (bill.paymentMethod === 'เงินโอน' ? 'fa-mobile-screen-button' : (bill.paymentMethod === 'เงินสด' ? 'fa-money-bill-wave' : 'fa-handshake'))}"></i>${bill.paymentMethod}
           </span>
         ` : '';
 
@@ -2341,19 +2344,108 @@ function toggleDownPayment() {
     }
 }
 
-// สลับการแสดงผลกล่องอัปโหลดสลิปโอนเงินตามช่องทางการรับเงิน
+// คำนวณยอดขายรวมของหน้าขายสินค้า ณ ขณะนั้น
+function getCurrentTotalSalePrice() {
+    if (typeof checkoutProductIds !== 'undefined' && checkoutProductIds && checkoutProductIds.length > 1) {
+        let total = 0;
+        for (const pId of checkoutProductIds) {
+            const input = document.getElementById(`bulk_price_${pId}`);
+            if (input) total += parseFloat(input.value) || 0;
+        }
+        return total;
+    } else if (typeof checkoutProductIds !== 'undefined' && checkoutProductIds && checkoutProductIds.length === 1) {
+        return parseFloat(document.getElementById('sell_price')?.value) || 0;
+    }
+    return 0;
+}
+
+// สลับการแสดงผลกล่องอัปโหลดสลิปโอนเงิน และกล่องระบุยอดเงินสด+เงินโอน
 function togglePaymentMethod() {
     const payMethodContainer = document.getElementById('payment_method_container');
     if (payMethodContainer && payMethodContainer.classList.contains('hidden')) return;
 
     const method = document.querySelector('input[name="sell_payment_method"]:checked')?.value || 'เงินสด';
     const slipContainer = document.getElementById('transferSlipContainer');
-    if (!slipContainer) return;
+    const splitContainer = document.getElementById('splitPaymentContainer');
 
     if (method === 'เงินโอน') {
-        slipContainer.classList.remove('hidden');
+        if (slipContainer) slipContainer.classList.remove('hidden');
+        if (splitContainer) splitContainer.classList.add('hidden');
+    } else if (method === 'เงินสด+เงินโอน') {
+        if (slipContainer) slipContainer.classList.remove('hidden');
+        if (splitContainer) splitContainer.classList.remove('hidden');
+        initSplitAmounts();
     } else {
-        slipContainer.classList.add('hidden');
+        if (slipContainer) slipContainer.classList.add('hidden');
+        if (splitContainer) splitContainer.classList.add('hidden');
+    }
+}
+
+// กำหนดค่ายอดเงินสด/โอนเริ่มต้นเมื่อเลือก เงินสด+เงินโอน
+function initSplitAmounts() {
+    const total = getCurrentTotalSalePrice();
+    const cashInput = document.getElementById('sell_cash_amount');
+    const transferInput = document.getElementById('sell_transfer_amount');
+    const hintEl = document.getElementById('splitPaymentHint');
+
+    if (hintEl) {
+        hintEl.textContent = `ยอดขายรวม: ฿${formatNumber(total)}`;
+        hintEl.className = 'text-purple-600 font-semibold text-xs';
+    }
+
+    if (cashInput && transferInput) {
+        const curCash = parseFloat(cashInput.value) || 0;
+        const curTransfer = parseFloat(transferInput.value) || 0;
+        if (curCash === 0 && curTransfer === 0 && total > 0) {
+            cashInput.value = '';
+            transferInput.value = total;
+        }
+    }
+}
+
+// คำนวณยอดเงินสดและเงินโอนอัตโนมัติเมื่อพิมพ์
+function onSplitAmountChanged(changedSource) {
+    const total = getCurrentTotalSalePrice();
+    const cashInput = document.getElementById('sell_cash_amount');
+    const transferInput = document.getElementById('sell_transfer_amount');
+    const hintEl = document.getElementById('splitPaymentHint');
+    if (!cashInput || !transferInput) return;
+
+    if (changedSource === 'cash') {
+        const rawCash = cashInput.value.trim();
+        if (rawCash === '') {
+            transferInput.value = total > 0 ? total : '';
+        } else {
+            const cash = parseFloat(rawCash) || 0;
+            const remaining = Math.max(0, total - cash);
+            transferInput.value = remaining;
+        }
+    } else if (changedSource === 'transfer') {
+        const rawTransfer = transferInput.value.trim();
+        if (rawTransfer === '') {
+            cashInput.value = total > 0 ? total : '';
+        } else {
+            const transfer = parseFloat(rawTransfer) || 0;
+            const remaining = Math.max(0, total - transfer);
+            cashInput.value = remaining;
+        }
+    }
+
+    const c = parseFloat(cashInput.value) || 0;
+    const t = parseFloat(transferInput.value) || 0;
+    const diff = total - (c + t);
+
+    if (hintEl) {
+        if (Math.abs(diff) < 0.01) {
+            hintEl.textContent = `✓ รวมครบ ฿${formatNumber(total)}`;
+            hintEl.className = 'text-emerald-600 font-bold text-xs';
+        } else if (diff > 0) {
+            hintEl.textContent = `ยังขาดอีก ฿${formatNumber(diff)} (ยอดขาย ฿${formatNumber(total)})`;
+            hintEl.className = 'text-amber-600 font-semibold text-xs';
+        } else {
+            hintEl.textContent = `เกินยอดขาย ฿${formatNumber(Math.abs(diff))} (ยอดขาย ฿${formatNumber(total)})`;
+            hintEl.className = 'text-rose-600 font-semibold text-xs';
+        }
     }
 }
 
@@ -2378,9 +2470,15 @@ function openSellModal(productId) {
     sellReceiptDataURI = null;
     clearSlipImage();
 
-    // รีเซ็ตตัวเลือกช่องทางรับเงินเป็นเงินสด
+    // รีเซ็ตตัวเลือกช่องทางรับเงินเป็นเงินสด และล้างค่ายอดแบ่งชำระ
     const defaultCashRadio = document.querySelector('input[name="sell_payment_method"][value="เงินสด"]');
     if (defaultCashRadio) defaultCashRadio.checked = true;
+    const splitContainer = document.getElementById('splitPaymentContainer');
+    if (splitContainer) splitContainer.classList.add('hidden');
+    const cashInput = document.getElementById('sell_cash_amount');
+    if (cashInput) cashInput.value = '';
+    const transferInput = document.getElementById('sell_transfer_amount');
+    if (transferInput) transferInput.value = '';
 
     const dpContainer = document.getElementById('sell_downPaymentContainer');
     if (dpContainer) dpContainer.classList.add('hidden');
@@ -2440,9 +2538,15 @@ function closeSellModal() {
     const firstRadio = document.querySelector('input[name="partner_payment_type"][value="สด"]');
     if (firstRadio) firstRadio.checked = true;
 
-    // รีเซ็ตปุ่มวิทยุช่องทางรับเงินกลับไปเป็น เงินสด
+    // รีเซ็ตปุ่มวิทยุช่องทางรับเงินกลับไปเป็น เงินสด และล้างค่ายอดแบ่งชำระ
     const defaultCashRadio = document.querySelector('input[name="sell_payment_method"][value="เงินสด"]');
     if (defaultCashRadio) defaultCashRadio.checked = true;
+    const splitContainer = document.getElementById('splitPaymentContainer');
+    if (splitContainer) splitContainer.classList.add('hidden');
+    const cashInput = document.getElementById('sell_cash_amount');
+    if (cashInput) cashInput.value = '';
+    const transferInput = document.getElementById('sell_transfer_amount');
+    if (transferInput) transferInput.value = '';
 }
 
 function previewReceiptImage(input) {
@@ -2581,15 +2685,35 @@ async function confirmSell() {
     // บังคับกรอกวันกำหนดชำระเงินเชื่อเฉพาะการส่งร้านพาร์ทเนอร์ที่เป็นเงินเชื่อเท่านั้น
     if (isPartnerCredit && !dueDate) { showToast('กรุณาระบุวันกำหนดชำระเงินเชื่อ', 'warning'); return; }
     
-    // ตรวจสอบช่องทางการรับเงิน (เงินสด / เงินโอน)
+    // ตรวจสอบช่องทางการรับเงิน (เงินสด / เงินโอน / เงินสด+เงินโอน)
     const payMethodContainer = document.getElementById('payment_method_container');
     const isPayMethodVisible = payMethodContainer && !payMethodContainer.classList.contains('hidden');
-    const paymentMethod = isPayMethodVisible 
+    const rawPaymentMethod = isPayMethodVisible 
         ? (document.querySelector('input[name="sell_payment_method"]:checked')?.value || 'เงินสด')
         : (isPartnerCredit ? 'เงินเชื่อ' : 'เงินสด');
 
-    // กรณีเป็นเงินโอน ต้องบังคับแนบรูปสลิป
-    if (isPayMethodVisible && paymentMethod === 'เงินโอน' && !sellSlipDataURI) {
+    let splitCashAmount = 0;
+    let splitTransferAmount = 0;
+
+    if (isPayMethodVisible && rawPaymentMethod === 'เงินสด+เงินโอน') {
+        const cashVal = document.getElementById('sell_cash_amount')?.value.trim();
+        const transferVal = document.getElementById('sell_transfer_amount')?.value.trim();
+        splitCashAmount = parseFloat(cashVal) || 0;
+        splitTransferAmount = parseFloat(transferVal) || 0;
+
+        if (!cashVal && !transferVal) {
+            showToast('กรุณาระบุยอดเงินสดและยอดเงินโอน', 'warning');
+            return;
+        }
+        if (splitCashAmount < 0 || splitTransferAmount < 0) {
+            showToast('ยอดเงินต้องไม่ติดลบ', 'warning');
+            return;
+        }
+        if (!sellSlipDataURI) {
+            showToast('กรณีมีเงินโอน กรุณาแนบสลิปโอนเงินก่อนกดยืนยันการขาย', 'warning');
+            return;
+        }
+    } else if (isPayMethodVisible && rawPaymentMethod === 'เงินโอน' && !sellSlipDataURI) {
         showToast('กรุณาแนบสลิปโอนเงินก่อนกดยืนยันการขาย', 'warning');
         return;
     }
@@ -2617,6 +2741,21 @@ async function confirmSell() {
         salePrices[productId] = soldPrice;
     }
 
+    const currentTotalSale = isBulk ? totalBulkPrice : (salePrices[checkoutProductIds[0]] || 0);
+
+    // ตรวจสอบความถูกต้องของสัดส่วน เงินสด+เงินโอน กับยอดขายรวม
+    if (isPayMethodVisible && rawPaymentMethod === 'เงินสด+เงินโอน') {
+        const sumSplit = splitCashAmount + splitTransferAmount;
+        if (Math.abs(sumSplit - currentTotalSale) > 1) {
+            showToast(`ยอดเงินสด (฿${formatNumber(splitCashAmount)}) + เงินโอน (฿${formatNumber(splitTransferAmount)}) รวมเป็น ฿${formatNumber(sumSplit)} ไม่ตรงกับยอดขายจริง ฿${formatNumber(currentTotalSale)}`, 'warning');
+            return;
+        }
+    }
+
+    const finalPaymentMethod = (isPayMethodVisible && rawPaymentMethod === 'เงินสด+เงินโอน')
+        ? `เงินสด+เงินโอน (สด ฿${formatNumber(splitCashAmount)} / โอน ฿${formatNumber(splitTransferAmount)})`
+        : rawPaymentMethod;
+
     // ล็อคปุ่มทันทีก่อนแสดง Pop-up เพื่อป้องกันการกดเบิ้ล
     isSubmittingSell = true;
     const confirmBtn = document.getElementById('confirmSellBtn');
@@ -2626,12 +2765,16 @@ async function confirmSell() {
     }
 
     let confirmed = false;
+    const payMethodConfirmText = rawPaymentMethod === 'เงินสด+เงินโอน'
+        ? ` [เงินสด ฿${formatNumber(splitCashAmount)} + โอน ฿${formatNumber(splitTransferAmount)}]`
+        : ` [${rawPaymentMethod}]`;
+
     if (isBulk) {
-        confirmed = await showCustomConfirm('ยืนยันการขายสินค้าทั้งหมด ' + checkoutProductIds.length + ' เครื่อง รวมเป็นเงิน ฿' + formatNumber(totalBulkPrice) + ' ใช่หรือไม่?', 'ยืนยันการขาย (เหมา)');
+        confirmed = await showCustomConfirm('ยืนยันการขายสินค้าทั้งหมด ' + checkoutProductIds.length + ' เครื่อง รวมเป็นเงิน ฿' + formatNumber(totalBulkPrice) + payMethodConfirmText + ' ใช่หรือไม่?', 'ยืนยันการขาย (เหมา)');
     } else {
         const productId = checkoutProductIds[0];
         const soldPrice = salePrices[productId];
-        confirmed = await showCustomConfirm('ยืนยันการขายสินค้าในราคา ฿' + formatNumber(soldPrice) + ' ใช่หรือไม่?', 'ยืนยันการขาย');
+        confirmed = await showCustomConfirm('ยืนยันการขายสินค้าในราคา ฿' + formatNumber(soldPrice) + payMethodConfirmText + ' ใช่หรือไม่?', 'ยืนยันการขาย');
     }
 
     if (!confirmed) {
@@ -2688,7 +2831,9 @@ async function confirmSell() {
                 salesperson: currentUser ? (currentUser.saleName || currentUser.name) : '',
                 recordedBy: currentUser ? currentUser.name : '',
                 notes: sellNotes,
-                paymentMethod: paymentMethod,
+                paymentMethod: finalPaymentMethod,
+                cashAmount: splitCashAmount,
+                transferAmount: splitTransferAmount,
                 receiptImage: sellReceiptDataURI ? { filename: 'receipt_bulk_' + Date.now() + receiptExt, dataURI: sellReceiptDataURI } : null,
                 paymentSlipImage: sellSlipDataURI ? { filename: 'slip_bulk_' + Date.now() + slipExt, dataURI: sellSlipDataURI } : null
             };
@@ -2714,7 +2859,9 @@ async function confirmSell() {
                 salesperson: currentUser ? (currentUser.saleName || currentUser.name) : '',
                 recordedBy: currentUser ? currentUser.name : '',
                 notes: sellNotes,
-                paymentMethod: paymentMethod,
+                paymentMethod: finalPaymentMethod,
+                cashAmount: splitCashAmount,
+                transferAmount: splitTransferAmount,
                 receiptImage: sellReceiptDataURI ? { filename: 'receipt_' + Date.now() + receiptExt, dataURI: sellReceiptDataURI } : null,
                 paymentSlipImage: sellSlipDataURI ? { filename: 'slip_' + Date.now() + slipExt, dataURI: sellSlipDataURI } : null
             };
@@ -2908,7 +3055,7 @@ function showReceipt(r) {
                 ${itemsHtml}
             </div>
             <div class="flex justify-between"><span class="text-gray-500">รูปแบบการขาย:</span><span class="font-medium">${r.saleType}</span></div>
-            ${r.paymentMethod ? `<div class="flex justify-between"><span class="text-gray-500">ช่องทางการรับเงิน:</span><span class="font-bold ${r.paymentMethod === 'เงินโอน' ? 'text-blue-600' : 'text-emerald-600'}">${r.paymentMethod}</span></div>` : ''}
+            ${r.paymentMethod ? `<div class="flex justify-between items-start"><span class="text-gray-500">ช่องทางการรับเงิน:</span><span class="font-bold text-right ${r.paymentMethod.includes('เงินสด+เงินโอน') ? 'text-purple-600' : (r.paymentMethod === 'เงินโอน' ? 'text-blue-600' : 'text-emerald-600')}">${r.paymentMethod}</span></div>` : ''}
             <hr>
             <div class="flex justify-between text-base"><span class="font-bold text-gray-800">ราคาขายรวม:</span><span class="font-bold text-brand-600">฿${formatNumber(totalAmount)}</span></div>
             ${r.downPayment > 0 ? `
@@ -3902,9 +4049,15 @@ function checkoutCart() {
     sellReceiptDataURI = null;
     clearSlipImage();
 
-    // รีเซ็ตตัวเลือกช่องทางรับเงินเป็นเงินสด
+    // รีเซ็ตตัวเลือกช่องทางรับเงินเป็นเงินสด และล้างค่ายอดแบ่งชำระ
     const defaultCashRadio = document.querySelector('input[name="sell_payment_method"][value="เงินสด"]');
     if (defaultCashRadio) defaultCashRadio.checked = true;
+    const splitContainer = document.getElementById('splitPaymentContainer');
+    if (splitContainer) splitContainer.classList.add('hidden');
+    const cashInput = document.getElementById('sell_cash_amount');
+    if (cashInput) cashInput.value = '';
+    const transferInput = document.getElementById('sell_transfer_amount');
+    if (transferInput) transferInput.value = '';
 
     const dpContainer = document.getElementById('sell_downPaymentContainer');
     if (dpContainer) dpContainer.classList.add('hidden');

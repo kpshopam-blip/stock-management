@@ -1117,13 +1117,15 @@ function renderWholesaleReport() {
             <span class="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-100 dark:border-indigo-500/10">${bill.saleType}</span>
             ${bill.paymentMethod ? `
             <span class="text-[10px] font-bold px-2 py-0.5 rounded border inline-flex items-center gap-1 ${
-              bill.paymentMethod === 'เงินโอน'
-                ? 'bg-blue-50 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-500/30'
-                : bill.paymentMethod === 'เงินสด'
-                  ? 'bg-emerald-50 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-500/30'
-                  : 'bg-purple-50 dark:bg-purple-500/20 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-500/30'
+              bill.paymentMethod.includes('เงินสด+เงินโอน')
+                ? 'bg-purple-50 dark:bg-purple-500/20 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-500/30'
+                : bill.paymentMethod === 'เงินโอน'
+                  ? 'bg-blue-50 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-500/30'
+                  : bill.paymentMethod === 'เงินสด'
+                    ? 'bg-emerald-50 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-500/30'
+                    : 'bg-amber-50 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-500/30'
             }">
-              <i class="fa-solid ${bill.paymentMethod === 'เงินโอน' ? 'fa-mobile-screen-button' : (bill.paymentMethod === 'เงินสด' ? 'fa-money-bill-wave' : 'fa-handshake')}"></i>${bill.paymentMethod}
+              <i class="fa-solid ${bill.paymentMethod.includes('เงินสด+เงินโอน') ? 'fa-money-bill-transfer' : (bill.paymentMethod === 'เงินโอน' ? 'fa-mobile-screen-button' : (bill.paymentMethod === 'เงินสด' ? 'fa-money-bill-wave' : 'fa-handshake'))}"></i>${bill.paymentMethod}
             </span>` : ''}
             ${payBadge}
           </div>
@@ -1438,7 +1440,7 @@ function showReceipt(r) {
         ${itemsHtml}
       </div>
       <div class="flex justify-between"><span class="text-gray-500 dark:text-gray-400">รูปแบบการขาย:</span><span class="font-medium">${r.saleType}</span></div>
-      ${r.paymentMethod ? `<div class="flex justify-between"><span class="text-gray-500 dark:text-gray-400">ช่องทางการรับเงิน:</span><span class="font-bold ${r.paymentMethod === 'เงินโอน' ? 'text-blue-600 dark:text-blue-400' : 'text-emerald-600 dark:text-emerald-400'}">${r.paymentMethod}</span></div>` : ''}
+      ${r.paymentMethod ? `<div class="flex justify-between items-start"><span class="text-gray-500 dark:text-gray-400">ช่องทางการรับเงิน:</span><span class="font-bold text-right ${r.paymentMethod.includes('เงินสด+เงินโอน') ? 'text-purple-600 dark:text-purple-400' : (r.paymentMethod === 'เงินโอน' ? 'text-blue-600 dark:text-blue-400' : 'text-emerald-600 dark:text-emerald-400')}">${r.paymentMethod}</span></div>` : ''}
       <hr class="dark:border-darkbg-700">
       <div class="flex justify-between text-base"><span class="font-bold text-gray-800 dark:text-white">ราคาขายรวม:</span><span class="font-bold text-brand-600 dark:text-indigo-400">฿${formatNumber(totalAmount)}</span></div>
       ${r.downPayment > 0 ? `
@@ -1514,7 +1516,11 @@ function openEditBillModal(bill) {
 
   const paymentMethodSelect = document.getElementById('edit_paymentMethod');
   if (paymentMethodSelect) {
-    paymentMethodSelect.value = bill.paymentMethod || 'เงินโอน';
+    let methodVal = bill.paymentMethod || 'เงินโอน';
+    if (methodVal.includes('เงินสด+เงินโอน')) {
+      methodVal = 'เงินสด+เงินโอน';
+    }
+    paymentMethodSelect.value = methodVal;
   }
 
   // วันกำหนดชำระ
@@ -2222,7 +2228,8 @@ function openPaymentModal(saleId) {
               <select id="pay_method" class="w-full p-2 bg-white dark:bg-darkbg-700 border border-gray-300 dark:border-darkbg-600 rounded-xl text-xs font-semibold text-gray-800 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500 transition">
                 <option value="เงินโอน" ${defaultPaymentMethod === 'เงินโอน' ? 'selected' : ''}>📱 เงินโอนเข้าบัญชี</option>
                 <option value="เงินสด" ${defaultPaymentMethod === 'เงินสด' ? 'selected' : ''}>💵 เงินสด</option>
-                <option value="อื่นๆ" ${defaultPaymentMethod !== 'เงินโอน' && defaultPaymentMethod !== 'เงินสด' ? 'selected' : ''}>🤝 อื่นๆ / พาร์ทเนอร์</option>
+                <option value="เงินสด+เงินโอน" ${defaultPaymentMethod.includes('เงินสด+เงินโอน') ? 'selected' : ''}>💵+📱 เงินสด+เงินโอน</option>
+                <option value="อื่นๆ" ${!defaultPaymentMethod.includes('เงินสด') && !defaultPaymentMethod.includes('เงินโอน') ? 'selected' : ''}>🤝 อื่นๆ / พาร์ทเนอร์</option>
               </select>
             </div>
           </div>
