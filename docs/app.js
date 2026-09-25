@@ -2383,69 +2383,79 @@ function togglePaymentMethod() {
 
 // กำหนดค่ายอดเงินสด/โอนเริ่มต้นเมื่อเลือก เงินสด+เงินโอน
 function initSplitAmounts() {
-    const total = getCurrentTotalSalePrice();
-    const cashInput = document.getElementById('sell_cash_amount');
-    const transferInput = document.getElementById('sell_transfer_amount');
-    const hintEl = document.getElementById('splitPaymentHint');
+    try {
+        const total = getCurrentTotalSalePrice();
+        const cashInput = document.getElementById('sell_cash_amount');
+        const transferInput = document.getElementById('sell_transfer_amount');
+        const hintEl = document.getElementById('splitPaymentHint');
+        const fmt = (n) => typeof formatNumber === 'function' ? formatNumber(n) : Number(n).toLocaleString();
 
-    if (hintEl) {
-        hintEl.textContent = `ยอดขายรวม: ฿${formatNumber(total)}`;
-        hintEl.className = 'text-purple-600 font-semibold text-xs';
-    }
-
-    if (cashInput && transferInput) {
-        const curCash = parseFloat(cashInput.value) || 0;
-        const curTransfer = parseFloat(transferInput.value) || 0;
-        if (curCash === 0 && curTransfer === 0 && total > 0) {
-            cashInput.value = '';
-            transferInput.value = total;
+        if (hintEl) {
+            hintEl.textContent = `ยอดขายรวม: ฿${fmt(total)}`;
+            hintEl.className = 'text-purple-600 font-semibold text-xs';
         }
+
+        if (cashInput && transferInput) {
+            const curCash = parseFloat(cashInput.value) || 0;
+            const curTransfer = parseFloat(transferInput.value) || 0;
+            if (curCash === 0 && curTransfer === 0 && total > 0) {
+                cashInput.value = '';
+                transferInput.value = total;
+            }
+        }
+    } catch (err) {
+        console.warn('initSplitAmounts error:', err);
     }
 }
 
 // คำนวณยอดเงินสดและเงินโอนอัตโนมัติเมื่อพิมพ์
 function onSplitAmountChanged(changedSource) {
-    const total = getCurrentTotalSalePrice();
-    const cashInput = document.getElementById('sell_cash_amount');
-    const transferInput = document.getElementById('sell_transfer_amount');
-    const hintEl = document.getElementById('splitPaymentHint');
-    if (!cashInput || !transferInput) return;
+    try {
+        const total = getCurrentTotalSalePrice();
+        const cashInput = document.getElementById('sell_cash_amount');
+        const transferInput = document.getElementById('sell_transfer_amount');
+        const hintEl = document.getElementById('splitPaymentHint');
+        if (!cashInput || !transferInput) return;
 
-    if (changedSource === 'cash') {
-        const rawCash = cashInput.value.trim();
-        if (rawCash === '') {
-            transferInput.value = total > 0 ? total : '';
-        } else {
-            const cash = parseFloat(rawCash) || 0;
-            const remaining = Math.max(0, total - cash);
-            transferInput.value = remaining;
+        if (changedSource === 'cash') {
+            const rawCash = cashInput.value.trim();
+            if (rawCash === '') {
+                transferInput.value = total > 0 ? total : '';
+            } else {
+                const cash = parseFloat(rawCash) || 0;
+                const remaining = Math.max(0, total - cash);
+                transferInput.value = remaining;
+            }
+        } else if (changedSource === 'transfer') {
+            const rawTransfer = transferInput.value.trim();
+            if (rawTransfer === '') {
+                cashInput.value = total > 0 ? total : '';
+            } else {
+                const transfer = parseFloat(rawTransfer) || 0;
+                const remaining = Math.max(0, total - transfer);
+                cashInput.value = remaining;
+            }
         }
-    } else if (changedSource === 'transfer') {
-        const rawTransfer = transferInput.value.trim();
-        if (rawTransfer === '') {
-            cashInput.value = total > 0 ? total : '';
-        } else {
-            const transfer = parseFloat(rawTransfer) || 0;
-            const remaining = Math.max(0, total - transfer);
-            cashInput.value = remaining;
-        }
-    }
 
-    const c = parseFloat(cashInput.value) || 0;
-    const t = parseFloat(transferInput.value) || 0;
-    const diff = total - (c + t);
+        const c = parseFloat(cashInput.value) || 0;
+        const t = parseFloat(transferInput.value) || 0;
+        const diff = total - (c + t);
+        const fmt = (n) => typeof formatNumber === 'function' ? formatNumber(n) : Number(n).toLocaleString();
 
-    if (hintEl) {
-        if (Math.abs(diff) < 0.01) {
-            hintEl.textContent = `✓ รวมครบ ฿${formatNumber(total)}`;
-            hintEl.className = 'text-emerald-600 font-bold text-xs';
-        } else if (diff > 0) {
-            hintEl.textContent = `ยังขาดอีก ฿${formatNumber(diff)} (ยอดขาย ฿${formatNumber(total)})`;
-            hintEl.className = 'text-amber-600 font-semibold text-xs';
-        } else {
-            hintEl.textContent = `เกินยอดขาย ฿${formatNumber(Math.abs(diff))} (ยอดขาย ฿${formatNumber(total)})`;
-            hintEl.className = 'text-rose-600 font-semibold text-xs';
+        if (hintEl) {
+            if (Math.abs(diff) < 0.01) {
+                hintEl.textContent = `✓ รวมครบ ฿${fmt(total)}`;
+                hintEl.className = 'text-emerald-600 font-bold text-xs';
+            } else if (diff > 0) {
+                hintEl.textContent = `ยังขาดอีก ฿${fmt(diff)} (ยอดขาย ฿${fmt(total)})`;
+                hintEl.className = 'text-amber-600 font-semibold text-xs';
+            } else {
+                hintEl.textContent = `เกินยอดขาย ฿${fmt(Math.abs(diff))} (ยอดขาย ฿${fmt(total)})`;
+                hintEl.className = 'text-rose-600 font-semibold text-xs';
+            }
         }
+    } catch (err) {
+        console.warn('onSplitAmountChanged error:', err);
     }
 }
 
