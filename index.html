@@ -1,0 +1,1282 @@
+<!DOCTYPE html>
+<html lang="th">
+
+<head>
+  <meta charset="UTF-8">
+  <title>ระบบจัดการสต็อก มือ 2 — KP Shop</title>
+  <meta name="description" content="ระบบจัดการสต็อกสินค้ามือสอง KP Shop">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts: Kanit -->
+  <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- QuaggaJS Barcode Scanner -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
+  <!-- Tesseract.js สำหรับ Image OCR -->
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+
+  <!-- Tailwind Config -->
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Kanit', 'sans-serif'] },
+          colors: {
+            brand: { 50: '#fff1f2', 100: '#ffe4e6', 500: '#f43f5e', 600: '#e11d48', 700: '#be123c' }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    html, body {
+      width: 100%;
+      max-width: 100vw;
+      overflow-x: hidden !important;
+      position: relative;
+    }
+
+    #appContainer {
+      width: 100%;
+      max-width: 100%;
+      overflow-x: hidden;
+    }
+
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: #f1f1f1;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 10px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+
+    .glass {
+      background: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.4);
+    }
+
+    .fade-in {
+      animation: fadeIn 0.4s ease-out;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .product-card {
+      transition: all 0.2s ease-in-out;
+    }
+
+    .product-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      border-color: #f43f5e;
+    }
+
+    input[type="number"]::-webkit-outer-spin-button,
+    input[type="number"]::-webkit-inner-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+
+    .hide-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+  </style>
+</head>
+
+<body class="bg-gray-100 font-sans antialiased text-gray-800 flex flex-col min-h-screen max-w-full overflow-x-hidden">
+
+  <!-- Loading Overlay -->
+  <div id="loadingOverlay"
+    class="fixed inset-0 bg-black/40 backdrop-blur-sm z-[200] flex flex-col items-center justify-center hidden transition-opacity">
+    <div class="bg-white rounded-2xl shadow-2xl px-8 py-6 flex flex-col items-center gap-3">
+      <div class="relative w-14 h-14">
+        <div class="absolute inset-0 rounded-full border-4 border-gray-200"></div>
+        <div class="absolute inset-0 rounded-full border-4 border-transparent border-t-brand-500 animate-spin"></div>
+      </div>
+      <h2 class="text-lg font-bold text-gray-800">กำลังดำเนินการ...</h2>
+      <p class="text-sm text-gray-500">กรุณารอสักครู่</p>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div id="toastContainer" class="fixed top-4 right-4 z-[250] flex flex-col gap-2 max-w-sm w-full pointer-events-none">
+  </div>
+
+  <!-- App Container -->
+  <div id="appContainer" class="flex-grow flex flex-col"></div>
+
+  <!-- ===== Templates ===== -->
+
+  <!-- Template: Login -->
+  <template id="tpl-login">
+    <div
+      class="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-indigo-50 via-white to-pink-50">
+      <div class="glass max-w-sm w-full rounded-2xl shadow-xl overflow-hidden p-8 fade-in">
+        <div class="text-center mb-8">
+          <div
+            class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-brand-100 text-brand-600 mb-4 shadow-sm">
+            <i class="fa-solid fa-mobile-screen-button text-3xl"></i>
+          </div>
+          <h2 class="text-2xl font-bold text-gray-800">KP Shop</h2>
+          <p class="text-gray-500 text-sm mt-1">ระบบจัดการสต็อก มือ 2</p>
+        </div>
+        <form id="loginForm" onsubmit="handleLogin(event)">
+          <div class="mb-5">
+            <label for="username" class="block text-sm font-medium text-gray-600 mb-1">ชื่อผู้ใช้ (Username)</label>
+            <div class="relative">
+              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><i
+                  class="fa-solid fa-user text-gray-400"></i></div>
+              <input type="text" id="username" required inputmode="numeric" pattern="[0-9]*"
+                class="w-full pl-10 pr-3 py-2.5 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none transition-all text-sm shadow-sm"
+                placeholder="กรอกชื่อผู้ใช้">
+            </div>
+          </div>
+          <div class="mb-6">
+            <label for="password" class="block text-sm font-medium text-gray-600 mb-1">รหัสผ่าน (Password)</label>
+            <div class="relative">
+              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><i
+                  class="fa-solid fa-lock text-gray-400"></i></div>
+              <input type="password" id="password" required inputmode="numeric" pattern="[0-9]*"
+                class="w-full pl-10 pr-3 py-2.5 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none transition-all text-sm shadow-sm"
+                placeholder="กรอกรหัสผ่าน">
+            </div>
+          </div>
+          <button type="submit"
+            class="w-full bg-brand-600 hover:bg-brand-700 text-white font-medium py-2.5 rounded-lg shadow-md hover:shadow-lg transition-all flex justify-center items-center">
+            <span>เข้าสู่ระบบ</span><i class="fa-solid fa-arrow-right-to-bracket ml-2"></i>
+          </button>
+          <div id="loginError" class="mt-4 text-center text-red-500 text-sm font-medium hidden">
+            <i class="fa-solid fa-circle-exclamation mr-1"></i><span id="loginErrorMsg"></span>
+          </div>
+        </form>
+      </div>
+    </div>
+  </template>
+
+  <!-- Template: Store -->
+  <template id="tpl-store">
+    <nav class="bg-gradient-to-r from-brand-600 to-brand-500 text-white shadow-md sticky top-0 z-40">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex items-center justify-between h-16">
+          <div class="flex items-center gap-2 cursor-pointer" onclick="loadStore()">
+            <i class="fa-solid fa-shop text-2xl"></i>
+            <span class="font-bold text-lg sm:text-xl tracking-wide">KP Shop</span>
+          </div>
+          <div class="flex-1 max-w-lg mx-4 hidden md:flex relative text-gray-800">
+            <input type="text" id="storeSearchDesktop" placeholder="ค้นหารุ่น, ยี่ห้อ, ความจุ, สี, หรือ IMEI..."
+              onkeydown="if(event.key === 'Enter') searchProducts('storeSearchDesktop')"
+              class="w-full py-2 pl-4 pr-24 rounded-sm focus:outline-none border-none shadow-inner text-sm">
+            <button type="button" onclick="startScanner(null, 'storeSearchDesktop')"
+              class="absolute top-0 right-12 h-full w-10 text-brand-600 hover:text-brand-800 transition flex justify-center items-center" title="สแกนบาร์โค้ด / IMEI">
+              <i class="fa-solid fa-barcode"></i>
+            </button>
+            <button onclick="searchProducts('storeSearchDesktop')"
+              class="absolute top-0 right-0 h-full w-12 bg-gray-800 text-white rounded-r-sm hover:bg-gray-700 transition flex justify-center items-center">
+              <i class="fa-solid fa-magnifying-glass"></i>
+            </button>
+          </div>
+          <div class="flex items-center gap-1.5 sm:gap-4 shrink-0">
+            <div class="text-xs sm:text-sm opacity-90 flex items-center gap-1 max-w-[90px] xs:max-w-[120px] sm:max-w-none">
+              <i class="fa-regular fa-user shrink-0"></i>
+              <span id="storeUserName" class="font-medium truncate">User</span>
+            </div>
+            <!-- ปุ่มตะกร้าสินค้า -->
+            <button id="btnOpenCart" onclick="toggleCartDrawer(true)"
+              class="relative hover:bg-white/20 px-2 sm:px-3 py-1.5 rounded transition text-sm flex items-center gap-1.5 shrink-0"
+              title="ตะกร้าสินค้า">
+              <i class="fa-solid fa-cart-shopping"></i>
+              <span class="hidden sm:inline">ตะกร้า</span>
+              <span id="cartBadge" class="absolute -top-1 -right-1 bg-red-600 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center border border-white hidden">0</span>
+            </button>
+            <button id="btnOpenInventory" onclick="loadInventory()"
+              class="hidden hover:bg-white/20 px-2 sm:px-3 py-1.5 rounded transition text-sm flex items-center gap-1.5 shrink-0">
+              <i class="fa-solid fa-boxes-stacked"></i><span class="hidden sm:inline">จัดการสต็อก</span>
+            </button>
+            <button id="btnOpenDashboard" onclick="loadDashboard()"
+              class="hidden hover:bg-white/20 px-2 sm:px-3 py-1.5 rounded transition text-sm flex items-center gap-1.5 shrink-0">
+              <i class="fa-solid fa-chart-line"></i><span class="hidden sm:inline">Dashboard</span>
+            </button>
+            <button onclick="logout()"
+              class="hover:bg-white/20 px-2 sm:px-3 py-1.5 rounded transition text-sm flex items-center gap-1.5 shrink-0"
+              title="ออกจากระบบ">
+              <i class="fa-solid fa-right-from-bracket"></i><span class="hidden sm:inline">ออก</span>
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="md:hidden px-4 pb-3 flex text-gray-800 gap-1">
+        <div class="relative flex-grow flex text-gray-800 min-w-0">
+          <input type="text" id="storeSearchMobile" placeholder="ค้นหาสินค้า, IMEI..."
+            onkeydown="if(event.key === 'Enter') searchProducts('storeSearchMobile')"
+            class="w-full py-2 pl-3 pr-10 rounded-l-sm focus:outline-none text-sm shadow-inner min-w-0">
+          <button type="button" onclick="startScanner(null, 'storeSearchMobile')"
+            class="absolute top-0 right-0 h-full w-10 text-brand-600 hover:text-brand-800 transition flex justify-center items-center" title="สแกนบาร์โค้ด / IMEI">
+            <i class="fa-solid fa-barcode"></i>
+          </button>
+        </div>
+        <button onclick="searchProducts('storeSearchMobile')"
+          class="bg-gray-800 px-4 text-white rounded-r-sm flex justify-center items-center shrink-0">
+          <i class="fa-solid fa-magnifying-glass"></i>
+        </button>
+      </div>
+    </nav>
+    <div class="bg-white py-3 sm:py-4 border-b">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="rounded-lg bg-indigo-50 border border-indigo-100 p-3 sm:p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+          <div class="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            <i class="fa-solid fa-bolt text-brand-500 text-xl sm:text-2xl shrink-0"></i>
+            <div class="min-w-0">
+              <h3 class="font-bold text-gray-800 text-sm sm:text-base truncate">สินค้ามือสองคุณภาพดี</h3>
+              <p class="text-xs text-gray-500 truncate">รับประกันโดยร้าน KP Shop ตรวจเช็คทุกเครื่อง</p>
+            </div>
+          </div>
+          <span class="bg-brand-100 text-brand-600 text-xs font-bold px-2 py-1 rounded shrink-0 self-start sm:self-auto">มีสินค้า <span
+              id="totalProductCount">0</span> รายการ</span>
+        </div>
+      </div>
+    </div>
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 fade-in pb-20 max-w-full overflow-x-hidden">
+      <div
+        class="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-4 border-b-2 border-brand-500 pb-2 gap-3 w-full max-w-full">
+        <div class="w-full sm:w-auto">
+          <h2 class="text-lg font-bold text-gray-800" id="storeTitle">สินค้าทั้งหมด</h2>
+          <div id="storeTabs" class="flex gap-2 sm:gap-4 mt-2 hidden overflow-x-auto pb-1 max-w-full">
+            <button onclick="setStockTab('Products')"
+              class="font-bold text-brand-600 border-b-2 border-brand-600 px-1 pb-1 text-sm transition shrink-0"
+              id="tab_Products">พร้อมขาย</button>
+            <button onclick="setStockTab('Employee')"
+              class="text-gray-500 hover:text-brand-500 border-b-2 border-transparent px-1 pb-1 text-sm transition shrink-0 hidden"
+              id="tab_Employee">เครื่องพนักงาน</button>
+            <button onclick="setStockTab('Spare')"
+              class="text-gray-500 hover:text-brand-500 border-b-2 border-transparent px-1 pb-1 text-sm transition shrink-0 hidden"
+              id="tab_Spare">เครื่องอะไหล่</button>
+          </div>
+        </div>
+        <div class="flex flex-wrap sm:flex-nowrap gap-1.5 sm:gap-2 w-full sm:w-auto min-w-0">
+          <select id="filterBrand" onchange="filterProducts()"
+            class="flex-1 sm:flex-initial min-w-0 text-xs sm:text-sm border-gray-300 rounded py-1.5 px-2 focus:ring-brand-500 outline-none text-gray-600 bg-white">
+            <option value="">ทุกยี่ห้อ</option>
+            <option value="Apple">Apple / iPhone</option>
+            <option value="Samsung">Samsung</option>
+            <option value="Oppo">Oppo</option>
+            <option value="Vivo">Vivo</option>
+            <option value="Xiaomi">Xiaomi</option>
+          </select>
+          <select id="filterLocation" onchange="filterProducts()"
+            class="flex-1 sm:flex-initial min-w-0 text-xs sm:text-sm border-gray-300 rounded py-1.5 px-2 focus:ring-brand-500 outline-none text-gray-600 bg-white truncate">
+            <option value="">ทุกสาขา / ทุกที่อยู่</option>
+          </select>
+          <select id="filterStatus" onchange="filterProducts()"
+            class="w-full sm:w-auto min-w-0 text-xs sm:text-sm border-gray-300 rounded py-1.5 px-2 focus:ring-brand-500 outline-none text-gray-600 bg-white hidden">
+            <option value="available" selected>🟢 พร้อมขาย</option>
+            <option value="unavailable_others">🔴 ไม่พร้อมขาย (ส่งซ่อม/จอง)</option>
+            <option value="sold">⚫ ขายแล้ว</option>
+            <option value="all">แสดงทั้งหมด</option>
+          </select>
+        </div>
+      </div>
+      <div id="productGrid" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4">
+        <div class="bg-white p-2 rounded animate-pulse border">
+          <div class="w-full aspect-square bg-gray-200 mb-2"></div>
+          <div class="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
+          <div class="h-5 bg-gray-200 rounded w-1/3"></div>
+        </div>
+        <div class="bg-white p-2 rounded animate-pulse border">
+          <div class="w-full aspect-square bg-gray-200 mb-2"></div>
+          <div class="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
+          <div class="h-5 bg-gray-200 rounded w-1/3"></div>
+        </div>
+      </div>
+      <div id="noProductFound" class="hidden text-center py-16">
+        <i class="fa-solid fa-box-open text-gray-300 text-6xl mb-4"></i>
+        <p class="text-gray-500">ไม่พบสินค้าในหมวดหมู่นี้</p>
+        <button onclick="resetFilters()" class="mt-4 text-brand-600 text-sm hover:underline">แสดงสินค้าทั้งหมด</button>
+      </div>
+    </main>
+    <!-- Modal Product Detail -->
+    <div id="productDetailModal"
+      class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-0 sm:p-4 hidden backdrop-blur-sm"
+      style="z-index:100;">
+      <div
+        class="bg-white w-full h-full sm:h-auto sm:max-h-[95vh] sm:max-w-4xl sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col relative">
+        <div class="px-4 py-3 border-b flex justify-between items-center bg-gray-50 shrink-0 z-20">
+          <h3 class="font-bold text-gray-800 text-lg">รายละเอียดสินค้า</h3>
+          <button onclick="closeProductView()"
+            class="w-8 h-8 rounded-full bg-gray-200 text-gray-600 hover:bg-red-100 hover:text-red-500 flex justify-center items-center transition"><i
+              class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div id="productDetailBody" class="overflow-y-auto flex-grow pb-10 sm:pb-4 p-0"></div>
+      </div>
+    </div>
+  </template>
+
+  <!-- Template: Inventory -->
+  <template id="tpl-inventory">
+    <nav class="bg-gray-800 text-white shadow-md sticky top-0 z-40">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex items-center justify-between h-16">
+          <div class="flex items-center gap-2"><i class="fa-solid fa-boxes-stacked text-xl text-brand-400"></i><span
+              class="font-bold text-lg tracking-wide">จัดการสต็อก (Inventory)</span></div>
+          <button onclick="loadStore()"
+            class="hover:bg-gray-700 px-3 py-1.5 rounded transition text-sm flex items-center gap-1">
+            <i class="fa-solid fa-arrow-left"></i><span class="hidden sm:inline">กลับไปหน้าร้าน</span>
+          </button>
+        </div>
+      </div>
+    </nav>
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 fade-in pb-20">
+      <div class="bg-white rounded-xl shadow-sm border p-4 sm:p-6 mb-6">
+        <div class="flex justify-between items-center mb-4 border-b pb-3">
+          <h2 class="text-xl font-bold text-gray-800 flex items-center gap-2"><i
+              class="fa-solid fa-plus-circle text-brand-500"></i> รับเข้าสินค้าใหม่</h2>
+          <button onclick="toggleForm('addProductForm')" class="text-brand-600 hover:text-brand-800 text-sm"><i
+              class="fa-solid fa-chevron-down" id="addProductFormIcon"></i> ซ่อน/แสดง</button>
+        </div>
+        <form id="addProductForm" onsubmit="submitProduct(event)" class="transition-all duration-300">
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+            <div id="targetSheetContainer" class="hidden lg:col-span-3">
+              <label class="block text-sm font-medium text-gray-700 mb-1">คลังเป้าหมาย (รับเข้าสต็อกไหน) *</label>
+              <select id="p_targetSheet"
+                class="w-full sm:w-1/3 p-2 border border-brand-300 rounded focus:ring-brand-500 outline-none font-bold text-brand-700 bg-brand-50">
+                <option value="Products">พร้อมขาย</option>
+                <option value="Stock_Employee">เครื่องพนักงาน</option>
+                <option value="Stock_Spare">เครื่องอะไหล่</option>
+              </select>
+            </div>
+            <div class="lg:col-span-2">
+              <label class="block text-sm font-medium text-gray-700 mb-1">IMEI / Serial Number <span class="text-red-500">*</span></label>
+              <div class="flex gap-2">
+                <input type="text" id="p_imei" placeholder="กรอกเลข IMEI เครื่อง (บังคับกรอก)"
+                  class="flex-grow p-2 border border-gray-300 rounded focus:ring-brand-500 outline-none transition-colors"
+                  oninput="onImeiInput(this.value)">
+                <button type="button" onclick="triggerOcrFileInput('p_imei')"
+                  class="px-3 py-2 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded text-sm font-semibold hover:bg-emerald-100 transition flex items-center gap-1.5 whitespace-nowrap shadow-sm"
+                  title="อ่าน IMEI / SN จากรูปภาพ (OCR)">
+                  <i class="fa-solid fa-file-image"></i> อ่านจากรูป
+                </button>
+                <button type="button" onclick="startScanner()"
+                  class="px-3 py-2 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded text-sm font-semibold hover:bg-indigo-100 transition flex items-center gap-1 whitespace-nowrap">
+                  <i class="fa-solid fa-barcode"></i> สแกน
+                </button>
+              </div>
+              <div id="imei_warning"
+                class="hidden mt-1.5 flex items-start gap-1.5 text-xs font-medium rounded-md px-2.5 py-2"></div>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">ยี่ห้อ (Brand) *</label>
+              <select id="p_brand" required onchange="onBrandChange(this.value)"
+                class="w-full p-2 border border-gray-300 rounded focus:ring-brand-500 outline-none">
+                <option value="">เลือกยี่ห้อ</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">รุ่น (Model) *</label>
+              <div class="relative">
+                <input type="text" id="p_model" required placeholder="เช่น iPhone 13 Pro Max (เลือกหรือพิมพ์เองได้)"
+                  class="w-full p-2 pr-8 border border-gray-300 rounded focus:ring-brand-500 outline-none">
+                <button type="button" id="btn_p_model" class="absolute inset-y-0 right-0 px-2.5 flex items-center text-gray-400 hover:text-gray-600 focus:outline-none">
+                  <i class="fa-solid fa-chevron-down text-xs"></i>
+                </button>
+                <div id="dropdown_p_model" class="absolute left-0 right-0 z-50 bg-white border border-gray-300 rounded-md shadow-lg hidden max-h-60 overflow-y-auto mt-1"></div>
+              </div>
+              <datalist id="modelOptions"></datalist>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">โมเดล (Model Code)</label>
+              <div class="relative">
+                <input type="text" id="p_model_code" placeholder="เช่น TH/A, ZP/A (ระบุหรือพิมพ์เอง)"
+                  class="w-full p-2 pr-8 border border-gray-300 rounded focus:ring-brand-500 outline-none">
+                <button type="button" id="btn_p_model_code" class="absolute inset-y-0 right-0 px-2.5 flex items-center text-gray-400 hover:text-gray-600 focus:outline-none">
+                  <i class="fa-solid fa-chevron-down text-xs"></i>
+                </button>
+                <div id="dropdown_p_model_code" class="absolute left-0 right-0 z-50 bg-white border border-gray-300 rounded-md shadow-lg hidden max-h-60 overflow-y-auto mt-1"></div>
+              </div>
+              <datalist id="modelCodeOptions">
+                <option value="TH/A">
+                <option value="ZP/A">
+                <option value="LL/A">
+                <option value="ZA/A">
+                <option value="VN/A">
+                <option value="J/A">
+                <option value="KH/A">
+                <option value="CH/A">
+              </datalist>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">RAM</label>
+              <input type="text" id="p_ram" placeholder="เช่น 4GB, 8GB"
+                class="w-full p-2 border border-gray-300 rounded focus:ring-brand-500 outline-none">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">ความจุ (Storage)</label>
+              <select id="p_storage"
+                class="w-full p-2 border border-gray-300 rounded focus:ring-brand-500 outline-none">
+                <option value="">เลือกความจุ</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">สี (Color)</label>
+              <input type="text" id="p_color" placeholder="เช่น ดำ, ทอง, Alpine Green"
+                class="w-full p-2 border border-gray-300 rounded focus:ring-brand-500 outline-none">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">ประเภทเครื่อง/แหล่งที่มา</label>
+              <div class="relative">
+                <input type="text" id="p_source" placeholder="เช่น รับซื้อหน้าร้าน (เลือกหรือพิมพ์เองได้)"
+                  class="w-full p-2 pr-8 border border-gray-300 rounded focus:ring-brand-500 outline-none">
+                <button type="button" id="btn_p_source" class="absolute inset-y-0 right-0 px-2.5 flex items-center text-gray-400 hover:text-gray-600 focus:outline-none">
+                  <i class="fa-solid fa-chevron-down text-xs"></i>
+                </button>
+                <div id="dropdown_p_source" class="absolute left-0 right-0 z-50 bg-white border border-gray-300 rounded-md shadow-lg hidden max-h-60 overflow-y-auto mt-1"></div>
+              </div>
+              <datalist id="sourceOptions"></datalist>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">ราคาต้นทุน (บาท) *</label>
+              <input type="number" id="p_cost" required placeholder="0"
+                class="w-full p-2 border border-gray-300 rounded focus:ring-brand-500 outline-none">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">ราคาขาย (บาท) *</label>
+              <input type="number" id="p_price" required placeholder="0"
+                class="w-full p-2 border border-gray-300 rounded focus:ring-brand-500 outline-none text-brand-600 font-bold bg-brand-50">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">ราคาขายส่ง (บาท)</label>
+              <input type="number" id="p_wholesalePrice" placeholder="0"
+                class="w-full p-2 border border-gray-300 rounded focus:ring-brand-500 outline-none text-indigo-600 font-bold bg-indigo-50">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">ราคาจัดผ่อน (บาท)</label>
+              <input type="number" id="p_installmentPrice" placeholder="0"
+                class="w-full p-2 border border-gray-300 rounded focus:ring-brand-500 outline-none text-emerald-600 font-bold bg-emerald-50">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">สภาพสินค้า (%)</label>
+              <input type="text" id="p_condition" placeholder="เช่น 95%, 100% มือหนึ่ง"
+                class="w-full p-2 border border-gray-300 rounded focus:ring-brand-500 outline-none">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">ตำหนิ (ถ้ามี)</label>
+              <input type="text" id="p_defect" placeholder="เช่น รอยขนแมวขอบเครื่อง"
+                class="w-full p-2 border border-gray-300 rounded focus:ring-brand-500 outline-none">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">แบตเตอรี่ (%)</label>
+              <input type="text" id="p_battery" placeholder="เช่น 95%, เปลี่ยนใหม่"
+                class="w-full p-2 border border-gray-300 rounded focus:ring-brand-500 outline-none">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">อุปกรณ์เสริม</label>
+              <input type="text" id="p_accessories" placeholder="เช่น กล่องบาร์ตรง, สายแท้"
+                class="w-full p-2 border border-gray-300 rounded focus:ring-brand-500 outline-none">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">ที่อยู่/สาขา <span class="text-red-500">*</span></label>
+              <select id="p_location"
+                class="w-full p-2 border border-gray-300 rounded focus:ring-brand-500 outline-none">
+                <option value="">เลือกสาขา (บังคับเลือก)</option>
+              </select>
+            </div>
+            <div class="lg:col-span-2">
+              <label class="block text-sm font-medium text-gray-700 mb-1">หมายเหตุ (ถ้ามี)</label>
+              <input type="text" id="p_notes" placeholder="เช่น ประกันศูนย์ 5 เดือน"
+                class="w-full p-2 border border-gray-300 rounded focus:ring-brand-500 outline-none">
+            </div>
+            <!-- อัปโหลดรูปภาพ -->
+            <div class="lg:col-span-3 border border-dashed border-gray-300 rounded-xl p-4 bg-gray-50/70 overflow-hidden">
+              <label class="block text-sm font-semibold text-gray-700 mb-3"><i
+                  class="fa-solid fa-camera text-brand-500"></i> อัปโหลดรูปภาพสินค้า / ถ่ายภาพเครื่องนี้</label>
+              
+              <!-- โซนพิเศษ: หลังกล่อง หรือหน้าจอเกี่ยวกับ (OCR IMEI อัตโนมัติ) ตามแบบตัวอย่าง -->
+              <div class="mb-4 p-3 bg-white border border-emerald-200 rounded-xl shadow-sm">
+                <div class="flex items-center justify-between mb-2">
+                  <div class="text-sm font-semibold text-gray-800 flex items-center gap-1.5">
+                    <i class="fa-solid fa-wand-magic-sparkles text-emerald-600"></i>
+                    <span>หลังกล่อง หรือหน้าจอเกี่ยวกับ</span>
+                    <span class="text-xs font-normal text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">ดึงเลขอัตโนมัติ</span>
+                  </div>
+                  <span class="text-xs text-gray-400">รองรับทั้ง IMEI 1 และ Serial No (iPad)</span>
+                </div>
+
+                <div class="flex flex-wrap items-center gap-3">
+                  <!-- กล่องสไตล์ตัวอย่างสำหรับคลิกเลือกรูป -->
+                  <div onclick="triggerOcrFileInput('p_imei')" 
+                    class="w-28 h-28 border-2 border-dashed border-emerald-300 hover:border-emerald-500 rounded-xl bg-emerald-50/40 hover:bg-emerald-50 transition cursor-pointer flex flex-col items-center justify-center text-center p-2 group shadow-inner">
+                    <i class="fa-solid fa-camera-retro text-2xl text-emerald-500 group-hover:scale-110 transition-transform mb-1.5"></i>
+                    <span class="text-[11px] font-medium text-gray-600">เลือกรูป/ถ่ายรูป</span>
+                  </div>
+
+                  <div class="flex flex-col gap-2">
+                    <button type="button" onclick="triggerOcrFileInput('p_imei')"
+                      class="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-medium rounded-lg text-sm shadow hover:shadow-md transition flex items-center gap-2 w-fit">
+                      <i class="fa-solid fa-expand"></i> OCR IMEI / SN
+                    </button>
+                    <div class="text-[11px] text-gray-500 leading-tight">
+                      • ระบบจะอ่านเฉพาะ <b>IMEI 1</b> เท่านั้น (ข้าม IMEI 2/EID/MEID)<br>
+                      • หากเป็น <b>iPad Wi-Fi</b> ระบบจะอ่าน <b>Serial Number</b> ให้อัตโนมัติ
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- เมนูปุ่มเลือกรูปทั่วไป -->
+              <div class="text-xs font-medium text-gray-500 mb-2">รูปถ่ายตัวเครื่องเพิ่มเติม (หน้า/หลัง/รอบเครื่อง):</div>
+              <div class="flex flex-wrap gap-2 mb-3">
+                <label
+                  class="px-3 py-2 bg-brand-50 text-brand-700 border border-brand-200 rounded-lg text-sm font-semibold hover:bg-brand-100 cursor-pointer flex items-center gap-2 transition shadow-sm">
+                  <i class="fa-regular fa-images"></i> เลือกหลายรูปภาพ (อัลบั้ม)
+                  <input type="file" id="p_images_multiple" multiple accept="image/*" onchange="previewImages(this)"
+                    class="hidden">
+                </label>
+                <label
+                  class="px-3 py-2 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg text-sm font-semibold hover:bg-blue-100 cursor-pointer flex items-center gap-2 transition shadow-sm">
+                  <i class="fa-solid fa-camera"></i> ถ่ายรูปทีละภาพ (กล้อง)
+                  <input type="file" id="p_images_camera" accept="image/*" capture="environment"
+                    onchange="previewImages(this)" class="hidden">
+                </label>
+              </div>
+
+              <!-- ช่อง Input ซ่อนสำหรับระบบ OCR -->
+              <input type="file" id="ocr_global_file_input" accept="image/*" class="hidden" onchange="handleOcrImageFile(this)">
+
+              <div id="imagePreviewContainer" class="flex flex-wrap gap-2 mt-2"></div>
+            </div>
+          </div>
+          <div class="mt-6 flex justify-end gap-3">
+            <button type="button" onclick="resetProductForm()"
+              class="px-5 py-2 border border-gray-300 rounded text-gray-600 hover:bg-gray-100 transition">ล้างข้อมูล</button>
+            <button type="submit"
+              class="px-6 py-2 bg-brand-600 text-white font-medium rounded hover:bg-brand-700 transition shadow flex items-center gap-2">
+              <i class="fa-solid fa-save"></i> บันทึกเข้าระบบ
+            </button>
+          </div>
+        </form>
+      </div>
+      <!-- ตารางสต็อก -->
+      <div id="bulkTransferActionContainer" class="hidden mb-4 bg-indigo-50 border border-indigo-200 rounded-lg p-3 items-center justify-between shadow-sm">
+        <div class="text-indigo-800 text-sm font-medium">
+          <i class="fa-solid fa-check-double mr-1 text-indigo-500"></i> เลือกสินค้า <span id="bulkTransferCount" class="font-bold bg-indigo-200 px-2 py-0.5 rounded text-indigo-900 mx-1">0</span> รายการ
+        </div>
+        <button onclick="openTransferSetupModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-1.5 rounded-md text-sm font-bold shadow transition flex items-center gap-2">
+          <i class="fa-solid fa-truck-fast"></i> โอนสินค้าข้ามสาขา
+        </button>
+      </div>
+      <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+        <div
+          class="p-4 border-b bg-gray-50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+          <h3 class="font-bold text-gray-800 shrink-0"><i class="fa-solid fa-list"></i> รายการสินค้าสต็อก</h3>
+          <div class="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+            <button onclick="openTransferHistoryModal()" class="text-xs bg-white text-indigo-700 font-bold border border-indigo-200 px-3 py-1.5 rounded hover:bg-indigo-50 shrink-0 w-full sm:w-auto flex items-center gap-1 justify-center transition shadow-sm"><i class="fa-solid fa-clock-rotate-left"></i> ประวัติการโอน</button>
+            <select id="inventoryStatusFilter" onchange="filterInventory()"
+              class="text-xs bg-white border border-gray-300 rounded px-2.5 py-1.5 focus:ring-brand-500 outline-none text-gray-700 font-semibold cursor-pointer transition shadow-sm">
+              <option value="available" selected>🟢 พร้อมขาย</option>
+              <option value="unavailable_others">🔴 ไม่พร้อมขาย (ส่งซ่อม/จอง)</option>
+              <option value="sold">⚫ ขายแล้ว</option>
+              <option value="all">แสดงทั้งหมด</option>
+            </select>
+            <div class="relative w-full sm:w-64">
+              <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400"><i
+                  class="fa-solid fa-search"></i></span>
+              <input type="text" id="inventorySearch" placeholder="ค้นหารุ่น/ยี่ห้อ/IMEI..." oninput="filterInventory()"
+                class="w-full pl-9 pr-10 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-brand-500">
+              <button type="button" onclick="startScanner(null, 'inventorySearch')"
+                class="absolute inset-y-0 right-0 pr-3 flex items-center text-brand-600 hover:text-brand-800 transition" title="สแกนบาร์โค้ด / IMEI">
+                <i class="fa-solid fa-barcode text-sm"></i>
+              </button>
+            </div>
+            <button onclick="fetchInventoryData()"
+              class="text-xs bg-white border px-3 py-1.5 rounded hover:bg-gray-50 shrink-0 w-full sm:w-auto mt-2 sm:mt-0">
+              <i class="fa-solid fa-arrows-rotate"></i> รีเฟรช
+            </button>
+          </div>
+        </div>
+        <!-- การ์ด (มือถือ) -->
+        <div id="inventoryCardList" class="block md:hidden p-3 space-y-3"></div>
+        <!-- ตาราง (จอใหญ่) -->
+        <div class="overflow-x-auto hidden md:block">
+          <table class="w-full text-sm text-left whitespace-nowrap">
+            <thead class="text-xs text-gray-600 bg-gray-100 uppercase font-semibold">
+              <tr>
+                <th class="px-2 py-3 w-10">
+                  <input type="checkbox" id="selectAllCb" onchange="selectAllBulkTransfer(this)" class="w-4 h-4 text-brand-600 rounded border-gray-300 focus:ring-brand-500 cursor-pointer" title="เลือกทั้งหมดบนหน้านี้">
+                </th>
+                <th class="px-2 py-3">ยี่ห้อ/รุ่น</th>
+                <th class="px-2 py-3">วันที่รับเข้า</th>
+                <th class="px-2 py-3">สเปก</th>
+                <th class="px-2 py-3">IMEI</th>
+                <th class="px-2 py-3 text-right">ต้นทุน</th>
+                <th class="px-2 py-3 text-right">ราคาขายปกติ</th>
+                <th class="px-2 py-3 text-right">ราคาขายส่ง</th>
+                <th class="px-2 py-3 text-right">ราคาจัดผ่อน</th>
+                <th class="px-2 py-3 text-center">สถานะ</th>
+                <th class="px-2 py-3 text-center">จัดการ</th>
+              </tr>
+            </thead>
+            <tbody id="inventoryTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <!-- Template: Dashboard -->
+  <template id="tpl-dashboard">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 space-y-4">
+      <div class="flex justify-between items-center">
+        <h2 class="text-xl font-bold text-gray-800 flex items-center gap-2"><i
+            class="fa-solid fa-chart-line text-brand-500"></i> Dashboard สรุปยอดขาย</h2>
+        <div class="flex gap-2">
+          <button id="btnForceSyncFirebase" onclick="forceSyncFirebase()"
+            class="hidden text-sm bg-indigo-50 border border-indigo-200 text-indigo-700 px-3 py-1.5 rounded hover:bg-indigo-100 flex items-center gap-1"
+            title="ซิงค์ข้อมูลจาก Sheets ไป Firebase ทั้งหมดใหม่">
+            <i class="fa-solid fa-rotate"></i> <span>ซิงค์สต็อกไป Firebase</span>
+          </button>
+          <button onclick="loadStore()"
+            class="text-sm bg-white border px-3 py-1.5 rounded hover:bg-gray-50 flex items-center gap-1"><i
+              class="fa-solid fa-arrow-left"></i> กลับหน้าร้าน</button>
+        </div>
+      </div>
+      <div id="managerSummaryCards" class="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div class="bg-white rounded-xl shadow-sm border p-4">
+          <div class="flex items-center justify-between mb-2"><span id="lbl_dash_sales"
+              class="text-xs text-gray-500 font-medium">ยอดขายวันนี้</span><i
+              class="fa-solid fa-calendar-day text-brand-400"></i></div>
+          <div id="dash_todaySales" class="text-2xl font-bold text-gray-800">-</div>
+          <div id="dash_todayRevenue" class="text-xs text-brand-600 font-medium mt-1">฿0</div>
+        </div>
+        <div class="bg-white rounded-xl shadow-sm border p-4">
+          <div class="flex items-center justify-between mb-2"><span id="lbl_dash_profit"
+              class="text-xs text-gray-500 font-medium">กำไรวันนี้</span><i
+              class="fa-solid fa-arrow-trend-up text-green-400"></i></div>
+          <div id="dash_todayProfit" class="text-2xl font-bold text-green-600">-</div>
+        </div>
+        <div class="bg-white rounded-xl shadow-sm border p-4">
+          <div class="flex items-center justify-between mb-2"><span
+              class="text-xs text-gray-500 font-medium">ยอดขายเดือนนี้</span><i
+              class="fa-solid fa-calendar text-indigo-400"></i></div>
+          <div id="dash_monthSales" class="text-2xl font-bold text-gray-800">-</div>
+          <div id="dash_monthRevenue" class="text-xs text-indigo-600 font-medium mt-1">฿0</div>
+          <div id="dash_monthProfit" class="text-xs text-green-600 mt-0.5">กำไร: ฿0</div>
+        </div>
+        <div class="bg-white rounded-xl shadow-sm border p-4">
+          <div class="flex items-center justify-between mb-2"><span
+              class="text-xs text-gray-500 font-medium">สินค้าคงเหลือ</span><i
+              class="fa-solid fa-boxes-stacked text-amber-400"></i></div>
+          <div id="dash_stockCount" class="text-2xl font-bold text-gray-800">-</div>
+          <div id="dash_stockValue" class="text-xs text-amber-600 font-medium mt-1">มูลค่า: ฿0</div>
+        </div>
+      </div>
+      <div id="managerChartCard" class="bg-white rounded-xl shadow-sm border p-4">
+        <h3 class="font-bold text-gray-800 mb-4"><i class="fa-solid fa-chart-bar text-brand-500 mr-1"></i> ยอดขาย 7
+          วันย้อนหลัง</h3>
+        <div id="dash_chart" class="flex items-end gap-2 h-40">
+          <div class="text-center text-gray-400 text-sm w-full py-12"><i
+              class="fa-solid fa-circle-notch fa-spin mr-1"></i> กำลังโหลด...</div>
+        </div>
+      </div>
+      <div class="bg-white rounded-xl shadow-sm border p-4">
+        <h3 class="font-bold text-gray-800 mb-3"><i class="fa-solid fa-list text-brand-500 mr-1"></i> รายการขาย</h3>
+        <div class="flex flex-wrap gap-2 mb-3">
+          <div class="flex items-center gap-1"><label class="text-xs text-gray-500">จากวันที่:</label><input type="date"
+              id="dash_dateFrom" class="border rounded px-2 py-1 text-xs" onchange="filterSalesList()"></div>
+          <div class="flex items-center gap-1"><label class="text-xs text-gray-500">ถึงวันที่:</label><input type="date"
+              id="dash_dateTo" class="border rounded px-2 py-1 text-xs" onchange="filterSalesList()"></div>
+          <div id="dashSalespersonFilter" class="flex items-center gap-1"><label
+              class="text-xs text-gray-500">พนักงาน:</label><select id="dash_salesperson"
+              class="border rounded px-2 py-1 text-xs" onchange="filterSalesList()">
+              <option value="">ทั้งหมด</option>
+            </select></div>
+          <button onclick="clearDashFilter()" class="text-xs text-brand-600 hover:underline flex items-center gap-1"><i
+              class="fa-solid fa-rotate-left"></i> ล้างตัวกรอง</button>
+        </div>
+        <div id="dash_filterSummary" class="text-xs text-gray-500 mb-3"></div>
+        <div id="dash_salesList" class="space-y-2">
+          <div class="text-center text-gray-400 text-sm py-8"><i class="fa-solid fa-circle-notch fa-spin mr-1"></i>
+            กำลังโหลด...</div>
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <!-- Image Viewer Modal -->
+  <div id="imageViewerModal"
+    class="fixed inset-0 bg-black/90 z-[100] hidden flex flex-col justify-center items-center backdrop-blur-md transition-opacity">
+    <button onclick="closeImageViewer()"
+      class="absolute top-4 right-4 text-white hover:text-red-500 bg-black/50 hover:bg-black w-10 h-10 rounded-full flex justify-center items-center transition z-10">
+      <i class="fa-solid fa-xmark text-xl"></i>
+    </button>
+    <img id="imageViewerImg" src="" class="max-w-[95%] max-h-[90vh] object-contain select-none" alt="Full Image">
+  </div>
+
+  <!-- Modal เอาสินค้าออก (สำหรับผู้จัดการ) -->
+  <div id="removeProductModal"
+    class="fixed inset-0 bg-black/60 z-[90] hidden flex items-center justify-center p-2 sm:p-4 backdrop-blur-sm">
+    <div class="bg-white w-full max-w-md rounded-xl shadow-2xl overflow-hidden flex flex-col">
+      <div class="px-4 py-3 border-b bg-red-50 flex justify-between items-center">
+        <h3 class="font-bold text-red-700 text-lg"><i class="fa-solid fa-box-archive mr-1"></i> เอาสินค้าออกจากระบบ</h3>
+        <button onclick="closeRemoveProductModal()"
+          class="w-8 h-8 rounded-full bg-gray-200 text-gray-600 hover:bg-red-100 hover:text-red-500 flex justify-center items-center transition"><i
+            class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="p-4 space-y-3">
+        <div id="removeProductInfo" class="bg-gray-50 p-3 rounded-lg text-sm text-gray-700"></div>
+        <input type="hidden" id="remove_productId">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">ระบุเหตุผล/หมายเหตุที่เอาสินค้าออก *</label>
+          <textarea id="remove_reason" required placeholder="เช่น สินค้าชำรุดเสียหาย, ลูกค้านอกระบบรับไป, ตัดสต็อกส่งคืน ฯลฯ" rows="3"
+            class="w-full p-2 border border-gray-300 rounded focus:ring-red-500 outline-none text-sm"></textarea>
+        </div>
+      </div>
+      <div class="px-4 py-3 border-t bg-gray-50 flex justify-end gap-2">
+        <button onclick="closeRemoveProductModal()"
+          class="px-4 py-2 border border-gray-300 rounded text-gray-600 hover:bg-gray-100 transition text-sm">ยกเลิก</button>
+        <button onclick="confirmRemoveProduct()"
+          class="px-5 py-2 bg-red-600 text-white font-medium rounded hover:bg-red-700 transition shadow text-sm flex items-center gap-2"><i
+            class="fa-solid fa-check"></i> ยืนยันเอาสินค้าออก</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal ขายสินค้า (POS) -->
+  <div id="sellModal"
+    class="fixed inset-0 bg-black/60 z-[90] hidden flex items-center justify-center p-2 sm:p-4 pb-16 sm:pb-4 backdrop-blur-sm">
+    <div class="bg-white w-full max-w-md rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[82dvh] sm:max-h-[90vh]">
+      <div class="px-4 py-3 border-b bg-brand-50 flex justify-between items-center shrink-0">
+        <h3 class="font-bold text-brand-700 text-lg"><i class="fa-solid fa-cash-register mr-1"></i> ขายสินค้า</h3>
+        <button onclick="closeSellModal()"
+          class="w-8 h-8 rounded-full bg-gray-200 text-gray-600 hover:bg-red-100 hover:text-red-500 flex justify-center items-center transition"><i
+            class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="p-4 overflow-y-auto flex-grow space-y-3">
+        <div id="sellProductInfo" class="bg-gray-50 p-3 rounded-lg text-sm"></div>
+        <input type="hidden" id="sell_productId">
+        <div>
+          <div class="flex justify-between items-center mb-1">
+            <label class="block text-sm font-medium text-gray-700">ราคาที่ขายจริง (บาท) *</label>
+            <div class="flex gap-1">
+              <button type="button" id="btnUseRetailPrice" class="text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 px-2 py-0.5 rounded transition">ราคาปลีก</button>
+              <button type="button" id="btnUseWholesalePrice" class="text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-600 px-2 py-0.5 rounded border border-indigo-100 transition">ราคาส่ง</button>
+              <button type="button" id="btnUseInstallmentPrice" class="text-xs bg-emerald-50 hover:bg-emerald-100 text-emerald-600 px-2 py-0.5 rounded border border-emerald-100 transition">ราคาจัดผ่อน</button>
+            </div>
+          </div>
+          <input type="number" id="sell_price" required placeholder="0"
+            class="w-full p-2 border border-gray-300 rounded focus:ring-brand-500 outline-none text-brand-600 font-bold bg-brand-50 text-lg">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">รูปแบบการขาย *</label>
+          <select id="sell_type" required onchange="toggleDownPayment()"
+            class="w-full p-2 border border-gray-300 rounded focus:ring-brand-500 outline-none">
+            <option value="">เลือกรูปแบบ</option>
+          </select>
+        </div>
+        <!-- ตัวเลือกย่อยสำหรับ ส่งร้านพาร์ทเนอร์ -->
+        <div id="partner_payment_container" class="hidden">
+          <label class="block text-sm font-medium text-gray-700 mb-1">ประเภทการชำระ (สด/เชื่อ) *</label>
+          <div class="flex gap-4 p-2 bg-gray-50 rounded-lg border border-gray-200">
+            <label class="flex items-center gap-2 text-sm font-semibold text-gray-700 cursor-pointer">
+              <input type="radio" name="partner_payment_type" value="สด" checked onchange="toggleDownPayment()" class="text-brand-600 focus:ring-brand-500">
+              ขายสด
+            </label>
+            <label class="flex items-center gap-2 text-sm font-semibold text-gray-700 cursor-pointer">
+              <input type="radio" name="partner_payment_type" value="เชื่อ" onchange="toggleDownPayment()" class="text-brand-600 focus:ring-brand-500">
+              เงินเชื่อ
+            </label>
+          </div>
+        </div>
+        <div id="sell_downPaymentContainer" class="hidden">
+          <label class="block text-sm font-medium text-gray-700 mb-1">เงินดาวน์ (บาท) *</label>
+          <input type="number" id="sell_downPayment" placeholder="0"
+            class="w-full p-2 border border-gray-300 rounded focus:ring-brand-500 outline-none text-brand-600 font-bold bg-brand-50 text-lg">
+          <p class="text-xs text-red-500 mt-1"><i class="fa-solid fa-circle-info mr-1"></i>กรุณากรอกเงินดาวน์ตามที่ไฟแนนซ์อนุมัติ</p>
+        </div>
+        <div id="sell_dueDateContainer" class="hidden">
+          <label class="block text-sm font-medium text-gray-700 mb-1">วันกำหนดชำระเงินเชื่อ *</label>
+          <input type="date" id="sell_dueDate"
+            class="w-full p-2 border border-gray-300 rounded focus:ring-brand-500 outline-none text-brand-600 font-bold bg-brand-50 text-lg">
+          <p class="text-xs text-red-500 mt-1"><i class="fa-solid fa-circle-info mr-1"></i>กรุณาระบุวันกำหนดชำระเงินเชื่อของลูกค้า</p>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">ชื่อลูกค้า *</label>
+            <input type="text" id="sell_customerName" required placeholder="ชื่อ-นามสกุล"
+              class="w-full p-2 border border-gray-300 rounded focus:ring-brand-500 outline-none">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">เบอร์โทรลูกค้า *</label>
+            <input type="text" id="sell_customerPhone" required placeholder="08x-xxx-xxxx"
+              class="w-full p-2 border border-gray-300 rounded focus:ring-brand-500 outline-none">
+          </div>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">
+            <i class="fa-solid fa-user-tag text-brand-600 mr-1"></i>รหัสผู้แนะนำ <span class="text-xs text-gray-400 font-normal">(ถ้ามี)</span>
+          </label>
+          <input type="text" id="sell_referrerCode" placeholder="ระบุรหัสผู้แนะนำ หรือปล่อยว่างได้"
+            class="w-full p-2 border border-gray-300 rounded focus:ring-brand-500 outline-none text-sm">
+        </div>
+        <!-- ช่องทางการรับเงิน (เงินสด / เงินโอน / เงินสด+เงินโอน) -->
+        <div id="payment_method_container">
+          <label class="block text-sm font-medium text-gray-700 mb-1">ช่องทางการรับเงิน *</label>
+          <div class="grid grid-cols-3 gap-1.5 sm:gap-2 p-1.5 bg-gray-50 rounded-lg border border-gray-200">
+            <label class="flex items-center justify-center gap-1 sm:gap-2 p-2 bg-white rounded-md border border-gray-200 text-xs sm:text-sm font-bold text-gray-700 cursor-pointer hover:border-emerald-500 hover:text-emerald-700 transition">
+              <input type="radio" name="sell_payment_method" value="เงินสด" checked onchange="togglePaymentMethod()" onclick="togglePaymentMethod()" class="text-emerald-600 focus:ring-emerald-500">
+              <i class="fa-solid fa-money-bill-wave text-emerald-600"></i> เงินสด
+            </label>
+            <label class="flex items-center justify-center gap-1 sm:gap-2 p-2 bg-white rounded-md border border-gray-200 text-xs sm:text-sm font-bold text-gray-700 cursor-pointer hover:border-blue-500 hover:text-blue-700 transition">
+              <input type="radio" name="sell_payment_method" value="เงินโอน" onchange="togglePaymentMethod()" onclick="togglePaymentMethod()" class="text-blue-600 focus:ring-blue-500">
+              <i class="fa-solid fa-mobile-screen-button text-blue-600"></i> เงินโอน
+            </label>
+            <label class="flex items-center justify-center gap-1 sm:gap-2 p-2 bg-white rounded-md border border-gray-200 text-xs sm:text-sm font-bold text-gray-700 cursor-pointer hover:border-purple-500 hover:text-purple-700 transition">
+              <input type="radio" name="sell_payment_method" value="เงินสด+เงินโอน" onchange="togglePaymentMethod()" onclick="togglePaymentMethod()" class="text-purple-600 focus:ring-purple-500">
+              <i class="fa-solid fa-money-bill-transfer text-purple-600"></i> สด+โอน
+            </label>
+          </div>
+        </div>
+
+        <!-- กล่องระบุยอดเงินสด และ ยอดเงินโอน (แสดงเมื่อเลือก เงินสด+เงินโอน) -->
+        <div id="splitPaymentContainer" class="hidden p-3 bg-purple-50/60 rounded-xl border border-purple-200 space-y-2">
+          <div class="flex items-center justify-between text-xs font-bold text-purple-800">
+            <span><i class="fa-solid fa-calculator mr-1 text-purple-600"></i>ระบุสัดส่วนการชำระเงิน</span>
+            <span id="splitPaymentHint" class="text-gray-500 font-normal">ระบบคำนวณยอดคงเหลือให้อัตโนมัติ</span>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-xs font-semibold text-emerald-700 mb-1">
+                <i class="fa-solid fa-money-bill-wave mr-1"></i>ยอดเงินสด (บาท) *
+              </label>
+              <input type="number" id="sell_cash_amount" min="0" step="any" placeholder="0"
+                oninput="onSplitAmountChanged('cash')"
+                class="w-full px-2.5 py-1.5 border border-emerald-300 rounded-lg text-sm font-bold text-emerald-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none bg-white">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-blue-700 mb-1">
+                <i class="fa-solid fa-mobile-screen-button mr-1"></i>ยอดเงินโอน (บาท) *
+              </label>
+              <input type="number" id="sell_transfer_amount" min="0" step="any" placeholder="0"
+                oninput="onSplitAmountChanged('transfer')"
+                class="w-full px-2.5 py-1.5 border border-blue-300 rounded-lg text-sm font-bold text-blue-800 focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white">
+            </div>
+          </div>
+        </div>
+
+        <!-- กล่องแนบสลิปโอนเงิน (แสดงเมื่อเลือกเงินโอน หรือ เงินสด+เงินโอน) -->
+        <div id="transferSlipContainer" class="hidden">
+          <label class="block text-sm font-medium text-blue-600 mb-1">
+            <i class="fa-solid fa-file-invoice-dollar mr-1"></i> แนบสลิปโอนเงิน *
+          </label>
+          <div class="flex flex-wrap gap-2 mb-2">
+            <label
+              class="px-3 py-2 bg-blue-50 text-blue-700 border border-blue-200 rounded text-sm font-semibold hover:bg-blue-100 cursor-pointer flex items-center gap-2 transition">
+              <i class="fa-regular fa-images"></i> เลือกรูปสลิป
+              <input type="file" id="sell_slipFile" accept="image/*" onchange="previewSlipImage(this)"
+                class="hidden">
+            </label>
+            <label
+              class="px-3 py-2 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded text-sm font-semibold hover:bg-indigo-100 cursor-pointer flex items-center gap-2 transition">
+              <i class="fa-solid fa-camera"></i> ถ่ายรูปสลิป
+              <input type="file" id="sell_slipCamera" accept="image/*" capture="environment"
+                onchange="previewSlipImage(this)" class="hidden">
+            </label>
+          </div>
+          <div id="slipPreview" class="hidden">
+            <div class="relative inline-block">
+              <img id="slipPreviewImg" class="w-24 h-24 object-cover rounded border shadow">
+              <button type="button" onclick="clearSlipImage()" title="ลบรูปสลิป" class="absolute -top-2 -right-2 bg-rose-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs hover:bg-rose-600 shadow transition"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+          </div>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-red-600 mb-1"><i class="fa-solid fa-receipt"></i>
+            อัปโหลดรูปใบเสร็จจากเครื่อง POS *</label>
+          <div class="flex flex-wrap gap-2 mb-2">
+            <label
+              class="px-3 py-2 bg-red-50 text-red-700 border border-red-200 rounded text-sm font-semibold hover:bg-red-100 cursor-pointer flex items-center gap-2 transition">
+              <i class="fa-regular fa-images"></i> เลือกรูป
+              <input type="file" id="sell_receiptFile" accept="image/*" onchange="previewReceiptImage(this)"
+                class="hidden">
+            </label>
+            <label
+              class="px-3 py-2 bg-blue-50 text-blue-700 border border-blue-200 rounded text-sm font-semibold hover:bg-blue-100 cursor-pointer flex items-center gap-2 transition">
+              <i class="fa-solid fa-camera"></i> ถ่ายรูป
+              <input type="file" id="sell_receiptCamera" accept="image/*" capture="environment"
+                onchange="previewReceiptImage(this)" class="hidden">
+            </label>
+          </div>
+          <div id="receiptPreview" class="hidden">
+            <img id="receiptPreviewImg" class="w-24 h-24 object-cover rounded border shadow">
+          </div>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1"><i class="fa-solid fa-note-sticky text-amber-500 mr-1"></i> หมายเหตุการขาย (ระบุของแถม/การรับประกัน/ตำหนิ)</label>
+          <textarea id="sell_notes" rows="2" placeholder="เช่น แถมฟิล์ม+เคส, ประกันร้าน 30 วัน, มีรอยมุมซ้าย" class="w-full p-2 border border-gray-300 rounded focus:ring-brand-500 outline-none text-sm"></textarea>
+        </div>
+      </div>
+      <div class="px-4 py-3 pb-5 sm:pb-3 border-t bg-gray-50 flex justify-end gap-2 shrink-0">
+        <button onclick="closeSellModal()"
+          class="px-4 py-2 border border-gray-300 rounded text-gray-600 hover:bg-gray-100 transition text-sm">ยกเลิก</button>
+        <button id="confirmSellBtn" onclick="confirmSell()"
+          class="px-5 py-2 bg-brand-600 text-white font-medium rounded hover:bg-brand-700 transition shadow text-sm flex items-center gap-2"><i
+            class="fa-solid fa-check"></i> ยืนยันขาย</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal รับคืน / เคลม / เปลี่ยนเครื่อง (Claim Modal) -->
+  <div id="claimModal"
+    class="fixed inset-0 bg-black/60 z-[90] hidden flex items-center justify-center p-2 sm:p-4 pb-16 sm:pb-4 backdrop-blur-sm">
+    <div class="bg-white w-full max-w-md rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[82dvh] sm:max-h-[90vh]">
+      <div class="px-4 py-3 border-b bg-amber-50 flex justify-between items-center shrink-0">
+        <h3 class="font-bold text-amber-800 text-lg"><i class="fa-solid fa-arrows-rotate mr-1"></i> รับคืน / เปลี่ยนเครื่อง / แจ้งเคลม</h3>
+        <button onclick="closeClaimModal()"
+          class="w-8 h-8 rounded-full bg-gray-200 text-gray-600 hover:bg-red-100 hover:text-red-500 flex justify-center items-center transition"><i
+            class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="p-4 overflow-y-auto flex-grow space-y-3">
+        <div id="claimProductInfo" class="bg-amber-50/50 border border-amber-100 p-3 rounded-lg text-sm"></div>
+        <input type="hidden" id="claim_productId">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">ประเภทการทำรายการ *</label>
+          <select id="claim_type" required onchange="toggleClaimTypeOptions()"
+            class="w-full p-2 border border-gray-300 rounded focus:ring-brand-500 outline-none font-semibold text-gray-800">
+            <option value="exchange">🔄 เปลี่ยนเครื่องใหม่ให้ลูกค้า</option>
+            <option value="refund">💸 รับคืนสินค้า (คืนเงินลูกค้า)</option>
+            <option value="repair">🛠️ ส่งซ่อม / เช็คอาการช่าง</option>
+          </select>
+        </div>
+        
+        <!-- ช่องเลือกเครื่องใหม่สำหรับกรณีเปลี่ยนเครื่อง -->
+        <div id="claim_replacement_container" class="space-y-2">
+          <label class="block text-sm font-medium text-gray-700">เลือกเครื่องใหม่ที่เปลี่ยนให้ลูกค้า *</label>
+          <select id="claim_replacement_productId" onchange="updateReplacementPriceHint()" class="w-full p-2 border border-gray-300 rounded focus:ring-brand-500 outline-none text-sm">
+            <option value="">-- เลือกเครื่องในสต็อกพร้อมขาย --</option>
+          </select>
+          <div class="flex items-center gap-2 mt-1">
+            <label class="text-xs font-medium text-gray-600">ราคาขายเครื่องใหม่ (บาท):</label>
+            <input type="number" id="claim_replacement_soldPrice" placeholder="ราคาขาย" class="w-32 p-1.5 border border-gray-300 rounded text-sm font-bold text-emerald-600">
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">สาเหตุการคืน/เคลม *</label>
+          <input type="text" id="claim_reason" required placeholder="เช่น จอขึ้นเส้น, แบตเสื่อมเร็ว, ลูกค้าไม่ถูกใจ"
+            class="w-full p-2 border border-gray-300 rounded focus:ring-brand-500 outline-none text-sm">
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">หมายเหตุเพิ่มเติม</label>
+          <textarea id="claim_notes" rows="2" placeholder="รายละเอียดอื่นๆ เช่น คืนเงินสด 5000 บ., เปลี่ยนเป็นรหัส PXXXXX"
+            class="w-full p-2 border border-gray-300 rounded focus:ring-brand-500 outline-none text-sm"></textarea>
+        </div>
+      </div>
+      <div class="px-4 py-3 pb-5 sm:pb-3 border-t bg-gray-50 flex justify-end gap-2 shrink-0">
+        <button onclick="closeClaimModal()"
+          class="px-4 py-2 border border-gray-300 rounded text-gray-600 hover:bg-gray-100 transition text-sm">ยกเลิก</button>
+        <button onclick="confirmClaim()" id="btnConfirmClaim"
+          class="px-5 py-2 bg-amber-600 text-white font-medium rounded hover:bg-amber-700 transition shadow text-sm flex items-center gap-2"><i
+            class="fa-solid fa-check"></i> บันทึกรายการ</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal ใบเสร็จดิจิทัล -->
+  <div id="receiptModal"
+    class="fixed inset-0 bg-black/60 z-[95] hidden flex items-center justify-center p-2 sm:p-4 pb-16 sm:pb-4 backdrop-blur-sm">
+    <div class="bg-white w-full max-w-sm rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[82dvh] sm:max-h-[90vh]">
+      <div class="px-4 py-3 border-b bg-green-50 flex justify-between items-center shrink-0">
+        <h3 class="font-bold text-green-700 text-lg"><i class="fa-solid fa-receipt mr-1"></i> ใบเสร็จการขาย</h3>
+        <button onclick="document.getElementById('receiptModal').classList.add('hidden')"
+          class="w-8 h-8 rounded-full bg-gray-200 text-gray-600 hover:bg-red-100 hover:text-red-500 flex justify-center items-center transition"><i
+            class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div id="receiptBody" class="p-4 overflow-y-auto flex-grow text-sm bg-white"></div>
+      <div class="px-4 py-3 pb-5 sm:pb-3 border-t bg-gray-50 flex flex-col items-center shrink-0">
+        <p class="text-xs text-brand-600 font-bold mb-2"><i class="fa-solid fa-mobile-screen"></i>
+          กรุณาแคปหน้าจอนี้ไว้เป็นหลักฐานการขาย</p>
+        <button onclick="document.getElementById('receiptModal').classList.add('hidden')"
+          class="w-full py-2 bg-gray-300 text-gray-700 font-medium rounded hover:bg-gray-400 transition shadow text-sm">
+          <i class="fa-solid fa-xmark"></i> ปิดหน้าต่าง
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal โอนสินค้าข้ามสาขา -->
+  <div id="transferSetupModal" class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 hidden backdrop-blur-sm">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-zoomIn">
+      <div class="px-4 py-3 border-b bg-indigo-50 flex justify-between items-center">
+        <h3 class="font-bold text-indigo-800 text-lg"><i class="fa-solid fa-truck-fast mr-1"></i> เลือกสาขาปลายทาง</h3>
+        <button onclick="closeTransferSetupModal()" class="w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 hover:bg-red-100 hover:text-red-500 flex justify-center items-center transition"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="p-6">
+        <label class="block text-sm font-medium text-gray-700 mb-2">โอนสินค้าที่เลือก ไปยัง:</label>
+        <select id="transfer_targetPlatform" class="w-full border-gray-300 rounded-lg p-3 border focus:ring-indigo-500 focus:border-indigo-500 text-gray-800 outline-none text-base">
+          <option value="">เลือกสาขาปลายทาง</option>
+        </select>
+        <p class="text-xs text-gray-500 mt-3"><i class="fa-solid fa-info-circle text-indigo-400"></i> เวลาเข้าสาขาใหม่จะถูกรีเซ็ต เมื่อทำการโอนสำเร็จ</p>
+      </div>
+      <div class="px-4 py-3 border-t bg-gray-50 flex justify-end gap-2">
+        <button onclick="closeTransferSetupModal()" class="px-4 py-2 border rounded text-gray-600 hover:bg-gray-100 transition text-sm font-medium">ยกเลิก</button>
+        <button onclick="confirmBulkTransfer()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-medium shadow text-sm transition flex items-center gap-2"><i class="fa-solid fa-check"></i> ยืนยันการโอน</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal ใบโอนสินค้า (โอนสำเร็จ) -->
+  <div id="transferReceiptModal" class="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 hidden backdrop-blur-sm">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-zoomIn flex flex-col max-h-[90vh]">
+      <div class="bg-gradient-to-r from-indigo-500 to-purple-600 px-4 py-3 flex justify-between items-center text-white shrink-0">
+        <h3 class="font-bold text-lg"><i class="fa-solid fa-file-invoice mr-1"></i> โอนสำเร็จ</h3>
+        <button onclick="document.getElementById('transferReceiptModal').classList.add('hidden')" class="w-8 h-8 rounded-full bg-white/20 hover:bg-red-500 flex justify-center items-center transition"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div id="transferReceiptBody" class="p-4 overflow-y-auto flex-grow text-sm bg-white"></div>
+      <div class="px-4 py-3 border-t bg-gray-50 flex flex-col items-center shrink-0">
+        <p class="text-xs text-indigo-600 font-bold mb-2 flex items-center"><i class="fa-solid fa-mobile-screen mr-2"></i> กรุณาแคปหน้าจอนี้ไว้เป็นหลักฐานการโอน</p>
+        <button onclick="document.getElementById('transferReceiptModal').classList.add('hidden')" class="w-full py-2 bg-indigo-100 text-indigo-800 font-medium rounded hover:bg-indigo-200 transition shadow-sm text-sm">
+          ปิดหน้าต่าง
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal ประวัติการโอนสินค้า -->
+  <div id="transferHistoryModal" class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 hidden backdrop-blur-sm">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden animate-zoomIn flex flex-col max-h-[90vh]">
+      <div class="bg-indigo-700 px-4 py-3 flex justify-between items-center text-white shrink-0">
+        <h3 class="font-bold text-lg"><i class="fa-solid fa-clock-rotate-left mr-1"></i> ประวัติการโอนสินค้า</h3>
+        <button onclick="document.getElementById('transferHistoryModal').classList.add('hidden')" class="w-8 h-8 rounded-full bg-white/20 hover:bg-red-500 flex justify-center items-center transition"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div id="transferHistoryBody" class="p-4 overflow-y-auto flex-grow text-sm bg-gray-50/50"></div>
+    </div>
+  </div>
+
+  <!-- แผงตะกร้าสินค้า (Cart Drawer) -->
+  <div id="cartDrawer" class="fixed inset-0 z-[110] hidden overflow-hidden" aria-labelledby="slide-over-title" role="dialog" aria-modal="true">
+    <div class="absolute inset-0 overflow-hidden">
+      <!-- Backdrop -->
+      <div onclick="toggleCartDrawer(false)" class="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" aria-hidden="true"></div>
+      
+      <div class="pointer-events-none fixed inset-y-0 right-0 flex max-w-full pl-10">
+        <div class="pointer-events-auto w-screen max-w-md transform transition ease-in-out duration-500">
+          <div class="flex h-full flex-col overflow-y-hidden bg-white shadow-2xl">
+            <!-- Header -->
+            <div class="px-4 py-6 sm:px-6 bg-brand-600 text-white shrink-0 flex items-center justify-between">
+              <h2 class="text-lg font-bold flex items-center gap-2" id="slide-over-title">
+                <i class="fa-solid fa-cart-shopping"></i> ตะกร้าสินค้าของคุณ
+              </h2>
+              <button onclick="toggleCartDrawer(false)" class="rounded-full w-8 h-8 flex items-center justify-center bg-white/20 hover:bg-white/30 text-white transition">
+                <i class="fa-solid fa-xmark"></i>
+              </button>
+            </div>
+
+            <!-- Body -->
+            <div class="flex-1 overflow-y-auto p-4 space-y-4">
+              <!-- สแกน IMEI เพื่อดึงของเข้าตะกร้า -->
+              <div class="bg-gray-50 p-3 rounded-lg border border-gray-200">
+                <label class="block text-xs font-semibold text-gray-700 mb-1.5"><i class="fa-solid fa-barcode"></i> พิมพ์หรือสแกน IMEI เพื่อเพิ่มสินค้า</label>
+                <form onsubmit="handleCartImeiSubmit(event)" class="flex gap-2">
+                  <input type="text" id="cartImeiInput" placeholder="ยิงบาร์โค้ด หรือกรอก IMEI..." class="flex-grow text-sm p-2 border border-gray-300 rounded focus:ring-brand-500 outline-none">
+                  <button type="button" onclick="startScanner(null, 'cartImeiInput')" class="px-2.5 py-2 bg-brand-50 text-brand-700 border border-brand-200 rounded hover:bg-brand-100 transition" title="สแกนด้วยกล้อง">
+                    <i class="fa-solid fa-barcode"></i>
+                  </button>
+                  <button type="submit" class="px-4 py-2 bg-gray-800 text-white text-xs font-bold rounded hover:bg-gray-700 transition">ตกลง</button>
+                </form>
+              </div>
+
+              <!-- รายการสินค้า -->
+              <div id="cartItemsList" class="divide-y divide-gray-100">
+                <div class="text-center py-10 text-gray-400 text-sm">
+                  <i class="fa-solid fa-cart-arrow-down text-4xl mb-2 opacity-50"></i>
+                  <p>ไม่มีสินค้าในตะกร้า</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="border-t border-gray-200 px-4 py-6 sm:px-6 bg-gray-50 shrink-0">
+              <div class="flex justify-between text-base font-bold text-gray-900 mb-2">
+                <p>จำนวนสินค้าทั้งหมด</p>
+                <p><span id="cartTotalItems">0</span> เครื่อง</p>
+              </div>
+              <div class="flex justify-between text-lg font-bold text-brand-600 mb-4">
+                <p>ยอดรวมราคาทั้งสิ้น</p>
+                <p>฿<span id="cartTotalPrice">0</span></p>
+              </div>
+              <p class="text-xs text-gray-500 mb-4"><i class="fa-solid fa-circle-info"></i> สินค้าที่ใส่ตะกร้าจะถูกจองไว้ให้คุณ 10 นาที เพื่อไม่ให้พนักงานคนอื่นขายชนกัน</p>
+              <div class="space-y-2">
+                <div class="grid grid-cols-2 gap-2">
+                  <button onclick="checkoutCartTransfer()" id="btnTransferCart" disabled class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 text-white font-bold rounded-lg text-xs sm:text-sm transition shadow flex items-center justify-center gap-1.5">
+                    <i class="fa-solid fa-truck-fast"></i> โอนสินค้า
+                  </button>
+                  <button onclick="checkoutCart()" id="btnCheckoutCart" disabled class="w-full py-2.5 bg-brand-600 hover:bg-brand-700 disabled:bg-gray-300 text-white font-bold rounded-lg text-xs sm:text-sm transition shadow flex items-center justify-center gap-1.5">
+                    <i class="fa-solid fa-cart-shopping"></i> ดำเนินการขาย
+                  </button>
+                </div>
+                <button onclick="clearCart()" class="w-full py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-600 font-medium rounded-lg text-xs transition">
+                  ล้างตะกร้า
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scanner UI Overlay -->
+  <div id="scanner-ui-overlay" class="w-full h-screen"
+    style="display:none;position:fixed;top:0;left:0;z-index:9999;background-color:#000;">
+    <div style="position:relative;width:100%;height:50vh;overflow:hidden;">
+      <div id="scanner-container" class="w-full h-full"></div>
+      <div
+        style="position:absolute;top:50%;left:10%;right:10%;height:2px;background:red;box-shadow:0 0 10px red,0 0 20px red;z-index:20;">
+      </div>
+      <button id="switch-camera-btn"
+        class="bg-white/20 hover:bg-white/40 backdrop-blur-sm text-white border border-white/50 rounded-full px-4 py-2 shadow-lg"
+        style="position:absolute;top:15px;right:15px;z-index:30;display:none;font-size:0.85rem;"
+        onclick="switchCamera()">
+        <i class="fa-solid fa-camera-rotate mr-1"></i> สลับกล้อง
+      </button>
+      <div
+        style="position:absolute;bottom:10px;width:100%;text-align:center;color:rgba(255,255,255,0.9);font-size:0.85rem;z-index:20;text-shadow:0px 1px 3px rgba(0,0,0,0.8);">
+        <i class="fa-solid fa-expand mr-1"></i> วางบาร์โค้ดให้ตรงเส้นแดง
+      </div>
+    </div>
+    <div class="flex flex-col justify-center items-center text-white" style="height:50vh;background-color:#0f172a;">
+      <div class="mb-6 text-center text-gray-400">
+        <i class="fa-solid fa-barcode text-6xl mb-3 text-indigo-400 opacity-80 animate-pulse"></i>
+        <p class="text-sm font-medium tracking-wide">กำลังวิเคราะห์บาร์โค้ดอัตโนมัติ...</p>
+      </div>
+      <button type="button"
+        class="bg-red-600 hover:bg-red-700 text-white font-bold rounded-full px-8 py-3 shadow-lg shadow-red-900/50 transition flex items-center gap-2 transform active:scale-95"
+        onclick="stopScanner()">
+        <i class="fa-solid fa-xmark text-lg"></i> ปิดกล้อง
+      </button>
+    </div>
+  </div>
+
+  <!-- Image OCR Modal Overlay -->
+  <div id="ocr-modal-overlay" class="fixed inset-0 z-[10000] bg-black/70 backdrop-blur-sm hidden flex items-center justify-center p-3 sm:p-4">
+    <div class="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden border border-gray-100 flex flex-col max-h-[92vh] animate-in fade-in zoom-in duration-200">
+      
+      <!-- Modal Header -->
+      <div class="px-5 py-4 bg-gradient-to-r from-emerald-600 via-teal-600 to-teal-700 text-white flex items-center justify-between">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center shadow-inner">
+            <i class="fa-solid fa-wand-magic-sparkles text-sm"></i>
+          </div>
+          <div>
+            <h3 class="font-bold text-base sm:text-lg leading-tight">ระบบอ่าน IMEI / Serial No จากรูป</h3>
+            <p class="text-[11px] text-emerald-100 font-light">อ่านเฉพาะ IMEI 1 / หรือ SN สำหรับ iPad</p>
+          </div>
+        </div>
+        <button type="button" onclick="closeOcrModal()" class="w-8 h-8 rounded-full hover:bg-white/20 flex items-center justify-center transition text-white/90 hover:text-white">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <!-- Modal Body -->
+      <div class="p-4 sm:p-5 overflow-y-auto space-y-4 text-gray-700">
+        
+        <!-- Image Preview & Scanner Animation Container -->
+        <div class="relative w-full h-48 sm:h-56 bg-gray-900 rounded-xl overflow-hidden flex items-center justify-center border border-gray-200">
+          <img id="ocrPreviewImage" src="" alt="OCR Preview" class="w-full h-full object-contain">
+          
+          <!-- Animated Scanning Line -->
+          <div id="ocrScanBeam" class="absolute inset-x-0 h-1 bg-gradient-to-r from-transparent via-emerald-400 to-transparent shadow-[0_0_12px_#34d399] transition-all duration-1000 ease-in-out pointer-events-none hidden"></div>
+
+          <!-- Loading State Overlay -->
+          <div id="ocrLoadingOverlay" class="absolute inset-0 bg-black/65 backdrop-blur-[2px] flex flex-col items-center justify-center text-white p-4 text-center hidden">
+            <div class="w-12 h-12 border-4 border-emerald-400 border-t-transparent rounded-full animate-spin mb-3"></div>
+            <p id="ocrStatusText" class="text-sm font-medium text-emerald-200 animate-pulse">กำลังวิเคราะห์รูปภาพ...</p>
+            <p class="text-xs text-gray-300 mt-1 font-light">ระบบกำลังอ่านทั้งบาร์โค้ดและข้อความ OCR</p>
+          </div>
+        </div>
+
+        <!-- Result Box -->
+        <div id="ocrResultContainer" class="hidden space-y-3">
+          <div class="p-3.5 bg-emerald-50/80 border border-emerald-200 rounded-xl">
+            <div class="flex items-center justify-between mb-1.5">
+              <span id="ocrResultBadge" class="text-xs font-semibold px-2 py-0.5 rounded-md bg-emerald-600 text-white flex items-center gap-1">
+                <i class="fa-solid fa-check"></i> <span id="ocrResultType">ตรวจพบ IMEI 1</span>
+              </span>
+              <span class="text-[11px] text-gray-500 font-normal">คัดเฉพาะ IMEI 1 เรียบร้อย</span>
+            </div>
+            
+            <div class="relative mt-2">
+              <input type="text" id="ocrExtractedValue" 
+                class="w-full text-lg sm:text-xl font-mono font-bold text-gray-900 bg-white px-3 py-2 border-2 border-emerald-400 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500/30 text-center tracking-wider"
+                placeholder="ไม่พบข้อมูล">
+              <button type="button" onclick="document.getElementById('ocrExtractedValue').focus(); document.getElementById('ocrExtractedValue').select();" 
+                class="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-emerald-600 text-xs" title="คลิกเพื่อแก้ไข">
+                <i class="fa-solid fa-pen-to-square"></i>
+              </button>
+            </div>
+            <p class="text-[11px] text-gray-500 mt-1.5 text-center">สามารถแก้ไขตัวเลขในช่องได้หากต้องการ</p>
+          </div>
+
+        </div>
+
+        <!-- Error / Not Found Box -->
+        <div id="ocrErrorContainer" class="hidden p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-xs space-y-1">
+          <div class="font-bold flex items-center gap-1.5 text-sm text-amber-900">
+            <i class="fa-solid fa-triangle-exclamation text-amber-600"></i> ไม่สามารถตรวจหา IMEI 1 หรือ Serial No ได้
+          </div>
+          <p>คำแนะนำ: กรุณาลองถ่ายภาพให้ตรง ใกล้ขึ้น และมีแสงสว่างเพียงพอ หรือเลือกรูปใหม่</p>
+        </div>
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="px-5 py-3.5 bg-gray-50 border-t border-gray-100 flex items-center justify-between gap-2">
+        <button type="button" onclick="triggerOcrFileInput(activeOcrTargetInputId)" 
+          class="px-3.5 py-2 text-xs font-semibold text-gray-600 hover:text-gray-900 hover:bg-gray-200 rounded-lg transition flex items-center gap-1.5">
+          <i class="fa-solid fa-arrow-rotate-right"></i> เลือกรูปใหม่
+        </button>
+        <div class="flex items-center gap-2">
+          <button type="button" onclick="closeOcrModal()" 
+            class="px-4 py-2 text-xs font-medium text-gray-600 hover:bg-gray-200 rounded-lg transition">
+            ยกเลิก
+          </button>
+          <button type="button" id="btnConfirmOcr" onclick="confirmOcrResult()" disabled
+            class="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 text-white text-xs sm:text-sm font-bold rounded-lg shadow hover:shadow-md transition flex items-center gap-1.5 disabled:cursor-not-allowed">
+            <i class="fa-solid fa-check"></i> นำไปใช้ในช่อง IMEI
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- โหลด config.js และ api.js ก่อน แล้วค่อยโหลด app.js -->
+  <script src="config.js?v=1.1.4"></script>
+  <script src="api.js?v=1.1.4"></script>
+  <script src="app.js?v=1.1.4"></script>
+
+</body>
+
+</html>
