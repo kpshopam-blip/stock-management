@@ -1419,6 +1419,7 @@ function renderSalesList(list) {
                 saleType: s.saleType,
                 customerName: s.customerName,
                 customerPhone: s.customerPhone,
+                referrerCode: s.referrerCode || '',
                 salesperson: s.salesperson,
                 receiptImage: s.receiptImage,
                 paymentSlip: s.paymentSlip || '',
@@ -1491,6 +1492,7 @@ function renderSalesList(list) {
             salesperson: bill.salesperson || '',
             customerName: bill.customerName || '',
             customerPhone: bill.customerPhone || '',
+            referrerCode: bill.referrerCode || '',
             saleType: bill.saleType || '',
             paymentMethod: bill.paymentMethod || '',
             paymentSlip: bill.paymentSlip || '',
@@ -1533,6 +1535,7 @@ function renderSalesList(list) {
           <div><i class="fa-regular fa-user mr-1"></i>${bill.salesperson || '-'}</div>
           <div><i class="fa-solid fa-tag mr-1"></i>${bill.saleType || '-'}</div>
           <div>${bill.customerName ? '<i class="fa-regular fa-address-card mr-1"></i>' + bill.customerName : ''}</div>
+          ${bill.referrerCode ? `<div class="col-span-2 text-indigo-600"><i class="fa-solid fa-user-tag mr-1"></i>ผู้แนะนำ: <span class="font-semibold">${bill.referrerCode}</span></div>` : ''}
         </div>
         
         <div class="flex gap-2 mt-2 border-t pt-2 flex-wrap">
@@ -2483,6 +2486,7 @@ function openSellModal(productId) {
     
     document.getElementById('sell_customerName').value = '';
     document.getElementById('sell_customerPhone').value = '';
+    if (document.getElementById('sell_referrerCode')) document.getElementById('sell_referrerCode').value = '';
     document.getElementById('receiptPreview').classList.add('hidden');
     sellReceiptDataURI = null;
     clearSlipImage();
@@ -2686,6 +2690,7 @@ async function confirmSell() {
     const saleType = document.getElementById('sell_type').value;
     const customerName = document.getElementById('sell_customerName').value;
     const customerPhone = document.getElementById('sell_customerPhone').value;
+    const referrerCode = document.getElementById('sell_referrerCode') ? document.getElementById('sell_referrerCode').value.trim() : '';
     const downPayment = document.getElementById('sell_downPayment') ? document.getElementById('sell_downPayment').value : '';
     const dueDate = document.getElementById('sell_dueDate') ? document.getElementById('sell_dueDate').value : '';
 
@@ -2843,6 +2848,7 @@ async function confirmSell() {
                 productIds: checkoutProductIds,
                 prices: salePrices,
                 saleType: finalSaleType, customerName, customerPhone,
+                referrerCode,
                 downPayment: downPayment ? parseFloat(downPayment) : 0,
                 dueDate: isCredit && dueDate ? formatDateToDMY(dueDate) : '',
                 salesperson: currentUser ? (currentUser.saleName || currentUser.name) : '',
@@ -2871,6 +2877,7 @@ async function confirmSell() {
             const soldPrice = salePrices[productId];
             const saleData = {
                 productId, soldPrice, saleType: finalSaleType, customerName, customerPhone,
+                referrerCode,
                 downPayment: downPayment ? parseFloat(downPayment) : 0,
                 dueDate: isCredit && dueDate ? formatDateToDMY(dueDate) : '',
                 salesperson: currentUser ? (currentUser.saleName || currentUser.name) : '',
@@ -3082,6 +3089,7 @@ function showReceipt(r) {
             <hr>
             ${r.customerName ? `<div class="flex justify-between"><span class="text-gray-500">ลูกค้า:</span><span class="font-medium">${r.customerName}</span></div>` : ''}
             ${r.customerPhone ? `<div class="flex justify-between"><span class="text-gray-500">เบอร์โทร:</span><span class="font-medium">${r.customerPhone}</span></div>` : ''}
+            ${r.referrerCode ? `<div class="flex justify-between"><span class="text-gray-500">รหัสผู้แนะนำ:</span><span class="font-medium text-brand-600">${r.referrerCode}</span></div>` : ''}
         </div>
         <div class="text-center mt-4 text-xs text-gray-400"><p>ขอบคุณที่ใช้บริการ KP Shop</p></div>`;
     document.getElementById('receiptModal').classList.remove('hidden');
@@ -4062,6 +4070,7 @@ function checkoutCart() {
     
     document.getElementById('sell_customerName').value = '';
     document.getElementById('sell_customerPhone').value = '';
+    if (document.getElementById('sell_referrerCode')) document.getElementById('sell_referrerCode').value = '';
     document.getElementById('receiptPreview').classList.add('hidden');
     sellReceiptDataURI = null;
     clearSlipImage();

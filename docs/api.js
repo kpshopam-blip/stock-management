@@ -692,9 +692,10 @@ async function API_sellProduct(saleData) {
             status: 'Sold',
             soldDate: soldDate,
             salesperson: saleData.salesperson || '',
-            salePrice: Number(saleData.price) || 0,
+            salePrice: Number(saleData.price || saleData.soldPrice) || 0,
             saleChannel: saleData.channel || 'หน้าร้าน',
-            buyerName: saleData.buyerName || '',
+            buyerName: saleData.buyerName || saleData.customerName || '',
+            referrerCode: saleData.referrerCode || '',
             lockedBy: null,
             lockExpires: null
         });
@@ -927,6 +928,7 @@ async function API_sellBulkProducts(bulkSaleData) {
                 soldPrice: soldPrice,
                 customerName: bulkSaleData.customerName || '',
                 customerPhone: bulkSaleData.customerPhone || '',
+                referrerCode: bulkSaleData.referrerCode || '',
                 salesperson: bulkSaleData.salesperson || '',
                 saleDate: new Date().toISOString()
             });
@@ -943,6 +945,7 @@ async function API_sellBulkProducts(bulkSaleData) {
             total: totalAmount,
             customerName: bulkSaleData.customerName || '-',
             customerPhone: bulkSaleData.customerPhone || '-',
+            referrerCode: bulkSaleData.referrerCode || '',
             salesperson: bulkSaleData.salesperson || '-',
             saleType: bulkSaleData.saleType || 'ขายสด'
         };

@@ -853,6 +853,7 @@ function renderWholesaleReport() {
     list = list.filter(s => 
       String(s.customerName || '').toLowerCase().includes(searchText) ||
       String(s.customerPhone || '').toLowerCase().includes(searchText) ||
+      String(s.referrerCode || '').toLowerCase().includes(searchText) ||
       String(s.saleId || '').toLowerCase().includes(searchText) ||
       String(s.model || '').toLowerCase().includes(searchText) ||
       String(s.imei || '').toLowerCase().includes(searchText)
@@ -875,6 +876,7 @@ function renderWholesaleReport() {
         saleType: s.saleType,
         customerName: s.customerName,
         customerPhone: s.customerPhone,
+        referrerCode: s.referrerCode || '',
         salesperson: s.salesperson || '',
         paymentStatus: s.paymentStatus,
         dueDate: s.dueDate,
@@ -1052,6 +1054,7 @@ function renderWholesaleReport() {
       salesperson: bill.salesperson || '',
       customerName: bill.customerName || '',
       customerPhone: bill.customerPhone || '',
+      referrerCode: bill.referrerCode || '',
       saleType: bill.saleType || '',
       downPayment: bill.downPayment || 0,
       dueDate: bill.dueDate || '',
@@ -1141,6 +1144,7 @@ function renderWholesaleReport() {
             <i id="bill_${idx}_icon" class="fa-solid fa-chevron-down text-gray-400 text-[10px] ml-1 transition-transform duration-200"></i>
           </div>
         </div>
+        ${bill.referrerCode ? `<div class="mt-1 text-[11px] text-indigo-600 dark:text-indigo-400 font-medium"><i class="fa-solid fa-user-tag mr-1 text-[10px]"></i>ผู้แนะนำ: <b>${escapeHtml(bill.referrerCode)}</b></div>` : ''}
         ${debtPanel}
       </div>
 
@@ -1471,6 +1475,7 @@ function showReceipt(r) {
       <hr class="dark:border-darkbg-700">
       ${r.customerName ? `<div class="flex justify-between"><span class="text-gray-500 dark:text-gray-400">ลูกค้า:</span><span class="font-medium">${r.customerName}</span></div>` : ''}
       ${r.customerPhone ? `<div class="flex justify-between"><span class="text-gray-500 dark:text-gray-400">เบอร์โทร:</span><span class="font-medium">${r.customerPhone}</span></div>` : ''}
+      ${r.referrerCode ? `<div class="flex justify-between"><span class="text-gray-500 dark:text-gray-400">รหัสผู้แนะนำ:</span><span class="font-medium text-brand-600 dark:text-brand-400">${r.referrerCode}</span></div>` : ''}
     </div>
     <div class="text-center mt-4 text-xs text-gray-400"><p>ขอบคุณที่ใช้บริการ KP Shop</p></div>`;
   document.getElementById('receiptModal').classList.remove('hidden');
@@ -1510,6 +1515,9 @@ function openEditBillModal(bill) {
 
   document.getElementById('edit_customerName').value = bill.customerName || '';
   document.getElementById('edit_customerPhone').value = bill.customerPhone || '';
+  if (document.getElementById('edit_referrerCode')) {
+    document.getElementById('edit_referrerCode').value = bill.referrerCode || '';
+  }
   document.getElementById('edit_saleType').value = bill.saleType || '';
   document.getElementById('edit_downPayment').value = bill.downPayment || 0;
   document.getElementById('edit_notes').value = bill.notes || '';
@@ -1906,6 +1914,7 @@ async function handleEditBillSubmit(e) {
   const saleId = document.getElementById('edit_billId').value;
   const customerName = document.getElementById('edit_customerName').value.trim();
   const customerPhone = document.getElementById('edit_customerPhone').value.trim();
+  const referrerCode = document.getElementById('edit_referrerCode') ? document.getElementById('edit_referrerCode').value.trim() : '';
   const saleType = document.getElementById('edit_saleType').value.trim();
   const totalPrice = parseFloat(document.getElementById('edit_totalPrice').value) || 0;
   const downPayment = parseFloat(document.getElementById('edit_downPayment').value) || 0;
@@ -1939,6 +1948,7 @@ async function handleEditBillSubmit(e) {
   const billData = {
     customerName,
     customerPhone,
+    referrerCode,
     salesperson,
     downPayment,
     dueDate,
