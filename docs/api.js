@@ -410,8 +410,8 @@ async function API_getProducts() {
             throw new Error('Firebase DB URL not configured');
         }
 
-        // ดึงข้อมูลตรงๆ จาก Firebase เพื่อความเร็วระดับมิลลิวินาที
-        const url = `${CONFIG.FIREBASE_DB_URL}products.json`;
+        // ดึงข้อมูลตรงๆ จาก Firebase เพื่อความเร็วระดับมิลลิวินาที (เพิ่ม timestamp เพื่อป้องกันเบราว์เซอร์แคชข้อมูลเก่า)
+        const url = `${CONFIG.FIREBASE_DB_URL}products.json?t=${Date.now()}`;
         const response = await fetch(url);
         if (!response.ok) {
             throw new Error(`Firebase Error: ${response.status}`);
@@ -533,10 +533,10 @@ async function API_getSalesSummary() {
     const roleStr = (user && user.role ? user.role : '').toString().toLowerCase();
     const isManager = roleStr === 'manager' || roleStr === 'ผู้จัดการ' || roleStr === 'admin';
 
-    // 1. ลองดึงตรงจาก Firebase Realtime Database ก่อน (เร็วมาก 100-300ms)
+    // 1. ลองดึงตรงจาก Firebase Realtime Database ก่อน (เร็วมาก 100-300ms ป้องกันแคชด้วย timestamp)
     try {
         if (CONFIG.FIREBASE_DB_URL) {
-            const url = `${CONFIG.FIREBASE_DB_URL}salesSummary.json`;
+            const url = `${CONFIG.FIREBASE_DB_URL}salesSummary.json?t=${Date.now()}`;
             const fbRes = await fetch(url);
             if (fbRes.ok) {
                 const summary = await fbRes.json();
@@ -902,69 +902,9 @@ async function API_unlockProduct(productId) {
     }
 }
 
-// บันทึกขายหลายเครื่องพร้อมกัน (Firebase-First: 0.05 วินาที แล้วซิงค์ลง Google Sheets ในฉากหลัง)
+// บันทึกขายหลายเครื่องพร้อมกันในบิลเดียว
 async function API_sellBulkProducts(bulkSaleData) {
-    try {
-        const productIds = bulkSaleData.productIds || [];
-        const prices = bulkSaleData.prices || {};
-        const receiptItems = [];
-        let totalAmount = 0;
-
-        // 1. ตัดสต็อกสินค้าใน Firebase ทันที
-        const updatePromises = productIds.map(async (pId) => {
-            const currentItem = (await firebaseGet(`items/${pId}`)) || {};
-            const soldPrice = parseFloat(prices[pId]) || currentItem.price || 0;
-            totalAmount += soldPrice;
-            receiptItems.push({
-                id: pId,
-                name: (currentItem.brand || '') + ' ' + (currentItem.model || ''),
-                price: soldPrice,
-                imei: currentItem.imei || ''
-            });
-            return firebaseWrite(`items/${pId}`, {
-                ...currentItem,
-                status: 'ขายแล้ว',
-                stockType: 'Sold',
-                soldPrice: soldPrice,
-                customerName: bulkSaleData.customerName || '',
-                customerPhone: bulkSaleData.customerPhone || '',
-                referrerCode: bulkSaleData.referrerCode || '',
-                salesperson: bulkSaleData.salesperson || '',
-                saleDate: new Date().toISOString()
-            });
-        });
-
-        await Promise.all(updatePromises);
-
-        // 2. สร้างใบเสร็จจำลองสำหรับหน้าจอ POS
-        const mockReceipt = {
-            receiptNo: 'REC-' + Date.now().toString().slice(-6),
-            date: new Date().toLocaleDateString('th-TH'),
-            time: new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }),
-            items: receiptItems,
-            total: totalAmount,
-            customerName: bulkSaleData.customerName || '-',
-            customerPhone: bulkSaleData.customerPhone || '-',
-            referrerCode: bulkSaleData.referrerCode || '',
-            salesperson: bulkSaleData.salesperson || '-',
-            saleType: bulkSaleData.saleType || 'ขายสด'
-        };
-
-        // 3. ส่งคำขอบันทึกลง Google Sheets แบบ Background Sync
-        bgPostToGAS({
-            action: 'sellBulkProducts',
-            bulkSaleData: bulkSaleData
-        });
-
-        return {
-            success: true,
-            message: 'บันทึกการขายหลายรายการสำเร็จเรียบร้อย',
-            receipt: mockReceipt
-        };
-    } catch (e) {
-        console.warn('Firebase-First sellBulk error, fallback to GAS:', e);
-        return apiPost('sellBulkProducts', { bulkSaleData });
-    }
+    return apiPost('sellBulkProducts', { bulkSaleData });
 }
 
 // อัปเดตสถานะชำระเงินของบิลเงินเชื่อ (รองรับยอดรับจริง วันที่รับจริง และหมายเหตุ)
