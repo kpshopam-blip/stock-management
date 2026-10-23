@@ -2276,6 +2276,12 @@ async function loadComments(productId) {
 }
 
 // ====== ระบบขาย POS ======
+function isKFinanceSaleType(type) {
+    if (!type) return false;
+    const str = type.toString().toLowerCase().replace(/[\s\-_]/g, '');
+    return str.includes('kfinance') || str.includes('เคไฟแนนซ์');
+}
+
 function toggleDownPayment() {
     const type = document.getElementById('sell_type').value;
     const dpContainer = document.getElementById('sell_downPaymentContainer');
@@ -2283,6 +2289,16 @@ function toggleDownPayment() {
     const partnerPayContainer = document.getElementById('partner_payment_container');
     const payMethodContainer = document.getElementById('payment_method_container');
     if (!dpContainer) return;
+
+    // อัปเดตข้อความแนะนำเงินดาวน์ตามประเภทสินเชื่อ
+    const dpHint = document.getElementById('sell_downPaymentHint');
+    if (dpHint) {
+        if (isKFinanceSaleType(type)) {
+            dpHint.textContent = 'กรุณากรอกเงินดาวน์เต็ม(เงินดาวน์ก่อนร้านช่วยจ่าย)';
+        } else {
+            dpHint.textContent = 'กรุณากรอกเงินดาวน์ตามที่ไฟแนนซ์อนุมัติ';
+        }
+    }
 
     // ตรวจสอบว่าเป็นประเภท "ส่งร้านพาร์ทเนอร์" หรือไม่
     const isPartner = type && type.includes('พาร์ทเนอร์');
@@ -2697,7 +2713,13 @@ async function confirmSell() {
     if (!saleType) { showToast('กรุณาเลือกรูปแบบการขาย', 'warning'); return; }
     if (!customerName || !customerName.trim()) { showToast('กรุณากรอกชื่อลูกค้า', 'warning'); return; }
     if (!customerPhone || !customerPhone.trim()) { showToast('กรุณากรอกเบอร์โทรลูกค้า', 'warning'); return; }
-    if (saleType && !saleType.includes('สด') && !saleType.includes('พาร์ทเนอร์') && !downPayment) { showToast('กรุณากรอกเงินดาวน์ตามที่ไฟแนนซ์อนุมัติ', 'warning'); return; }
+    if (saleType && !saleType.includes('สด') && !saleType.includes('พาร์ทเนอร์') && !downPayment) {
+        const errorMsg = isKFinanceSaleType(saleType)
+            ? 'กรุณากรอกเงินดาวน์เต็ม(เงินดาวน์ก่อนร้านช่วยจ่าย)'
+            : 'กรุณากรอกเงินดาวน์ตามที่ไฟแนนซ์อนุมัติ';
+        showToast(errorMsg, 'warning');
+        return;
+    }
     
     // ตรวจสอบข้อมูลพาร์ทเนอร์และเงื่อนไขการขายเชื่อตามข้อกำหนด
     const isPartner = saleType && saleType.includes('พาร์ทเนอร์');

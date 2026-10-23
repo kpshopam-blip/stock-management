@@ -13,5 +13,9 @@ const CONFIG = {
     GAS_URL: 'https://script.google.com/macros/s/YOUR_SCRIPT_DEPLOYMENT_ID/exec',
 
     // API Key ต้องตรงกับค่า API_KEY ใน Code.js
-    API_KEY: 'YOUR_SECRET_API_KEY_HERE'
+    API_KEY: 'YOUR_SECRET_API_KEY_HERE',
+
+    // URL และ Secret ของ Firebase Realtime Database
+    FIREBASE_DB_URL: 'https://YOUR_FIREBASE_PROJECT.firebasedatabase.app/',
+    FIREBASE_SECRET: 'YOUR_FIREBASE_DATABASE_SECRET'
 };
